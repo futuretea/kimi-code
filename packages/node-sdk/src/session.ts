@@ -6,7 +6,7 @@ import {
   type SwarmModeTrigger,
 } from '@moonshot-ai/agent-core';
 
-import { type ApprovalHandler, type Event, type QuestionHandler } from '#/events';
+import { type ApprovalHandler, type Event, type QuestionHandler, type ToolCallHandler } from '#/events';
 import type { SDKRpcClientBase } from '#/rpc';
 import type {
   AddAdditionalDirOptions,
@@ -23,6 +23,7 @@ import type {
   PluginInfo,
   PluginSummary,
   PromptInput,
+  RegisterToolInput,
   ReloadSessionOptions,
   ReloadSummary,
   ResumedSessionState,
@@ -270,6 +271,53 @@ export class Session {
   async undoHistory(count: number = 1): Promise<void> {
     this.ensureOpen();
     await this.rpc.undoHistory({ sessionId: this.id, count });
+  }
+
+  /**
+   * Register a host-owned tool on this session's agent. When the model
+   * invokes it, the core reverse-RPCs the handler installed via
+   * `setToolCallHandler` and returns that handler's output as the tool
+   * result. Registering a tool also enables it.
+   */
+  async registerTool(tool: RegisterToolInput): Promise<void> {
+    this.ensureOpen();
+    const name = normalizeRequiredString(
+      tool.name,
+      'Tool name cannot be empty',
+      ErrorCodes.REQUEST_INVALID,
+    );
+    await this.rpc.registerTool({
+      sessionId: this.id,
+      name,
+      description: tool.description,
+      parameters: tool.parameters,
+    });
+  }
+
+  async unregisterTool(name: string): Promise<void> {
+    this.ensureOpen();
+    const normalized = normalizeRequiredString(
+      name,
+      'Tool name cannot be empty',
+      ErrorCodes.REQUEST_INVALID,
+    );
+    await this.rpc.unregisterTool({ sessionId: this.id, name: normalized });
+  }
+
+  /** Replace the set of enabled tools on this session's agent. */
+  async setActiveTools(names: readonly string[]): Promise<void> {
+    this.ensureOpen();
+    await this.rpc.setActiveTools({ sessionId: this.id, names });
+  }
+
+  /**
+   * Install the handler invoked when the agent executes a user tool
+   * registered via `registerTool`. Pass `undefined` to remove it; without a
+   * handler, tool calls resolve to an error result.
+   */
+  setToolCallHandler(handler: ToolCallHandler | undefined): void {
+    this.ensureOpen();
+    this.rpc.setToolCallHandler(this.id, handler);
   }
 
   async getContext(): Promise<AgentContextData> {

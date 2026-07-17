@@ -3,6 +3,8 @@ import type {
   ApprovalResponse,
   QuestionRequest,
   QuestionResult,
+  ToolCallRequest,
+  ToolCallResponse,
 } from '@moonshot-ai/agent-core';
 
 // Event union plus shared fields/payloads used across event families.
@@ -112,3 +114,7 @@ export type MaybePromise<T> = T | Promise<T>;
 export type ApprovalHandler = (request: ApprovalRequest) => MaybePromise<ApprovalResponse>;
 
 export type QuestionHandler = (request: QuestionRequest) => MaybePromise<QuestionResult>;
+
+// Reverse-RPC handler for user tools registered via `Session.registerTool`.
+// Invoked when the agent executes one of the session's registered tools.
+export type ToolCallHandler = (request: ToolCallRequest) => MaybePromise<ToolCallResponse>;

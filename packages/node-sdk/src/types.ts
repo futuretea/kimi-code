@@ -181,6 +181,18 @@ export interface CompactOptions {
   readonly instruction?: string | undefined;
 }
 
+/**
+ * Definition of a host-owned tool registered with the session's agent. The
+ * agent sees it like any other tool; when the model invokes it, the core
+ * reverse-RPCs the host's `ToolCallHandler` (`Session.setToolCallHandler`)
+ * and returns that handler's output as the tool result.
+ */
+export interface RegisterToolInput {
+  readonly name: string;
+  readonly description: string;
+  readonly parameters: Record<string, unknown>;
+}
+
 export interface ReloadSessionOptions {
   readonly forcePluginSessionStartReminder?: boolean;
 }

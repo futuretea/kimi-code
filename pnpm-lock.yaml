@@ -785,6 +785,18 @@ importers:
         specifier: ^4.1.4
         version: 4.1.4
 
+  packages/oca-facade:
+    dependencies:
+      '@moonshot-ai/kimi-code-sdk':
+        specifier: workspace:^
+        version: link:../node-sdk
+      fastify:
+        specifier: ^5.1.0
+        version: 5.8.5
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+
   packages/pi-tui:
     dependencies:
       get-east-asian-width:

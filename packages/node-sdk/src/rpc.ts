@@ -20,7 +20,7 @@ import {
 } from '@moonshot-ai/agent-core';
 import type { Kaos } from '@moonshot-ai/kaos';
 
-import type { ApprovalHandler, QuestionHandler } from '#/events';
+import type { ApprovalHandler, QuestionHandler, ToolCallHandler } from '#/events';
 import type {
   AddAdditionalDirInput,
   AddAdditionalDirResult,
@@ -112,6 +112,20 @@ export interface ReconnectMcpServerRpcInput extends SessionIdRpcInput {
   readonly name: string;
 }
 
+export interface RegisterToolRpcInput extends SessionIdRpcInput {
+  readonly name: string;
+  readonly description: string;
+  readonly parameters: Record<string, unknown>;
+}
+
+export interface UnregisterToolRpcInput extends SessionIdRpcInput {
+  readonly name: string;
+}
+
+export interface SetActiveToolsRpcInput extends SessionIdRpcInput {
+  readonly names: readonly string[];
+}
+
 type ResolvedCoreAPI = RPCMethods<CoreAPI>;
 
 export abstract class SDKRpcClientBase {
@@ -119,6 +133,7 @@ export abstract class SDKRpcClientBase {
   private readonly eventListeners = new Set<(event: Event) => void>();
   private readonly approvalHandlers = new Map<string, ApprovalHandler>();
   private readonly questionHandlers = new Map<string, QuestionHandler>();
+  private readonly toolCallHandlers = new Map<string, ToolCallHandler>();
 
   get interactiveAgentId(): string {
     return this.interactiveAgentScope.getStore() ?? MAIN_AGENT_ID;
@@ -425,6 +440,35 @@ export abstract class SDKRpcClientBase {
     });
   }
 
+  async registerTool(input: RegisterToolRpcInput): Promise<void> {
+    const rpc = await this.getRpc();
+    return rpc.registerTool({
+      sessionId: input.sessionId,
+      agentId: this.interactiveAgentId,
+      name: input.name,
+      description: input.description,
+      parameters: input.parameters,
+    });
+  }
+
+  async unregisterTool(input: UnregisterToolRpcInput): Promise<void> {
+    const rpc = await this.getRpc();
+    return rpc.unregisterTool({
+      sessionId: input.sessionId,
+      agentId: this.interactiveAgentId,
+      name: input.name,
+    });
+  }
+
+  async setActiveTools(input: SetActiveToolsRpcInput): Promise<void> {
+    const rpc = await this.getRpc();
+    return rpc.setActiveTools({
+      sessionId: input.sessionId,
+      agentId: this.interactiveAgentId,
+      names: input.names,
+    });
+  }
+
   async getContext(input: SessionIdRpcInput): Promise<AgentContextData> {
     const rpc = await this.getRpc();
     return rpc.getContext({
@@ -701,9 +745,18 @@ export abstract class SDKRpcClientBase {
     this.questionHandlers.set(sessionId, handler);
   }
 
+  setToolCallHandler(sessionId: string, handler: ToolCallHandler | undefined): void {
+    if (handler === undefined) {
+      this.toolCallHandlers.delete(sessionId);
+      return;
+    }
+    this.toolCallHandlers.set(sessionId, handler);
+  }
+
   clearSessionHandlers(sessionId: string): void {
     this.approvalHandlers.delete(sessionId);
     this.questionHandlers.delete(sessionId);
+    this.toolCallHandlers.delete(sessionId);
   }
 
   async requestApproval(
@@ -752,11 +805,31 @@ export abstract class SDKRpcClientBase {
     }
   }
 
-  async toolCall(request: ToolCallRequest): Promise<ToolCallResponse> {
-    return {
-      output: `SDK custom tool calls are not supported: ${request.toolCallId}`,
-      isError: true,
-    };
+  async toolCall(
+    request: ToolCallRequest & { sessionId: string; agentId: string },
+  ): Promise<ToolCallResponse> {
+    const handler = this.toolCallHandlers.get(request.sessionId);
+    if (handler === undefined) {
+      return {
+        output: 'No tool call handler registered.',
+        isError: true,
+      };
+    }
+
+    try {
+      return await handler(request);
+    } catch (error) {
+      this.receiveEvent({
+        type: 'error',
+        sessionId: request.sessionId,
+        agentId: request.agentId,
+        ...makeErrorPayload(ErrorCodes.INTERNAL, errorMessage(error)),
+      });
+      return {
+        output: 'Tool call handler failed.',
+        isError: true,
+      };
+    }
   }
 
 }
@@ -780,7 +853,9 @@ export class ClientAPI implements SDKAPI {
     return this.client.requestQuestion(request);
   }
 
-  toolCall(request: ToolCallRequest): Promise<ToolCallResponse> {
+  toolCall(
+    request: ToolCallRequest & { sessionId: string; agentId: string },
+  ): Promise<ToolCallResponse> {
     return this.client.toolCall(request);
   }
 }

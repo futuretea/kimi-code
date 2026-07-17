@@ -74,6 +74,7 @@
         ./packages/minidb
         ./packages/node-sdk
         ./packages/oauth
+        ./packages/oca-facade
         ./packages/pi-tui
         ./packages/protocol
         ./packages/telemetry
@@ -99,6 +100,7 @@
         "@moonshot-ai/kimi-code-sdk"
         "@moonshot-ai/kimi-code-oauth"
         "@moonshot-ai/klient"
+        "@moonshot-ai/oca-facade"
         "@moonshot-ai/pi-tui"
         "@moonshot-ai/protocol"
         "@moonshot-ai/kimi-telemetry"
