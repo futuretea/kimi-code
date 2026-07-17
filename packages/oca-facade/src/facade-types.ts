@@ -128,6 +128,10 @@ export type FacadeEvent =
       readonly output?: unknown;
       readonly is_error?: boolean;
     }
+  // No current fork protocol event maps to this type; it exists for
+  // contract-schema conformance and forward compatibility (emission requires
+  // a future protocol source).
+  | { readonly type: 'agent.artifact_delivered'; readonly file_id: string; readonly file_name: string }
   | { readonly type: 'session.status_running' }
   | { readonly type: 'session.status_idle' }
   | { readonly type: 'session.error'; readonly message: string; readonly code: string }

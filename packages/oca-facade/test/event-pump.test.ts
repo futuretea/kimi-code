@@ -61,6 +61,13 @@ function pumpWithActiveTurn(intervalMs?: number): {
 
 const MESSAGE: FacadeEvent = { type: 'agent.message', content: 'hi' };
 const THINKING: FacadeEvent = { type: 'agent.thinking', content: 'hmm' };
+// Contract-schema event with no current runtime source: the wire schema
+// accepts the frame and the pump delivers it unchanged.
+const ARTIFACT: FacadeEvent = {
+  type: 'agent.artifact_delivered',
+  file_id: 'file_1',
+  file_name: 'report.md',
+};
 
 describe('clampDeltaFlushIntervalMs', () => {
   it('clamps into the 50–5000 window and defaults at 100', () => {
@@ -115,6 +122,20 @@ describe('EventPump', () => {
     expect(turn.ended()).toBe(true);
     // The terminal frame never reaches the SSE channel.
     expect(seen.map((entry) => entry.event)).toEqual([MESSAGE, THINKING]);
+  });
+
+  it('passes an agent.artifact_delivered frame through to both channels unchanged', () => {
+    const { pump } = pumpWithActiveTurn(5000);
+    const turn = collector();
+    const { sub, seen } = subscriber();
+    pump.attachTurn('ses_1', turn.stream);
+    pump.subscribe('ses_1', sub);
+
+    pump.emit('ses_1', ARTIFACT);
+    pump.turnEnded('ses_1', 'completed');
+
+    expect(turn.frames).toEqual([ARTIFACT, { type: 'prompt_done', stop_reason: 'completed' }]);
+    expect(seen.map((entry) => entry.event)).toEqual([ARTIFACT]);
   });
 
   it('ends an open turn stream from the cancel path with the given terminal frame', () => {

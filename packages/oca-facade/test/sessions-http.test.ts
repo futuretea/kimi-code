@@ -177,6 +177,45 @@ describe('session routes', () => {
       expect(res.body).toEqual({ session_id: 'ses_1', status: 'active', pending_calls: [] });
     });
 
+    it('reports an in-flight approval in pending_calls with the wire field names', async () => {
+      handle = await bootTestServer();
+      fake().setScript('ses_1', [
+        { kind: 'event', event: runtimeEvent({ type: 'turn.started' }) },
+        {
+          kind: 'approval',
+          request: {
+            toolCallId: 'call_7f3',
+            toolName: 'run_tests',
+            action: 'execute',
+            display: { kind: 'command', command: 'pnpm test' },
+          },
+        },
+        { kind: 'event', event: runtimeEvent({ type: 'turn.ended', reason: 'completed' }) },
+      ]);
+      await createSession();
+      const stream = await postStream(base(), '/sessions/ses_1/prompt', { content: 'go' });
+      expect(stream.response.status).toBe(200);
+      expect(asFrame(await nextNdjsonFrame(stream.reader)).type).toBe('session.status_running');
+      // The turn now blocks on the approval, so the call is registered pending.
+      expect(asFrame(await nextNdjsonFrame(stream.reader)).type).toBe('approval_request');
+
+      const res = await postJson(base(), '/sessions/ses_1/resume', {});
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        session_id: 'ses_1',
+        status: 'active',
+        pending_calls: [{ tool_call_id: 'call_7f3', kind: 'approval', state: 'pending' }],
+      });
+
+      // Settle the pending call so the turn drains cleanly.
+      const approved = await postJson(base(), '/sessions/ses_1/approvals', {
+        tool_call_id: 'call_7f3',
+        decision: 'approved',
+      });
+      expect(approved.status).toBe(202);
+      await collectNdjson(stream.reader);
+    });
+
     it('rejects an unknown session id (404 session_not_found)', async () => {
       handle = await bootTestServer();
       const res = await postJson(base(), '/sessions/nope/resume', {});
