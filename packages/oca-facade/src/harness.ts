@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { accessSync, constants, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-import { createKimiHarness } from '@moonshot-ai/kimi-code-sdk';
+import { createKimiHarness, resolveKimiHome } from '@moonshot-ai/kimi-code-sdk';
 import type {
   ApprovalHandler,
   CreateSessionOptions,
@@ -98,7 +100,10 @@ export interface FacadeHarness {
   prompt(sessionId: string, content: string): Promise<void>;
   interrupt(sessionId: string): Promise<void>;
   cancelSession(sessionId: string): Promise<void>;
-  /** Readiness probe: rejects when the runtime is not available. */
+  /**
+   * Readiness probe: rejects when the runtime is not available — harness
+   * construction or the home (journal) directory check.
+   */
   probe?(): Promise<void>;
 }
 
@@ -189,13 +194,17 @@ export class LiveHarnessFactory implements FacadeHarness {
   }
 
   /**
-   * Readiness probe: the runtime harness must be constructible. Construction
-   * is lazy and cached, so only the first probe pays for it; a failure is
+   * Readiness probe: the runtime harness must be constructible, and the home
+   * directory (the journal-bearing filesystem, resolved exactly as the
+   * runtime resolves it) must exist and be readable and writable. Harness
+   * construction is lazy and cached, so only the first probe pays for it; the
+   * home-dir check stays cheap and runs on every probe. Any failure is
    * reported as a neutral `runtime_unavailable`.
    */
   async probe(): Promise<void> {
     try {
       this.runtime();
+      probeHomeDir(resolveKimiHome(this.harnessOptions.homeDir));
     } catch (error) {
       throw toFacadeError(error, 'runtime_unavailable');
     }
@@ -502,6 +511,21 @@ function raceTeardown<T>(state: LiveSessionState, resolution: Promise<T>): Promi
 
 function textPart(text: string): TextPromptPart {
   return { type: 'text', text };
+}
+
+/**
+ * Home-dir journal probe: the directory must exist, be readable, and accept a
+ * create+delete round trip (write probe). Runs synchronously per call; any
+ * throw is sanitized by the caller into `runtime_unavailable`.
+ */
+function probeHomeDir(homeDir: string): void {
+  if (!statSync(homeDir).isDirectory()) {
+    throw new Error('home path is not a directory');
+  }
+  accessSync(homeDir, constants.R_OK);
+  const probeFile = join(homeDir, `.oca-ready-probe-${randomUUID()}`);
+  writeFileSync(probeFile, '');
+  unlinkSync(probeFile);
 }
 
 /**

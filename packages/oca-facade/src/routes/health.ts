@@ -4,7 +4,8 @@ import type { RouteContext } from './context';
 
 /**
  * Probe routes: `/health` is a plain liveness signal; `/ready` additionally
- * requires the harness (runtime) to be available, failing closed as
+ * requires the harness (runtime) to be available and the home (journal)
+ * directory to be readable and writable, failing closed as
  * `runtime_unavailable`.
  */
 export function registerHealthRoutes(app: FastifyInstance, ctx: RouteContext): void {
