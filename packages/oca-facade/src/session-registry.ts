@@ -171,7 +171,7 @@ export class SessionRegistry {
     }
     // failed: only the journal can bring the session back.
     const recovered = await this.runRecoveryHook(sessionId, 'session_resume_failed');
-    const pendingCalls = this.recoveredPendingCalls(sessionId, recovered, false);
+    const pendingCalls = this.recoveredPendingCalls(sessionId, recovered);
     entry.pendingCalls.clear();
     for (const call of pendingCalls) {
       entry.pendingCalls.set(call.id, { ...call });
@@ -183,13 +183,15 @@ export class SessionRegistry {
   /**
    * Registry-miss fallback: the facade process restarted, so only durable
    * state can vouch for the session. The runtime journal is consulted through
-   * the recovery hook; the facade pending-call journal then decides whether
-   * the session was ever known (no record -> `session_not_found`) and what
-   * its pending calls are. A failed recovery leaves no entry behind.
+   * the recovery hook, and a successful hook is the existence authority (its
+   * own session_not_found keeps the 404 contract code). The facade
+   * pending-call journal then only rebuilds the pending table; it holds
+   * UNSETTLED calls, so an empty journal is the common case (idle crash), not
+   * evidence the session is unknown. A failed recovery leaves no entry behind.
    */
   private async recoverMissingEntry(sessionId: string): Promise<ResumeResult> {
     const recovered = await this.runRecoveryHook(sessionId, 'session_not_found');
-    const pendingCalls = this.recoveredPendingCalls(sessionId, recovered, true);
+    const pendingCalls = this.recoveredPendingCalls(sessionId, recovered);
     const entry: SessionEntry = {
       id: sessionId,
       status: 'active',
@@ -225,14 +227,13 @@ export class SessionRegistry {
    * configured the journal is the authority: approvals and questions are
    * auto-skipped (their turn died with the process, so they are dropped) and
    * external tool calls are reported `unknown` until the user settles them.
-   * On the registry-miss path an empty journal means the facade never saw
-   * the session, so the id stays unknown. Without a journal the hook's own
-   * list is used as-is.
+   * The journal holds only unsettled calls, so an empty journal carries no
+   * information about whether the session exists. Without a journal the
+   * hook's own list is used as-is.
    */
   private recoveredPendingCalls(
     sessionId: string,
     recovered: RecoveredSession,
-    requireKnown: boolean,
   ): PendingCall[] {
     if (!this.pendingJournal) {
       return recovered.pendingCalls;
@@ -243,9 +244,6 @@ export class SessionRegistry {
     } catch {
       // A corrupt journal is a deterministic recovery failure, never skipped.
       throw new FacadeError('session_resume_failed');
-    }
-    if (requireKnown && journaled.length === 0) {
-      throw new FacadeError('session_not_found');
     }
     return journaled
       .filter((call) => call.kind === 'external_tool')

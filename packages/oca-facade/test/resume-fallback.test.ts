@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { FacadeError, type FacadeErrorCode } from '../src/errors';
+import { createFilePendingCallJournal } from '../src/pending-journal';
 import { SessionRegistry } from '../src/session-registry';
 
 import { RPC_SESSION_NOT_FOUND, rpcError, runtimeEvent } from './fake-harness';
@@ -58,6 +59,24 @@ describe('resume fallback to the journal (registry miss)', () => {
       pendingCalls: [{ id: 'call_ext', kind: 'external_tool', state: 'unknown' }],
     });
     expect(registry.getSession('ses_journal')?.status).toBe('active');
+  });
+
+  it('recovers an idle-crashed session whose facade pending journal is empty (hook is the existence authority)', async () => {
+    // The facade pending journal only holds UNSETTLED calls, so a session that
+    // crashed idle (or with no pending calls) has an empty journal; the
+    // successful runtime-journal hook alone vouches for existence and the
+    // resume must succeed with no pending calls.
+    const homeDir = await mkdtemp(join(tmpdir(), 'oca-facade-idle-journal-'));
+    const registry = new SessionRegistry({
+      pendingJournal: createFilePendingCallJournal(homeDir),
+      recoverFromJournal: async (sessionId) => {
+        expect(sessionId).toBe('ses_idle');
+        return { pendingCalls: [] };
+      },
+    });
+    const result = await registry.resumeSession('ses_idle');
+    expect(result).toEqual({ sessionId: 'ses_idle', status: 'active', pendingCalls: [] });
+    expect(registry.getSession('ses_idle')?.status).toBe('active');
   });
 
   it('keeps session_not_found when the journal has no such session', async () => {
@@ -142,6 +161,34 @@ describe('POST /sessions/{id}/resume journal fallback', () => {
         session_id: 'ses_1',
         status: 'active',
         pending_calls: [{ tool_call_id: 'call_ext', kind: 'external_tool', state: 'unknown' }],
+      });
+      // The runtime session is re-attached through the harness resume path.
+      expect(b.fake.resumed).toEqual([{ id: 'ses_1' }]);
+    } finally {
+      await b.close();
+    }
+  });
+
+  it('recovers a session that crashed idle (200 active with pending_calls: [])', async () => {
+    // Process A: create the session but never run a turn, then "crash". The
+    // facade pending journal holds only unsettled calls, so it stays empty;
+    // the runtime journal still holds the session and is the existence
+    // authority, so the resume must succeed instead of 404ing.
+    const homeDir = await mkdtemp(join(tmpdir(), 'oca-facade-idle-recovery-'));
+    const a = await bootTestServer({ homeDir });
+    const created = await postJson(a.baseUrl, '/sessions', { session_id: 'ses_1', work_dir: homeDir });
+    expect(created.status).toBe(201);
+    await a.server.close();
+
+    // Process B: a fresh registry on the same home (the PVC remounted).
+    const b = await bootTestServer({ homeDir });
+    try {
+      const res = await postJson(b.baseUrl, '/sessions/ses_1/resume', {});
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        session_id: 'ses_1',
+        status: 'active',
+        pending_calls: [],
       });
       // The runtime session is re-attached through the harness resume path.
       expect(b.fake.resumed).toEqual([{ id: 'ses_1' }]);

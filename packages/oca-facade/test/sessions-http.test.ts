@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { HarnessFactory, HarnessSessionFactory } from '../src/harness';
 
-import { createFakeHarness, runtimeEvent, type FakeHarness } from './fake-harness';
+import {
+  createFakeHarness,
+  RPC_SESSION_NOT_FOUND,
+  rpcError,
+  runtimeEvent,
+  type FakeHarness,
+} from './fake-harness';
 import {
   bootTestServer,
   collectNdjson,
@@ -218,6 +224,10 @@ describe('session routes', () => {
 
     it('rejects an unknown session id (404 session_not_found)', async () => {
       handle = await bootTestServer();
+      // The runtime journal is the existence authority: an unknown id misses
+      // there (RPC session.not_found at the harness boundary), which the hook
+      // maps to the 404 contract code.
+      fake().resumeErrors.set('nope', rpcError(RPC_SESSION_NOT_FOUND, 'session nope not found'));
       const res = await postJson(base(), '/sessions/nope/resume', {});
       expect(res.status).toBe(404);
       expectErrorEnvelope(res.body, 'session_not_found');
