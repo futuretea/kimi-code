@@ -6,6 +6,7 @@ import Fastify, {
 import { EventPump } from './event-pump';
 import { FacadeError, isFacadeError, toErrorBody } from './errors';
 import { LiveHarnessFactory, type FacadeHarness, type HarnessFactory } from './harness';
+import { createFilePendingCallJournal } from './pending-journal';
 import { registerApprovalRoutes } from './routes/approvals';
 import type { RouteContext } from './routes/context';
 import { registerEventRoutes } from './routes/events';
@@ -14,7 +15,7 @@ import { registerPromptRoutes } from './routes/prompts';
 import { registerQuestionRoutes } from './routes/questions';
 import { registerSessionRoutes } from './routes/sessions';
 import { registerToolResultRoutes } from './routes/tool-results';
-import { SessionRegistry, type RecoveredSession } from './session-registry';
+import { SessionRegistry, type PendingCallJournal, type RecoveredSession } from './session-registry';
 
 /**
  * Composition root: builds the facade server (Fastify + pino on stdout),
@@ -30,6 +31,11 @@ export interface StartServerOptions {
   readonly harnessFactory?: HarnessFactory;
   readonly deltaFlushIntervalMs?: number;
   readonly logger?: FastifyServerOptions['logger'];
+  /**
+   * Facade pending-call journal (register fail-closed / settle / recovery
+   * rebuild). Defaults to a file journal under the resolved home directory.
+   */
+  readonly pendingJournal?: PendingCallJournal;
 }
 
 export interface RunningFacadeServer {
@@ -61,9 +67,12 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   // the harness correlates its reverse-RPC calls through the registry.
   let harness: FacadeHarness;
   const registry: SessionRegistry = new SessionRegistry({
+    pendingJournal: options.pendingJournal ?? createFilePendingCallJournal(homeDir),
     recoverFromJournal: async (sessionId): Promise<RecoveredSession> => {
       await harness.resumeSession(sessionId);
-      return { pendingCalls: registry.listPendingCalls(sessionId) };
+      // The pending table is rebuilt from the facade pending-call journal by
+      // the registry (approvals/questions auto-skipped, external unknown).
+      return { pendingCalls: [] };
     },
   });
   const pump = new EventPump({

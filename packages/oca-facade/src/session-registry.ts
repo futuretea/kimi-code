@@ -1,4 +1,4 @@
-import { FacadeError } from './errors';
+import { FacadeError, type FacadeErrorCode } from './errors';
 
 /**
  * Facade session lifecycle: `active` (created/resumed, interactive),
@@ -79,12 +79,25 @@ export interface PendingCallRegistration {
   resolution: Promise<CallResolution>;
 }
 
-/** Journal-recovered state of a failed session (recovery hook result). */
+/** Journal-recovered state of a session (recovery hook result). */
 export interface RecoveredSession {
   pendingCalls: PendingCall[];
 }
 
 export type JournalRecovery = (sessionId: string) => Promise<RecoveredSession>;
+
+/**
+ * Facade-owned durable record of pending calls, keyed by session id. The
+ * journal is the recovery authority: registration persists first and is
+ * fail-closed (a call the journal cannot hold is never tracked, so no
+ * request is emitted for it), settlement removes the record, and recovery
+ * rebuilds the pending table from whatever the journal still holds.
+ */
+export interface PendingCallJournal {
+  register(sessionId: string, call: PendingCall): void;
+  settle(sessionId: string, callId: string): void;
+  read(sessionId: string): PendingCall[];
+}
 
 interface TurnState {
   content: string;
@@ -116,9 +129,14 @@ interface SessionEntry {
 export class SessionRegistry {
   private readonly sessions = new Map<string, SessionEntry>();
   private readonly recoverFromJournal?: JournalRecovery;
+  private readonly pendingJournal?: PendingCallJournal;
 
-  constructor(options?: { recoverFromJournal?: JournalRecovery }) {
+  constructor(options?: {
+    recoverFromJournal?: JournalRecovery;
+    pendingJournal?: PendingCallJournal;
+  }) {
     this.recoverFromJournal = options?.recoverFromJournal;
+    this.pendingJournal = options?.pendingJournal;
   }
 
   getSession(sessionId: string): SessionInfo | undefined {
@@ -141,7 +159,10 @@ export class SessionRegistry {
   }
 
   async resumeSession(sessionId: string): Promise<ResumeResult> {
-    const entry = this.requireEntry(sessionId);
+    const entry = this.sessions.get(sessionId);
+    if (entry === undefined) {
+      return this.recoverMissingEntry(sessionId);
+    }
     if (entry.status === 'closed') {
       throw new FacadeError('session_state_conflict');
     }
@@ -149,22 +170,86 @@ export class SessionRegistry {
       return this.resumeResult(entry);
     }
     // failed: only the journal can bring the session back.
-    if (!this.recoverFromJournal) {
-      throw new FacadeError('session_resume_failed');
-    }
-    let recovered: RecoveredSession;
-    try {
-      recovered = await this.recoverFromJournal(sessionId);
-    } catch {
-      // Raw recovery errors stay in internal logs; the caller sees a neutral code.
-      throw new FacadeError('session_resume_failed');
-    }
+    const recovered = await this.runRecoveryHook(sessionId, 'session_resume_failed');
+    const pendingCalls = this.recoveredPendingCalls(sessionId, recovered, false);
     entry.pendingCalls.clear();
-    for (const call of recovered.pendingCalls) {
+    for (const call of pendingCalls) {
       entry.pendingCalls.set(call.id, { ...call });
     }
     entry.status = 'active';
     return this.resumeResult(entry);
+  }
+
+  /**
+   * Registry-miss fallback: the facade process restarted, so only durable
+   * state can vouch for the session. The runtime journal is consulted through
+   * the recovery hook; the facade pending-call journal then decides whether
+   * the session was ever known (no record -> `session_not_found`) and what
+   * its pending calls are. A failed recovery leaves no entry behind.
+   */
+  private async recoverMissingEntry(sessionId: string): Promise<ResumeResult> {
+    const recovered = await this.runRecoveryHook(sessionId, 'session_not_found');
+    const pendingCalls = this.recoveredPendingCalls(sessionId, recovered, true);
+    const entry: SessionEntry = {
+      id: sessionId,
+      status: 'active',
+      idempotency: new Map(),
+      pendingCalls: new Map(pendingCalls.map((call) => [call.id, { ...call }])),
+    };
+    this.sessions.set(sessionId, entry);
+    return this.resumeResult(entry);
+  }
+
+  private async runRecoveryHook(
+    sessionId: string,
+    missingHookCode: FacadeErrorCode,
+  ): Promise<RecoveredSession> {
+    const hook = this.recoverFromJournal;
+    if (!hook) {
+      throw new FacadeError(missingHookCode);
+    }
+    try {
+      return await hook(sessionId);
+    } catch (error) {
+      // A journal miss at the hook keeps the 404 contract code; anything else
+      // is a resume failure with the raw detail confined to internal logs.
+      if (error instanceof FacadeError && error.code === 'session_not_found') {
+        throw error;
+      }
+      throw new FacadeError('session_resume_failed');
+    }
+  }
+
+  /**
+   * Rebuilds the pending table for a recovered session. With a journal
+   * configured the journal is the authority: approvals and questions are
+   * auto-skipped (their turn died with the process, so they are dropped) and
+   * external tool calls are reported `unknown` until the user settles them.
+   * On the registry-miss path an empty journal means the facade never saw
+   * the session, so the id stays unknown. Without a journal the hook's own
+   * list is used as-is.
+   */
+  private recoveredPendingCalls(
+    sessionId: string,
+    recovered: RecoveredSession,
+    requireKnown: boolean,
+  ): PendingCall[] {
+    if (!this.pendingJournal) {
+      return recovered.pendingCalls;
+    }
+    let journaled: PendingCall[];
+    try {
+      journaled = this.pendingJournal.read(sessionId);
+    } catch {
+      // A corrupt journal is a deterministic recovery failure, never skipped.
+      throw new FacadeError('session_resume_failed');
+    }
+    if (requireKnown && journaled.length === 0) {
+      throw new FacadeError('session_not_found');
+    }
+    return journaled
+      .filter((call) => call.kind === 'external_tool')
+      .map((call) => ({ id: call.id, kind: call.kind, state: 'unknown' as const }));
   }
 
   startPrompt(sessionId: string, input: StartPromptInput): StartPromptResult {
@@ -265,6 +350,15 @@ export class SessionRegistry {
     if (entry.pendingCalls.has(call.id)) {
       throw new FacadeError('internal_error');
     }
+    // Fail-closed: the call is journaled before it is tracked, so a call the
+    // journal cannot hold is never tracked and no request is emitted for it.
+    if (this.pendingJournal) {
+      try {
+        this.pendingJournal.register(sessionId, { id: call.id, kind: call.kind, state: 'pending' });
+      } catch {
+        throw new FacadeError('internal_error');
+      }
+    }
     let settle!: (resolution: CallResolution) => void;
     const resolution = new Promise<CallResolution>((resolve) => {
       settle = resolve;
@@ -276,25 +370,30 @@ export class SessionRegistry {
 
   resolveApproval(sessionId: string, input: ApprovalInput): AcceptedResult {
     const { entry, call } = this.lookupPendingCall(sessionId, input.toolCallId, 'approval');
-    entry.pendingCalls.delete(call.id);
+    this.settlePendingCall(entry, call);
     call.settle?.({ kind: 'approval', decision: input.decision, feedback: input.feedback });
     return { accepted: true };
   }
 
   answerQuestion(sessionId: string, input: QuestionAnswerInput): AcceptedResult {
     const { entry, call } = this.lookupPendingCall(sessionId, input.questionId, 'question');
-    entry.pendingCalls.delete(call.id);
+    this.settlePendingCall(entry, call);
     call.settle?.({ kind: 'question', answers: input.answers });
     return { accepted: true };
   }
 
   resolveToolResult(sessionId: string, input: ToolResultInput): AcceptedResult {
-    const { entry, call } = this.lookupPendingCall(sessionId, input.toolCallId, 'external_tool');
+    const { entry, call } = this.lookupPendingCall(
+      sessionId,
+      input.toolCallId,
+      'external_tool',
+      input.resolution,
+    );
     if (input.resolution === 'completed' && input.output === undefined) {
       // Invalid resolutions leave the call pending so a corrected retry is accepted.
       throw new FacadeError('invalid_request');
     }
-    entry.pendingCalls.delete(call.id);
+    this.settlePendingCall(entry, call);
     call.settle?.({ kind: 'external_tool', resolution: input.resolution, output: input.output });
     return { accepted: true };
   }
@@ -329,22 +428,49 @@ export class SessionRegistry {
 
   /**
    * Correlation guard: a response is accepted only when a call with the same
-   * id exists and is still `pending`. Unknown, duplicate, late (`unknown`
-   * state), or kind-mismatched ids are rejected and never match a new call.
+   * id exists and is still `pending` — with one exception: an `unknown`
+   * external tool call (left unconfirmed by a crash) accepts an explicit
+   * `skipped` resolution as its terminal settlement. Duplicate, late, or
+   * kind-mismatched ids and any other resolution on an `unknown` call are
+   * rejected and never match a new call.
    */
   private lookupPendingCall(
     sessionId: string,
     id: string,
     kind: PendingCallKind,
+    resolution?: ToolResolution,
   ): { entry: SessionEntry; call: PendingCallEntry } {
     const entry = this.requireEntry(sessionId);
     if (entry.status !== 'active') {
       throw new FacadeError('session_state_conflict');
     }
     const call = entry.pendingCalls.get(id);
-    if (!call || call.kind !== kind || call.state !== 'pending') {
+    if (!call || call.kind !== kind) {
+      throw new FacadeError('request_not_pending');
+    }
+    if (call.state === 'unknown') {
+      if (kind === 'external_tool' && resolution === 'skipped') {
+        return { entry, call };
+      }
       throw new FacadeError('request_not_pending');
     }
     return { entry, call };
+  }
+
+  /**
+   * Terminal settlement: the call leaves the pending table and its journal
+   * record is removed. A journal delete failure is tolerated — the lingering
+   * record is recovered as `unknown` / auto-skipped later, which is the same
+   * crash window the journal already covers.
+   */
+  private settlePendingCall(entry: SessionEntry, call: PendingCallEntry): void {
+    entry.pendingCalls.delete(call.id);
+    if (this.pendingJournal) {
+      try {
+        this.pendingJournal.settle(entry.id, call.id);
+      } catch {
+        // Tolerated: recovery closes the window.
+      }
+    }
   }
 }

@@ -142,11 +142,35 @@ export class FakeSession implements HarnessSession {
   }
 }
 
+/**
+ * Mirrors the klient `RPCError` shape (numeric envelope code) so tests can
+ * script the runtime failures the recovery hook discriminates on:
+ * `session.not_found` (envelope code 40401) vs. any other read failure.
+ */
+export class FakeRpcError extends Error {
+  constructor(
+    readonly code: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RPCError';
+  }
+}
+
+/** Envelope code for `session.not_found` on the runtime RPC boundary. */
+export const RPC_SESSION_NOT_FOUND = 40401;
+
+export function rpcError(code: number, message: string): FakeRpcError {
+  return new FakeRpcError(code, message);
+}
+
 export class FakeHarness implements HarnessSessionFactory {
   harnessOptions: KimiHarnessOptions | undefined;
   readonly created: CreateSessionOptions[] = [];
   readonly resumed: ResumeSessionInput[] = [];
   readonly sessions = new Map<string, FakeSession>();
+  /** Scripted per-id resume failures (journal miss / unreadable journal). */
+  readonly resumeErrors = new Map<string, Error>();
   private readonly scripts = new Map<string, readonly FakeScriptStep[]>();
 
   setScript(sessionId: string, steps: readonly FakeScriptStep[]): void {
@@ -163,6 +187,10 @@ export class FakeHarness implements HarnessSessionFactory {
 
   resumeSession(input: ResumeSessionInput): Promise<FakeSession> {
     this.resumed.push(input);
+    const failure = this.resumeErrors.get(input.id);
+    if (failure !== undefined) {
+      return Promise.reject(failure);
+    }
     const existing = this.sessions.get(input.id);
     if (existing !== undefined) {
       return Promise.resolve(existing);

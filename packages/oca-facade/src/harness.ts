@@ -189,7 +189,11 @@ export class LiveHarnessFactory implements FacadeHarness {
         contextBlocks: [],
       });
     } catch (error) {
-      throw toFacadeError(error, 'session_resume_failed');
+      // A session the runtime journal does not hold keeps the 404 contract
+      // code; anything else is sanitized into a neutral resume failure.
+      throw isSessionNotFoundError(error)
+        ? new FacadeError('session_not_found')
+        : toFacadeError(error, 'session_resume_failed');
     }
   }
 
@@ -298,7 +302,9 @@ export class LiveHarnessFactory implements FacadeHarness {
           kind: 'approval',
         });
       } catch {
-        // Session no longer active (or a duplicate id): settle neutrally.
+        // Session no longer active, a duplicate id, or the journal refused
+        // the record (fail-closed): settle neutrally so the runtime never
+        // awaits a response that can no longer arrive.
         return { decision: 'cancelled' };
       }
       this.sink.emit(sessionId, {
@@ -507,6 +513,22 @@ export class LiveHarnessFactory implements FacadeHarness {
 
 function raceTeardown<T>(state: LiveSessionState, resolution: Promise<T>): Promise<T | undefined> {
   return Promise.race([resolution, state.teardown]);
+}
+
+/**
+ * Runtime "no such session" discrimination. Two error shapes cross this
+ * boundary: the klient `RPCError` (numeric envelope code 40401, protocol
+ * `ErrorCode.SESSION_NOT_FOUND`) on the daemon path, and the core domain
+ * error (`code: 'session.not_found'`) on the in-process path. The code is
+ * the stable branch key across the wire, not `instanceof`.
+ */
+const RPC_SESSION_NOT_FOUND_CODE = 40401;
+const SESSION_NOT_FOUND_DOMAIN_CODE = 'session.not_found';
+
+function isSessionNotFoundError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const code = (error as { code?: unknown }).code;
+  return code === RPC_SESSION_NOT_FOUND_CODE || code === SESSION_NOT_FOUND_DOMAIN_CODE;
 }
 
 function textPart(text: string): TextPromptPart {

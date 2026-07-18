@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { expect } from 'vitest';
 
 import type { HarnessFactory } from '../src/harness';
+import type { PendingCallJournal } from '../src/session-registry';
 import { startServer, type RunningFacadeServer } from '../src/start';
 
 import { createFakeHarness, type FakeHarness } from './fake-harness';
@@ -26,8 +27,16 @@ export interface TestServerHandle {
 export async function bootTestServer(options?: {
   readonly harnessFactory?: HarnessFactory;
   readonly deltaFlushIntervalMs?: number;
+  /** Reuse an existing home (crash simulation: the journal survives the process). */
+  readonly homeDir?: string;
+  /**
+   * Journal injection for the recovery slice (the implementer wires it into
+   * the registry via a new `startServer` option). A failing journal drives
+   * the fail-closed registration path.
+   */
+  readonly pendingJournal?: PendingCallJournal;
 }): Promise<TestServerHandle> {
-  const homeDir = await mkdtemp(join(tmpdir(), 'oca-facade-http-'));
+  const homeDir = options?.homeDir ?? (await mkdtemp(join(tmpdir(), 'oca-facade-http-')));
   const { fake, createHarness } = createFakeHarness();
   const server = await startServer({
     host: '127.0.0.1',
@@ -36,6 +45,7 @@ export async function bootTestServer(options?: {
     logger: false,
     harnessFactory: options?.harnessFactory ?? createHarness,
     deltaFlushIntervalMs: options?.deltaFlushIntervalMs ?? 50,
+    ...(options?.pendingJournal !== undefined ? { pendingJournal: options.pendingJournal } : {}),
   });
   return {
     baseUrl: `http://127.0.0.1:${server.port}`,
