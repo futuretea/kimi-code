@@ -1,5 +1,4 @@
 import type * as ChildProcess from 'node:child_process';
-import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -109,7 +108,7 @@ vi.mock('node:child_process', async () => {
 
 function cacheWith(version: string): UpdateCache {
   return {
-    source: 'cdn',
+    source: 'npm-registry',
     checkedAt: '2026-04-23T08:00:00.000Z',
     latest: version,
     manifest: null,
@@ -127,7 +126,7 @@ function manifestFor(version: string, overrides: Partial<UpdateManifest> = {}): 
 
 function cacheWithManifest(manifest: UpdateManifest): UpdateCache {
   return {
-    source: 'cdn',
+    source: 'npm-registry',
     checkedAt: '2026-04-23T08:00:00.000Z',
     latest: manifest.version,
     manifest,
@@ -286,7 +285,7 @@ describe('runUpdatePreflight', () => {
     expect(detectInstallSource).toHaveBeenCalledTimes(1);
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^npm(\.cmd)?$/),
-      ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+      ['install', '-g', '@futuretea/tea-code@0.5.0'],
       { detached: true, stdio: 'ignore' },
     );
   });
@@ -345,16 +344,16 @@ describe('runUpdatePreflight', () => {
     await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('exit');
     expect(mocks.promptForInstallChoice).toHaveBeenCalledWith(
       expect.objectContaining({
-        installCommand: 'npm install -g @moonshot-ai/kimi-code@0.5.0',
+        installCommand: 'npm install -g @futuretea/tea-code@0.5.0',
         installSource: 'npm-global',
       }),
     );
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^npm(\.cmd)?$/),
-      ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+      ['install', '-g', '@futuretea/tea-code@0.5.0'],
       { stdio: 'inherit' },
     );
-    expect(stdout.join('')).toContain('Updated @moonshot-ai/kimi-code to 0.5.0');
+    expect(stdout.join('')).toContain('Updated @futuretea/tea-code to 0.5.0');
   });
 
   it('refreshes a stale cached target before showing the foreground install prompt', async () => {
@@ -372,15 +371,15 @@ describe('runUpdatePreflight', () => {
     expect(mocks.promptForInstallChoice).toHaveBeenCalledWith(
       expect.objectContaining({
         target: { version: '0.7.0' },
-        installCommand: 'npm install -g @moonshot-ai/kimi-code@0.7.0',
+        installCommand: 'npm install -g @futuretea/tea-code@0.7.0',
       }),
     );
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^npm(\.cmd)?$/),
-      ['install', '-g', '@moonshot-ai/kimi-code@0.7.0'],
+      ['install', '-g', '@futuretea/tea-code@0.7.0'],
       { stdio: 'inherit' },
     );
-    expect(stdout.join('')).toContain('Updated @moonshot-ai/kimi-code to 0.7.0');
+    expect(stdout.join('')).toContain('Updated @futuretea/tea-code to 0.7.0');
   });
 
   it('falls back to the cached foreground prompt target when the refresh hangs', async () => {
@@ -400,7 +399,7 @@ describe('runUpdatePreflight', () => {
       expect(mocks.promptForInstallChoice).toHaveBeenCalledWith(
         expect.objectContaining({
           target: { version: '0.6.0' },
-          installCommand: 'npm install -g @moonshot-ai/kimi-code@0.6.0',
+          installCommand: 'npm install -g @futuretea/tea-code@0.6.0',
         }),
       );
     } finally {
@@ -419,7 +418,7 @@ describe('runUpdatePreflight', () => {
     await runUpdatePreflight('0.4.0', options);
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^pnpm(\.cmd)?$/),
-      ['add', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+      ['add', '-g', '@futuretea/tea-code@0.5.0'],
       { stdio: 'inherit' },
     );
   });
@@ -438,7 +437,7 @@ describe('runUpdatePreflight', () => {
       await runUpdatePreflight('0.4.0', options);
       expect(mocks.spawn).toHaveBeenCalledWith(
         'pnpm.cmd',
-        ['add', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+        ['add', '-g', '@futuretea/tea-code@0.5.0'],
         { stdio: 'inherit', shell: true },
       );
     } finally {
@@ -457,7 +456,7 @@ describe('runUpdatePreflight', () => {
     await runUpdatePreflight('0.4.0', options);
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^yarn(\.cmd)?$/),
-      ['global', 'add', '@moonshot-ai/kimi-code@0.5.0'],
+      ['global', 'add', '@futuretea/tea-code@0.5.0'],
       { stdio: 'inherit' },
     );
   });
@@ -473,25 +472,24 @@ describe('runUpdatePreflight', () => {
     await runUpdatePreflight('0.4.0', options);
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^bun(\.exe)?$/),
-      ['add', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+      ['add', '-g', '@futuretea/tea-code@0.5.0'],
       { stdio: 'inherit' },
     );
   });
 
-  it('homebrew: prints manual brew upgrade command, does not spawn', async () => {
+  it('homebrew: prints the fork npm command and does not spawn', async () => {
     mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.refreshUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.detectInstallSource.mockResolvedValue('homebrew');
     const { stdout, options } = captureOutput();
     await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
-    expect(stdout.join('')).toContain('brew upgrade kimi-code');
-    expect(stdout.join('')).toContain('Third-party sources may lag behind the official release.');
-    expect(stdout.join('')).toContain('https://www.kimi.com/code');
+    expect(stdout.join('')).toContain('npm install -g @futuretea/tea-code@0.5.0');
+    expect(stdout.join('')).not.toContain('brew upgrade');
     expect(promptForInstallChoice).not.toHaveBeenCalled();
     expect(mocks.spawn).not.toHaveBeenCalled();
   });
 
-  it('native on darwin: spawns bash -c with pipefail-guarded curl|bash', async () => {
+  it('native on darwin: never executes an upstream installer and gives fork npm guidance', async () => {
     disableAutoInstall();
     mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.refreshUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
@@ -501,24 +499,17 @@ describe('runUpdatePreflight', () => {
     const originalPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'darwin' });
     try {
-      const { options } = captureOutput();
+      const { stdout, options } = captureOutput();
       await runUpdatePreflight('0.4.0', options);
-      const call = mocks.spawn.mock.calls[0];
-      expect(call?.[0]).toBe('bash');
-      expect(call?.[2]).toEqual({ stdio: 'inherit' });
-      const [flag, script] = call?.[1] as string[];
-      expect(flag).toBe('-c');
-      // pipefail must come before the pipeline so a failed `curl` is not masked
-      // by the trailing `bash` exiting 0 (see "surfaces a failed curl" below).
-      expect(script).toContain('set -o pipefail');
-      expect(script).toContain('curl -fsSL https://code.kimi.com/kimi-code/install.sh');
-      expect(script).toContain('| bash');
+      expect(mocks.spawn).not.toHaveBeenCalled();
+      expect(stdout.join('')).toContain('npm install -g @futuretea/tea-code@0.5.0');
+      expect(stdout.join('')).not.toContain('install.sh');
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform });
     }
   });
 
-  it('native on win32: prints manual powershell command, does not spawn', async () => {
+  it('native on win32: prints the Tea npm command, does not spawn', async () => {
     mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.refreshUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.detectInstallSource.mockResolvedValue('native');
@@ -527,7 +518,8 @@ describe('runUpdatePreflight', () => {
     try {
       const { stdout, options } = captureOutput();
       await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
-      expect(stdout.join('')).toContain('irm https://code.kimi.com/kimi-code/install.ps1 | iex');
+      expect(stdout.join('')).toContain('npm install -g @futuretea/tea-code@0.5.0');
+      expect(stdout.join('')).not.toContain('install.ps1');
       expect(promptForInstallChoice).not.toHaveBeenCalled();
       expect(mocks.spawn).not.toHaveBeenCalled();
     } finally {
@@ -541,7 +533,7 @@ describe('runUpdatePreflight', () => {
     mocks.detectInstallSource.mockResolvedValue('unsupported');
     const { stdout, options } = captureOutput();
     await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
-    expect(stdout.join('')).toContain('npm install -g @moonshot-ai/kimi-code@0.5.0');
+    expect(stdout.join('')).toContain('npm install -g @futuretea/tea-code@0.5.0');
     expect(mocks.spawn).not.toHaveBeenCalled();
   });
 
@@ -567,7 +559,7 @@ describe('runUpdatePreflight', () => {
     await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
     expect(stderr.join('')).toContain('warning: failed to install');
     // A failed install must never print the "Updated …" success line.
-    expect(stdout.join('')).not.toContain('Updated @moonshot-ai/kimi-code');
+    expect(stdout.join('')).not.toContain('Updated @futuretea/tea-code');
   });
 
   it('starts an automatic update in the background by default', async () => {
@@ -582,7 +574,7 @@ describe('runUpdatePreflight', () => {
     expect(promptForInstallChoice).not.toHaveBeenCalled();
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^npm(\.cmd)?$/),
-      ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+      ['install', '-g', '@futuretea/tea-code@0.5.0'],
       { detached: true, stdio: 'ignore' },
     );
     expect(writeUpdateInstallState).toHaveBeenCalledWith(expect.objectContaining({
@@ -620,7 +612,7 @@ describe('runUpdatePreflight', () => {
       await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
       expect(mocks.spawn).toHaveBeenCalledWith(
         'npm.cmd',
-        ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+        ['install', '-g', '@futuretea/tea-code@0.5.0'],
         { detached: true, stdio: 'ignore', shell: true, windowsHide: true },
       );
     } finally {
@@ -675,7 +667,7 @@ describe('runUpdatePreflight', () => {
     expect(promptForInstallChoice).not.toHaveBeenCalled();
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^npm(\.cmd)?$/),
-      ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+      ['install', '-g', '@futuretea/tea-code@0.5.0'],
       { detached: true, stdio: 'ignore' },
     );
   });
@@ -933,7 +925,7 @@ describe('runUpdatePreflight', () => {
 
       expect(mocks.spawn).toHaveBeenCalledWith(
         expect.stringMatching(/^npm(\.cmd)?$/),
-        ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+        ['install', '-g', '@futuretea/tea-code@0.5.0'],
         { detached: true, stdio: 'ignore' },
       );
       expect(track).toHaveBeenCalledWith('update_background_install_started', expect.objectContaining({
@@ -1059,7 +1051,7 @@ describe('runUpdatePreflight', () => {
 
       expect(mocks.spawn).toHaveBeenCalledWith(
         expect.stringMatching(/^npm(\.cmd)?$/),
-        ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+        ['install', '-g', '@futuretea/tea-code@0.5.0'],
         { detached: true, stdio: 'ignore' },
       );
       expect(track).toHaveBeenCalledWith('update_background_install_started', expect.objectContaining({
@@ -1110,22 +1102,10 @@ describe('runUpdatePreflight', () => {
   });
 });
 
-describe('spawnForSource native', () => {
-  // No spawn mock here — we run real bash to prove the failure contract
-  // end-to-end. `curl … | bash` reports only the trailing bash's exit status,
-  // so a curl that never connects (exit 7, empty stdin → bash exits 0) is
-  // masked and the update is wrongly reported as successful. `set -o pipefail`
-  // makes the pipeline surface curl's failure. Shadowing `curl` with a shell
-  // function keeps this offline and deterministic; skipped on Windows (no bash,
-  // and native auto-install is unsupported there anyway).
-  it.skipIf(process.platform === 'win32')(
-    'surfaces a failed curl download as a non-zero exit',
-    () => {
-      const { cmd, args } = spawnForSource('native', '0.5.0', 'darwin');
-      const script = `curl() { return 7; }\n${args[1] ?? ''}`;
-      const result = spawnSync(cmd, [args[0] ?? '-c', script], { encoding: 'utf8' });
-      expect(result.error).toBeUndefined();
-      expect(result.status).toBeGreaterThan(0);
-    },
-  );
+describe('spawnForSource non-npm sources', () => {
+  it.each(['homebrew', 'native'] as const)('rejects %s without returning a spawn command', (source) => {
+    expect(() => spawnForSource(source, '0.5.0', 'darwin')).toThrow(
+      'non-npm install sources cannot be auto-installed',
+    );
+  });
 });

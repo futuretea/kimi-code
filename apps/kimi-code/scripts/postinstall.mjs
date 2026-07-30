@@ -122,6 +122,8 @@ import {
 } from './postinstall/ui.mjs';
 
 async function main() {
+  // Fork installs intentionally never inspect or take over upstream shims.
+  return;
   // Step 1: skip non-global installs (npx, local project deps,
   // workspace bootstraps). Windows is supported natively; the
   // platform-specific bits (PATHEXT-aware PATH walk, whole-file

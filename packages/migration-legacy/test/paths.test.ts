@@ -20,8 +20,8 @@ describe('paths', () => {
     expect(paths.migratedMarker('/x/.kimi')).toBe(join('/x/.kimi', '.migrated-to-kimi-code'));
   });
 
-  it('skipMarker is under target', () => {
-    expect(paths.skipMarker('/y/.kimi-code')).toBe(join('/y/.kimi-code', '.skip-migration-from-kimi-cli'));
+  it('skipMarker follows the supplied migration target, including the Tea home', () => {
+    expect(paths.skipMarker('/y/.tea-code')).toBe(join('/y/.tea-code', '.skip-migration-from-kimi-cli'));
   });
 
   it('migrationReportFile is under target', () => {

@@ -19,7 +19,7 @@ let dir: string;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'kimi-update-cache-'));
-  process.env['KIMI_CODE_HOME'] = dir;
+  process.env['TEA_CODE_HOME'] = dir;
 });
 
 afterEach(() => {
@@ -52,9 +52,30 @@ describe('update cache', () => {
     await expect(readUpdateCache()).resolves.toEqual(emptyUpdateCache());
   });
 
+  it('discards a persisted CDN cache instead of migrating it', async () => {
+    const filePath = join(dir, 'legacy-cdn-cache.json');
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        source: 'cdn',
+        checkedAt: '2026-04-23T08:00:00.000Z',
+        latest: '0.5.0',
+        manifest: null,
+      }),
+      'utf-8',
+    );
+
+    await expect(readUpdateCache(filePath)).resolves.toEqual({
+      source: 'npm-registry',
+      checkedAt: null,
+      latest: null,
+      manifest: null,
+    });
+  });
+
   it('writes and reads back the cache from updates/latest.json', async () => {
     const cache = {
-      source: 'cdn',
+      source: 'npm-registry',
       checkedAt: '2026-04-23T08:00:00.000Z',
       latest: '0.5.0',
       manifest: null,
@@ -66,48 +87,23 @@ describe('update cache', () => {
     await expect(readUpdateCache()).resolves.toEqual(cache);
   });
 
-  it('writes and reads back a cache carrying a rollout manifest', async () => {
-    const cache = {
-      source: 'cdn',
-      checkedAt: '2026-04-23T08:00:00.000Z',
-      latest: '0.5.0',
-      manifest: {
-        version: '0.5.0',
-        publishedAt: '2026-04-23T07:00:00.000Z',
-        rollout: [
-          { percent: 30, delaySeconds: 0 },
-          { percent: 30, delaySeconds: 43_200 },
-          { percent: 40, delaySeconds: 86_400 },
-        ],
-      },
-    } as const;
-
-    await writeUpdateCache(cache);
-
-    await expect(readUpdateCache()).resolves.toEqual(cache);
-  });
-
-  it('reads a legacy cache file without a manifest field as manifest null', async () => {
+  it('discards a cache carrying a legacy rollout manifest', async () => {
     mkdirSync(join(dir, 'updates'), { recursive: true });
     writeFileSync(
       getUpdateStateFile(),
       JSON.stringify({
-        source: 'cdn',
+        source: 'npm-registry',
         checkedAt: '2026-04-23T08:00:00.000Z',
         latest: '0.5.0',
+        manifest: { version: '0.5.0', rollout: [] },
       }),
       'utf-8',
     );
 
-    await expect(readUpdateCache()).resolves.toEqual({
-      source: 'cdn',
-      checkedAt: '2026-04-23T08:00:00.000Z',
-      latest: '0.5.0',
-      manifest: null,
-    });
+    await expect(readUpdateCache()).resolves.toEqual(emptyUpdateCache());
   });
 
-  it('keeps latest and treats a malformed manifest field as null', async () => {
+  it('discards a cache with a legacy source even when its manifest is malformed', async () => {
     mkdirSync(join(dir, 'updates'), { recursive: true });
     writeFileSync(
       getUpdateStateFile(),
@@ -120,12 +116,7 @@ describe('update cache', () => {
       'utf-8',
     );
 
-    await expect(readUpdateCache()).resolves.toEqual({
-      source: 'cdn',
-      checkedAt: '2026-04-23T08:00:00.000Z',
-      latest: '0.5.0',
-      manifest: null,
-    });
+    await expect(readUpdateCache()).resolves.toEqual(emptyUpdateCache());
   });
 });
 
@@ -163,5 +154,24 @@ describe('update install state', () => {
 
     expect(getUpdateInstallStateFile()).toBe(join(dir, 'updates', 'install.json'));
     await expect(readUpdateInstallState()).resolves.toEqual(state);
+  });
+
+  it('discards a persisted Homebrew install state instead of migrating it', async () => {
+    const filePath = join(dir, 'legacy-homebrew-install.json');
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        active: {
+          version: '0.5.0',
+          source: 'homebrew',
+          startedAt: '2026-04-23T08:00:00.000Z',
+        },
+        lastFailure: null,
+        lastSuccess: null,
+      }),
+      'utf-8',
+    );
+
+    await expect(readUpdateInstallState(filePath)).resolves.toEqual(emptyUpdateInstallState());
   });
 });

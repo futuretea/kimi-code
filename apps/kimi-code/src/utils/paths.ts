@@ -29,7 +29,7 @@ import {
 /**
  * Return the root data directory for Kimi Code.
  *
- * Priority: `KIMI_CODE_HOME` env var > `~/.kimi-code`.
+ * Priority: `TEA_CODE_HOME` env var > `~/.tea-code`.
  */
 export function getDataDir(): string {
   const envDir = process.env[KIMI_CODE_HOME_ENV];

@@ -42,7 +42,7 @@ import { parseAgentFileText } from './parser';
 
 export interface SessionAgentCatalogOptions {
   readonly workDir: string;
-  /** Brand data dir (`KIMI_CODE_HOME`, default `~/.kimi-code`). */
+  /** Brand data dir (`TEA_CODE_HOME`, default `~/.tea-code`). */
   readonly brandHomeDir: string;
   /** OS home dir, for `~/.agents/agents` and `~` expansion. */
   readonly osHomeDir: string;

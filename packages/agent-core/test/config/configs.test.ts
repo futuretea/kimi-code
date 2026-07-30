@@ -673,18 +673,22 @@ micro_compaction = false
 });
 
 describe('config path env override', () => {
-  it('uses KIMI_CODE_HOME when no explicit homeDir is supplied', () => {
-    const saved = process.env['KIMI_CODE_HOME'];
+  it('uses TEA_CODE_HOME when no explicit homeDir is supplied and ignores the old env', () => {
+    const savedTea = process.env['TEA_CODE_HOME'];
+    const savedKimi = process.env['KIMI_CODE_HOME'];
     try {
-      process.env['KIMI_CODE_HOME'] = '/tmp/kimi-from-env';
+      process.env['KIMI_CODE_HOME'] = '/tmp/old-kimi-from-env';
+      process.env['TEA_CODE_HOME'] = '/tmp/tea-from-env';
 
-      expect(resolveKimiHome()).toBe('/tmp/kimi-from-env');
+      expect(resolveKimiHome()).toBe('/tmp/tea-from-env');
       expect(resolveKimiHome('/tmp/kimi-explicit')).toBe('/tmp/kimi-explicit');
-      expect(resolveConfigPath({})).toBe('/tmp/kimi-from-env/config.toml');
+      expect(resolveConfigPath({})).toBe('/tmp/tea-from-env/config.toml');
       expect(resolveConfigPath({ configPath: '/tmp/custom.toml' })).toBe('/tmp/custom.toml');
     } finally {
-      if (saved === undefined) delete process.env['KIMI_CODE_HOME'];
-      else process.env['KIMI_CODE_HOME'] = saved;
+      if (savedTea === undefined) delete process.env['TEA_CODE_HOME'];
+      else process.env['TEA_CODE_HOME'] = savedTea;
+      if (savedKimi === undefined) delete process.env['KIMI_CODE_HOME'];
+      else process.env['KIMI_CODE_HOME'] = savedKimi;
     }
   });
 });

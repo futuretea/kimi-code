@@ -1,6 +1,33 @@
 import { describe, expect, it } from 'vitest';
 
-import { CHECK_KIMI_CODE_DOCS_SKILL, SessionSkillRegistry, UPDATE_CONFIG_SKILL, registerBuiltinSkills } from '../../src/skill';
+import {
+  CHECK_KIMI_CODE_DOCS_SKILL,
+  CUSTOM_THEME_SKILL,
+  IMPORT_FROM_CC_CODEX_SKILL,
+  MCP_CONFIG_SKILL,
+  SessionSkillRegistry,
+  UPDATE_CONFIG_SKILL,
+  registerBuiltinSkills,
+} from '../../src/skill';
+
+const GLOBAL_HOME_SKILLS = [
+  CUSTOM_THEME_SKILL,
+  IMPORT_FROM_CC_CODEX_SKILL,
+  MCP_CONFIG_SKILL,
+  UPDATE_CONFIG_SKILL,
+] as const;
+
+describe('builtin global home guidance', () => {
+  it('uses Tea global home and keeps project-local .kimi-code references explicit', () => {
+    for (const skill of GLOBAL_HOME_SKILLS) {
+      expect(skill.content).toContain('TEA_CODE_HOME');
+      expect(skill.content).toContain('~/.tea-code');
+      expect(skill.content).not.toContain('KIMI_CODE_HOME');
+    }
+    expect(IMPORT_FROM_CC_CODEX_SKILL.content).toContain('<project root>/.kimi-code');
+    expect(MCP_CONFIG_SKILL.content).toContain('<cwd>/.kimi-code/mcp.json');
+  });
+});
 
 describe('builtin skill: update-config', () => {
   it('has the expected identity and inline metadata', () => {

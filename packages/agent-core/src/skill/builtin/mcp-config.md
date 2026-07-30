@@ -40,22 +40,22 @@ tools exist and the user didn't name one, ask which.
 Config lives in three files; on key collision, later entries in this
 precedence order override earlier ones.
 
-The kimi-code runtime resolves the user-global directory as `KIMI_CODE_HOME`
-first, falling back to `~/.kimi-code`. Before touching the user-global file,
+The kimi-code runtime resolves the user-global directory as `TEA_CODE_HOME`
+first, falling back to `~/.tea-code`. Before touching the user-global file,
 resolve the actual directory with Bash so you don't read or write the wrong
-one. Check whether `KIMI_CODE_HOME` is set and fall back to `~/.kimi-code`
+one. Check whether `TEA_CODE_HOME` is set and fall back to `~/.tea-code`
 when it is empty:
 
 ```bash
-echo "$KIMI_CODE_HOME"
-echo "$HOME/.kimi-code"
+echo "$TEA_CODE_HOME"
+echo "$HOME/.tea-code"
 ```
 
 Use the first line when it is non-empty; otherwise use the second line. In the
-rest of this skill, `<KIMI_CODE_HOME>` means that resolved data root —
-**never assume `~/.kimi-code`**.
+rest of this skill, `<TEA_CODE_HOME>` means that resolved data root —
+**never assume `~/.tea-code`**.
 
-- User-global: `<KIMI_CODE_HOME>/mcp.json`. Use for servers you want
+- User-global: `<TEA_CODE_HOME>/mcp.json`. Use for servers you want
   everywhere.
 - Project-root: `<project root>/.mcp.json`, where project root is found
   by walking up from `<cwd>` to the nearest `.git`. Use for

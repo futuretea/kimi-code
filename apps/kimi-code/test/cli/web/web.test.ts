@@ -900,16 +900,16 @@ describe('`kimi web rotate-token`', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'kimi-rotate-'));
-    prevHome = process.env['KIMI_CODE_HOME'];
-    process.env['KIMI_CODE_HOME'] = dir;
+    prevHome = process.env['TEA_CODE_HOME'];
+    process.env['TEA_CODE_HOME'] = dir;
     vi.resetModules();
   });
 
   afterEach(() => {
     if (prevHome === undefined) {
-      delete process.env['KIMI_CODE_HOME'];
+      delete process.env['TEA_CODE_HOME'];
     } else {
-      process.env['KIMI_CODE_HOME'] = prevHome;
+      process.env['TEA_CODE_HOME'] = prevHome;
     }
     rmSync(dir, { recursive: true, force: true });
   });

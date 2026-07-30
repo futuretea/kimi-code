@@ -10,9 +10,6 @@ const InstallSourceSchema: z.ZodType<InstallSource> = z.enum([
   'pnpm-global',
   'yarn-global',
   'bun-global',
-  'homebrew',
-  'native',
-  'unsupported',
 ]);
 
 const UpdateInstallStateSchema: z.ZodType<UpdateInstallState> = z

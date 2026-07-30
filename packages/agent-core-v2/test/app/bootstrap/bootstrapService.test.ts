@@ -44,10 +44,10 @@ describe('BootstrapService (scoped)', () => {
 });
 
 describe('resolveBootstrapOptions', () => {
-  it('prefers explicit homeDir over KIMI_CODE_HOME over osHomeDir', () => {
+  it('prefers explicit homeDir over TEA_CODE_HOME over osHomeDir', () => {
     expect(resolveBootstrapOptions({ homeDir: '/a', osHomeDir: '/b', env: {} }).homeDir).toBe('/a');
-    expect(resolveBootstrapOptions({ osHomeDir: '/b', env: { KIMI_CODE_HOME: '/c' } }).homeDir).toBe('/c');
-    expect(resolveBootstrapOptions({ osHomeDir: '/b', env: {} }).homeDir).toBe('/b/.kimi-code');
+    expect(resolveBootstrapOptions({ osHomeDir: '/b', env: { TEA_CODE_HOME: '/c', KIMI_CODE_HOME: '/old' } }).homeDir).toBe('/c');
+    expect(resolveBootstrapOptions({ osHomeDir: '/b', env: {} }).homeDir).toBe('/b/.tea-code');
   });
 });
 

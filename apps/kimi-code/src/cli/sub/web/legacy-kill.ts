@@ -6,7 +6,7 @@
  * terminal (Ctrl+C stops them), so they need no kill command. Builds before
  * the `kimi web` command tree could leave a background daemon behind; those
  * recorded themselves in the legacy single-instance lock at
- * `<KIMI_CODE_HOME>/server/lock`, which the instance registry never sees.
+ * `<TEA_CODE_HOME>/server/lock`, which the instance registry never sees.
  * This command is the cleanup path for exactly those servers.
  *
  * The kill combines two independent mechanisms so the server dies even if one

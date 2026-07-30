@@ -105,7 +105,7 @@
         "@moonshot-ai/kimi-telemetry"
         "@moonshot-ai/transcript"
         "@moonshot-ai/tree-sitter-bash"
-        "@moonshot-ai/kimi-code"
+        "@futuretea/tea-code"
         "kimi-code"
         "@moonshot-ai/kimi-inspect"
         "@moonshot-ai/kimi-web"
@@ -134,8 +134,8 @@
             else
               throw "Unsupported Kimi Code native target for ${pkgs.stdenv.hostPlatform.system}";
 
-          kimi-code = pkgs.stdenv.mkDerivation (finalAttrs: {
-            pname = "kimi-code";
+          tea-code = pkgs.stdenv.mkDerivation (finalAttrs: {
+            pname = "tea-code";
             version = appPackageJson.version;
 
             src = lib.fileset.toSource {
@@ -205,7 +205,7 @@
               # before producing the native executable.
               pnpm --filter=@moonshot-ai/kimi-web run build
               node apps/kimi-code/scripts/copy-web-assets.mjs
-              pnpm --filter=@moonshot-ai/kimi-code run build:native:sea
+              pnpm --filter=@futuretea/tea-code run build:native:sea
               runHook postBuild
             '';
 
@@ -214,36 +214,36 @@
 
               install -Dm755 \
                 "apps/kimi-code/dist-native/bin/${nativeTarget}/kimi" \
-                "$out/bin/kimi"
+                "$out/bin/tea-code"
 
               runHook postInstall
             '';
 
             postInstall = ''
-              wrapProgram $out/bin/kimi --prefix PATH : ${lib.makeBinPath [ pkgs.ripgrep pkgs.fd ]}
+              wrapProgram $out/bin/tea-code --prefix PATH : ${lib.makeBinPath [ pkgs.ripgrep pkgs.fd ]}
             '';
 
             meta = {
-              description = "Kimi Code CLI";
-              homepage = "https://github.com/MoonshotAI/kimi-code";
+              description = "Tea Code CLI";
+              homepage = "https://github.com/futuretea/kimi-code";
               license = lib.licenses.mit;
-              mainProgram = "kimi";
+              mainProgram = "tea-code";
               platforms = systems;
             };
           });
         in
         {
-          inherit kimi-code;
-          default = kimi-code;
+          inherit tea-code;
+          default = tea-code;
         }
       );
 
       apps = forAllSystems (pkgs: {
-        kimi-code = {
+        tea-code = {
           type = "app";
-          program = "${self.packages.${pkgs.system}.kimi-code}/bin/kimi";
+          program = "${self.packages.${pkgs.system}.tea-code}/bin/tea-code";
         };
-        default = self.apps.${pkgs.system}.kimi-code;
+        default = self.apps.${pkgs.system}.tea-code;
       });
 
       devShells = forAllSystems (pkgs: {

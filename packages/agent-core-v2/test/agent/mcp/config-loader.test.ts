@@ -313,20 +313,20 @@ describe('loadMcpServers', () => {
     });
   });
 
-  it('honors KIMI_CODE_HOME env var when homeDir is not supplied', async () => {
+  it('honors TEA_CODE_HOME env var when homeDir is not supplied', async () => {
     const home = makeTempDir();
     const cwd = makeTempDir();
     await writeJson(join(home, 'mcp.json'), {
       mcpServers: { from_env: { transport: 'stdio', command: 'env-cmd' } },
     });
-    const saved = process.env['KIMI_CODE_HOME'];
-    process.env['KIMI_CODE_HOME'] = home;
+    const saved = process.env['TEA_CODE_HOME'];
+    process.env['TEA_CODE_HOME'] = home;
     try {
       const servers = await loadMcpServers({ cwd });
       expect(servers['from_env']).toEqual({ transport: 'stdio', command: 'env-cmd' });
     } finally {
-      if (saved === undefined) delete process.env['KIMI_CODE_HOME'];
-      else process.env['KIMI_CODE_HOME'] = saved;
+      if (saved === undefined) delete process.env['TEA_CODE_HOME'];
+      else process.env['TEA_CODE_HOME'] = saved;
     }
   });
 });
