@@ -1,4 +1,16 @@
-# @moonshot-ai/kimi-code
+# @futuretea/tea-code
+
+## 0.1.0
+
+### Minor Changes
+
+- [#2232](https://github.com/MoonshotAI/kimi-code/pull/2232) [`efac96c`](https://github.com/futuretea/kimi-code/commit/efac96c8a95a3c3ca4e1ae9bce38082498a02b2e) Thanks [@7Sageer](https://github.com/7Sageer)! - Support Markdown-defined custom agents on agent-core.
+
+- [#2232](https://github.com/MoonshotAI/kimi-code/pull/2232) [`efac96c`](https://github.com/futuretea/kimi-code/commit/efac96c8a95a3c3ca4e1ae9bce38082498a02b2e) Thanks [@7Sageer](https://github.com/7Sageer)! - Add the /secondary_model slash command to configure the secondary model used by subagents.
+
+## Upstream history
+
+The entries below are inherited from @moonshot-ai/kimi-code and are not releases of @futuretea/tea-code.
 
 ## 0.30.0
 
