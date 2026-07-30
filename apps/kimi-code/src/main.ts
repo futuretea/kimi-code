@@ -97,7 +97,7 @@ export async function handleUpgradeCommand(version: string): Promise<void> {
   };
   const harness = createKimiHarness({
     homeDir: telemetryBootstrap.homeDir,
-    identity: createKimiCodeHostIdentity(version),
+    identity: createKimiCodeHostIdentity(),
     telemetry: telemetryClient,
   });
   let exitCode = 1;
@@ -105,11 +105,10 @@ export async function handleUpgradeCommand(version: string): Promise<void> {
     await harness.ensureConfigFile();
     const config = await harness.getConfig();
     initializeCliTelemetry({
-      harness,
-      bootstrap: telemetryBootstrap,
-      config,
-      version,
-      uiMode: CLI_UI_MODE,
+    harness,
+    bootstrap: telemetryBootstrap,
+    config,
+    uiMode: CLI_UI_MODE,
     });
     exitCode = await handleUpgrade(version, { track, logger: log });
   } finally {

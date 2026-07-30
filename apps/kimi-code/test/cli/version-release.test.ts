@@ -81,12 +81,12 @@ function fixtureSnapshot(root: string, changeset: string): Record<string, string
   };
 }
 
-describe('version:release fork suffix', () => {
+describe('version:release Tea package version', () => {
   it('runs the default release command with the app-local upstream version', () => {
     const root = prepareDefaultInvocationFixture();
 
     expect(runDefaultRelease(root)).toEqual({ status: 0, stderr: '' });
-    expect(appVersion(root)).toBe('0.1.0+up0.30.0');
+    expect(appVersion(root)).toBe('0.1.0');
     expect(existsSync(join(root, '.changeset', 'tea-code-minor.md'))).toBe(false);
   });
 
@@ -94,31 +94,31 @@ describe('version:release fork suffix', () => {
     const root = prepareFixture('first-release');
 
     expect(runRelease(root)).toEqual({ status: 0, stderr: '' });
-    expect(appVersion(root)).toBe('0.1.0+up0.30.0');
+    expect(appVersion(root)).toBe('0.1.0');
     expect(existsSync(join(root, '.changeset', 'tea-code-minor.md'))).toBe(false);
   });
 
-  it('keeps the upstream suffix while a subsequent changeset raises the base version', () => {
+  it('uses the Changesets version while a subsequent changeset raises it', () => {
     const root = prepareFixture('subsequent-release');
 
     expect(runRelease(root)).toEqual({ status: 0, stderr: '' });
-    expect(appVersion(root)).toBe('0.2.0+up0.30.0');
+    expect(appVersion(root)).toBe('0.2.0');
     expect(existsSync(join(root, '.changeset', 'tea-code-minor.md'))).toBe(false);
   });
 
-  it('preserves Changesets patch semantics before appending the upstream suffix', () => {
+  it('preserves Changesets patch semantics', () => {
     const root = prepareFixture('patch-release');
 
     expect(runRelease(root)).toEqual({ status: 0, stderr: '' });
-    expect(appVersion(root)).toBe('0.1.1+up0.30.0');
+    expect(appVersion(root)).toBe('0.1.1');
     expect(existsSync(join(root, '.changeset', 'tea-code-patch.md'))).toBe(false);
   });
 
-  it('preserves an approved Changesets major release before appending the upstream suffix', () => {
+  it('preserves an approved Changesets major release', () => {
     const root = prepareFixture('approved-major-release');
 
     expect(runRelease(root)).toEqual({ status: 0, stderr: '' });
-    expect(appVersion(root)).toBe('1.0.0+up0.30.0');
+    expect(appVersion(root)).toBe('1.0.0');
     expect(existsSync(join(root, '.changeset', 'tea-code-major.md'))).toBe(false);
   });
 

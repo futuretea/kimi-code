@@ -66,7 +66,8 @@ export async function runShell(
   };
   const harnessOptions: KimiHarnessOptions = {
     homeDir: telemetryBootstrap.homeDir,
-    identity: createKimiCodeHostIdentity(version),
+    identity: createKimiCodeHostIdentity(),
+    clientVersion: version,
     skillDirs: opts.skillsDirs,
     telemetry: telemetryClient,
     onOAuthRefresh: (outcome) => {
@@ -130,7 +131,6 @@ export async function runShell(
     harness,
     bootstrap: telemetryBootstrap,
     config,
-    version,
     uiMode: CLI_UI_MODE,
   });
   setCrashPhase('runtime');

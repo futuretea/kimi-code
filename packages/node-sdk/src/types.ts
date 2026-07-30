@@ -86,6 +86,8 @@ export type PromptInput = readonly PromptPart[];
 
 export interface KimiHarnessOptions {
   readonly identity?: KimiHostIdentity | undefined;
+  /** Version recorded by the local runtime. Defaults to the host identity version. */
+  readonly clientVersion?: string;
   readonly homeDir?: string | undefined;
   readonly configPath?: string | undefined;
   readonly autoLoadConfig?: boolean | undefined;

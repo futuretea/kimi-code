@@ -410,7 +410,6 @@ describe('main entry command handling', () => {
         defaultModel: 'kimi-k2',
         telemetry: true,
       },
-      version: '0.0.1-alpha.2',
       uiMode: 'shell',
     }));
     expect(mocks.handleUpgrade).toHaveBeenCalledWith('0.0.1-alpha.2', {

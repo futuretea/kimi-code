@@ -5,9 +5,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildKimiDefaultHeaders,
+  createKimiCodeHostIdentity,
   createKimiCodeUserAgent,
   getHostPackageJsonPath,
   getHostPackageRoot,
+  getUpstreamVersion,
   getVersion,
 } from '#/cli/version';
 
@@ -21,13 +23,14 @@ describe('cli version helpers', () => {
     expect(getVersion()).toBe(pkg.version);
   });
 
-  it('builds default headers with the kimi-code-cli user-agent', () => {
-    const headers = buildKimiDefaultHeaders('1.2.3');
+  it('uses the upstream version for the Kimi host identity and outbound headers', () => {
+    expect(getUpstreamVersion()).toBe('0.30.0');
+    expect(createKimiCodeHostIdentity()).toEqual({
+      userAgentProduct: 'kimi-code-cli',
+      version: '0.30.0',
+    });
 
-    expect(headers['User-Agent']).toBe('kimi-code-cli/1.2.3');
-  });
-
-  it('builds the product user-agent for ad-hoc fetches', () => {
-    expect(createKimiCodeUserAgent('1.2.3')).toBe('kimi-code-cli/1.2.3');
+    expect(buildKimiDefaultHeaders()['User-Agent']).toBe('kimi-code-cli/0.30.0');
+    expect(createKimiCodeUserAgent()).toBe('kimi-code-cli/0.30.0');
   });
 });

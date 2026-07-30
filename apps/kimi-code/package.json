@@ -1,6 +1,6 @@
 {
   "name": "@futuretea/tea-code",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The Starting Point for Next-Gen Agents",
   "license": "MIT",
   "author": "Moonshot AI",
@@ -31,7 +31,8 @@
     "native",
     "scripts/postinstall.mjs",
     "scripts/postinstall",
-    "README.md"
+    "README.md",
+    "UPSTREAM_VERSION"
   ],
   "type": "module",
   "imports": {

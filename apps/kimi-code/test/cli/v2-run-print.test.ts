@@ -31,6 +31,7 @@ import { runV2Print } from '../../src/cli/v2/run-v2-print';
 
 const mocks = vi.hoisted(() => ({
   bootstrap: vi.fn(),
+  createCloudAppender: vi.fn(() => ({})),
   ensureMainAgent: vi.fn(),
   createKimiDefaultHeaders: vi.fn(() => ({})),
   resolveKimiHome: vi.fn((homeDir?: string) => homeDir ?? '/tmp/kimi-code-test-home'),
@@ -42,6 +43,7 @@ vi.mock('@moonshot-ai/agent-core-v2', async (importOriginal) => {
   return {
     ...actual,
     bootstrap: mocks.bootstrap,
+    createCloudAppender: mocks.createCloudAppender,
     ensureMainAgent: mocks.ensureMainAgent,
   };
 });
@@ -264,6 +266,21 @@ describe('runV2Print', () => {
     // Version banner is first, then the rendered assistant output.
     expect(stderr.write).toHaveBeenNthCalledWith(1, 'kimi version 1.2.3-test\n');
     expect(stdout.text()).toContain('hello world');
+    expect(mocks.createKimiDefaultHeaders).toHaveBeenCalledWith(expect.objectContaining({
+      userAgentProduct: 'kimi-code-cli',
+      version: '0.30.0',
+    }));
+    expect(mocks.createCloudAppender).toHaveBeenCalledWith(
+      app.accessor,
+      expect.objectContaining({
+        appName: 'kimi-code-cli',
+        telemetryVersion: '0.30.0',
+      }),
+    );
+    expect(mocks.bootstrap).toHaveBeenCalledWith(
+      expect.objectContaining({ clientVersion: '1.2.3-test' }),
+      expect.any(Array),
+    );
     expect(app.dispose).toHaveBeenCalled();
   });
 

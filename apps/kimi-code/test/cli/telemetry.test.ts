@@ -65,11 +65,11 @@ describe('initializeServerTelemetry', () => {
 
   it('configures the sink with ui_mode="web" and the CLI product identity', async () => {
     const { initializeServerTelemetry } = await import('#/cli/telemetry');
-    const client = initializeServerTelemetry({ version: '1.2.3' });
+    const client = initializeServerTelemetry();
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith(
       expect.objectContaining({
         appName: 'kimi-code-cli',
-        version: '1.2.3',
+        version: '0.30.0',
         uiMode: 'web',
         model: 'kimi-k2',
         enabled: true,
@@ -97,7 +97,7 @@ describe('initializeServerTelemetry', () => {
       fileError: undefined,
     });
     const { initializeServerTelemetry } = await import('#/cli/telemetry');
-    initializeServerTelemetry({ version: '1.2.3' });
+    initializeServerTelemetry();
 
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith(
       expect.objectContaining({ enabled: false }),
@@ -110,7 +110,7 @@ describe('initializeServerTelemetry', () => {
       fileError: new Error('bad toml'),
     });
     const { initializeServerTelemetry } = await import('#/cli/telemetry');
-    initializeServerTelemetry({ version: '1.2.3' });
+    initializeServerTelemetry();
 
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith(
       expect.objectContaining({ enabled: true, model: undefined }),

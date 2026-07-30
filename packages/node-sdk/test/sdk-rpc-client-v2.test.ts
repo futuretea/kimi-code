@@ -13,6 +13,8 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { IBootstrapService } from '@moonshot-ai/agent-core-v2';
+
 import { createKimiHarnessV2, ErrorCodes, KimiError, KimiHarness, SDKRpcClientV2 } from '#/index';
 import { foldAgentWireReplay } from '#/v2/resume-replay';
 
@@ -34,6 +36,21 @@ async function makeHarness(): Promise<{ harness: KimiHarness; homeDir: string }>
 }
 
 describe('SDKRpcClientV2 (agent-core-v2 wiring MVP)', () => {
+  it('separates the local runtime version from the outbound identity', async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'kimi-sdk-v2-'));
+    tempDirs.push(homeDir);
+    const rpc = new SDKRpcClientV2({
+      homeDir,
+      identity: { ...TEST_IDENTITY, version: '0.30.0' },
+      clientVersion: '0.1.1',
+    });
+    try {
+      expect(rpc.engineAccessor.get(IBootstrapService).clientVersion).toBe('0.1.1');
+    } finally {
+      await rpc.close();
+    }
+  });
+
   it('serves getExperimentalFeatures from the v2 engine', async () => {
     const { harness } = await makeHarness();
     try {

@@ -409,7 +409,7 @@ describe('kimi export', () => {
       deviceId: 'device-1',
       enabled: true,
       appName: 'kimi-code-cli',
-      version: expect.any(String),
+      version: '0.30.0',
       uiMode: 'shell',
       model: 'k2',
       sessionId: undefined,

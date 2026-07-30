@@ -124,7 +124,7 @@ export async function runPrompt(
   };
   const harness = await createPromptHarness({
     homeDir: telemetryBootstrap.homeDir,
-    identity: createKimiCodeHostIdentity(version),
+    identity: createKimiCodeHostIdentity(),
     uiMode: PROMPT_UI_MODE,
     skillDirs: opts.skillsDirs,
     telemetry: telemetryClient,
@@ -190,7 +190,6 @@ export async function runPrompt(
       harness,
       bootstrap: telemetryBootstrap,
       config,
-      version,
       uiMode: PROMPT_UI_MODE,
       model: telemetryModel,
       sessionId: session.id,

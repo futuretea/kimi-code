@@ -60,7 +60,7 @@ if (initialManifest.name !== '@futuretea/tea-code') {
 
 // Validate every non-mutating precondition before Changesets edits package
 // manifests, changelogs, or pending change files.
-const upstream = readUpstreamVersion();
+readUpstreamVersion();
 const teaChangesets = readTeaChangesets();
 if (teaChangesets.length === 0) {
   throw new Error('expected a pending @futuretea/tea-code changeset');
@@ -81,5 +81,5 @@ if (!semver.test(nextBaseVersion) || nextBaseVersion === baseVersion(initialMani
   throw new Error('Changesets did not increment the Tea release base version');
 }
 
-nextManifest.version = `${nextBaseVersion}+up${upstream}`;
+nextManifest.version = nextBaseVersion;
 writeFileSync(appManifestPath, `${JSON.stringify(nextManifest, null, 2)}\n`);

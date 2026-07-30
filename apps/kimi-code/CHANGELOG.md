@@ -1,5 +1,11 @@
 # @futuretea/tea-code
 
+## 0.1.1
+
+### Patch Changes
+
+- Preserve the upstream Kimi Code version in Kimi requests and telemetry.
+
 ## 0.1.0
 
 ### Minor Changes

@@ -225,6 +225,12 @@ describe('runShell', () => {
       await runShell(minimalCliOptions, '1.2.3-test');
     });
     expect(mocks.kimiHarnessV2Constructor).toHaveBeenCalledTimes(1);
+    expect(mocks.kimiHarnessV2Constructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientVersion: '1.2.3-test',
+        identity: { userAgentProduct: 'kimi-code-cli', version: '0.30.0' },
+      }),
+    );
     expect(mocks.kimiHarnessConstructor).not.toHaveBeenCalled();
   });
 
@@ -268,7 +274,7 @@ describe('runShell', () => {
       expect.objectContaining({
         identity: expect.objectContaining({
           userAgentProduct: 'kimi-code-cli',
-          version: '1.2.3-test',
+          version: '0.30.0',
         }),
         sessionStartedProperties: { yolo: true, auto: false, plan: true, afk: false },
       }),
@@ -288,7 +294,7 @@ describe('runShell', () => {
       deviceId: 'device-1',
       enabled: true,
       appName: 'kimi-code-cli',
-      version: '1.2.3-test',
+      version: '0.30.0',
       uiMode: 'shell',
       model: 'k2',
       sessionId: undefined,

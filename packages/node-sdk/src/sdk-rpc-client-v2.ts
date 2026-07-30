@@ -299,6 +299,8 @@ export interface SDKRpcClientV2Options {
   readonly homeDir?: string;
   readonly configPath?: string;
   readonly identity?: KimiHostIdentity;
+  /** Version recorded by the local runtime. Defaults to the host identity version. */
+  readonly clientVersion?: string;
   /**
    * Explicit skill directories for this process (v1's SDK `skillDirs` /
    * the CLI's `--skills-dir`): when non-empty, default user / project skill
@@ -404,7 +406,7 @@ export class SDKRpcClientV2 extends SDKRpcClientBase {
       {
         homeDir: this.homeDir,
         configPath: this.configPath,
-        clientVersion: this.identity?.version,
+        clientVersion: options.clientVersion ?? this.identity?.version,
       },
       [
         ...logSeed(resolveLoggingConfig({ homeDir: this.homeDir, env: process.env })),

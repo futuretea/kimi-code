@@ -162,7 +162,6 @@ function createDefaultExportDeps(overrides: Partial<ExportDeps> = {}): ExportDep
       harness: currentHarness,
       bootstrap: currentTelemetryBootstrap,
       config,
-      version: identity.version,
       uiMode: CLI_UI_MODE,
     });
     telemetryInitialized = true;

@@ -48,7 +48,11 @@ export function getVersion(): string {
   return pkg.version;
 }
 
-export function createKimiCodeHostIdentity(version = getVersion()): KimiHostIdentity {
+export function getUpstreamVersion(): string {
+  return readFileSync(resolve(getHostPackageRoot(), 'UPSTREAM_VERSION'), 'utf-8').trim();
+}
+
+export function createKimiCodeHostIdentity(version = getUpstreamVersion()): KimiHostIdentity {
   return {
     userAgentProduct: CLI_USER_AGENT_PRODUCT,
     version,
@@ -56,14 +60,14 @@ export function createKimiCodeHostIdentity(version = getVersion()): KimiHostIden
 }
 
 /**
- * Product User-Agent (`kimi-code-cli/<version>`) for ad-hoc outbound fetches
- * that don't go through the provider pipeline (registry / catalog imports).
+ * Product User-Agent (`kimi-code-cli/<upstream-version>`) for ad-hoc outbound
+ * fetches that don't go through the provider pipeline (registry / catalog imports).
  */
-export function createKimiCodeUserAgent(version = getVersion()): string {
+export function createKimiCodeUserAgent(version = getUpstreamVersion()): string {
   return createKimiUserAgent(createKimiCodeHostIdentity(version));
 }
 
-export function buildKimiDefaultHeaders(version: string): Record<string, string> {
+export function buildKimiDefaultHeaders(version = getUpstreamVersion()): Record<string, string> {
   return createKimiDefaultHeaders({
     homeDir: getDataDir(),
     ...createKimiCodeHostIdentity(version),

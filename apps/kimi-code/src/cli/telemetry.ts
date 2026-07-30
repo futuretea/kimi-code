@@ -18,7 +18,7 @@ import {
 
 import { CLI_USER_AGENT_PRODUCT, WEB_UI_MODE } from '#/constant/app';
 
-import { createKimiCodeHostIdentity } from './version';
+import { createKimiCodeHostIdentity, getUpstreamVersion } from './version';
 
 export interface CliTelemetryBootstrap {
   readonly homeDir: string;
@@ -30,7 +30,6 @@ export interface InitializeCliTelemetryOptions {
   readonly harness: PromptHarness;
   readonly bootstrap: CliTelemetryBootstrap;
   readonly config: Pick<KimiConfig, 'defaultModel' | 'telemetry'>;
-  readonly version: string;
   readonly uiMode: string;
   readonly model?: string;
   readonly sessionId?: string;
@@ -53,7 +52,7 @@ export function initializeCliTelemetry(options: InitializeCliTelemetryOptions): 
     deviceId: options.bootstrap.deviceId,
     enabled: options.config.telemetry !== false,
     appName: CLI_USER_AGENT_PRODUCT,
-    version: options.version,
+    version: getUpstreamVersion(),
     uiMode: options.uiMode,
     model: options.model ?? options.config.defaultModel,
     sessionId: options.sessionId,
@@ -63,10 +62,6 @@ export function initializeCliTelemetry(options: InitializeCliTelemetryOptions): 
   if (options.bootstrap.firstLaunch) {
     options.harness.track('first_launch');
   }
-}
-
-export interface InitializeServerTelemetryOptions {
-  readonly version: string;
 }
 
 /**
@@ -85,16 +80,14 @@ export interface InitializeServerTelemetryOptions {
  * functions, so the module-level `track` / `withTelemetryContext` (used to
  * fire the startup event) share the same underlying client + sink.
  */
-export function initializeServerTelemetry(
-  options: InitializeServerTelemetryOptions,
-): TelemetryClient {
+export function initializeServerTelemetry(): TelemetryClient {
   const bootstrap = createCliTelemetryBootstrap();
   const configPath = resolveConfigPath({ homeDir: bootstrap.homeDir });
   const config = readServerTelemetryConfig(configPath);
   const auth = new KimiAuthFacade({
     homeDir: bootstrap.homeDir,
     configPath,
-    identity: createKimiCodeHostIdentity(options.version),
+    identity: createKimiCodeHostIdentity(),
   });
 
   initializeTelemetry({
@@ -102,7 +95,7 @@ export function initializeServerTelemetry(
     deviceId: bootstrap.deviceId,
     enabled: config.telemetry !== false,
     appName: CLI_USER_AGENT_PRODUCT,
-    version: options.version,
+    version: getUpstreamVersion(),
     uiMode: WEB_UI_MODE,
     model: config.defaultModel,
     getAccessToken: async () => (await auth.getCachedAccessToken(KIMI_CODE_PROVIDER_NAME)) ?? null,

@@ -103,6 +103,27 @@ describe('CloudAppender', () => {
     expect(typeof event?.['timestamp']).toBe('number');
   });
 
+  it('uses an explicit telemetry version without changing the bootstrap version', async () => {
+    const requests: CapturedRequest[] = [];
+    const appender = new CloudAppender(
+      baseOptions({
+        homeDir,
+        telemetryVersion: '0.30.0',
+        fetchImpl: makeFetch((req) => {
+          requests.push(req);
+          return okResponse();
+        }),
+      }),
+    );
+
+    appender.track('tool.call');
+    await appender.flush();
+
+    const event = requests[0]?.body.events[0];
+    expect(event?.['context_client_version']).toBe('0.30.0');
+    expect(event?.['context_version']).toBe('0.30.0');
+  });
+
   it('applies setContext sessionId and model updates to subsequent events', async () => {
     const requests: CapturedRequest[] = [];
     const appender = new CloudAppender(

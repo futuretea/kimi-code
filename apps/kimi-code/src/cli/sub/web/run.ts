@@ -241,7 +241,7 @@ async function runServerInProcess(
   const version = getVersion();
   // Registers the telemetry provider for `track` / `shutdownTelemetry`; the
   // client itself is not passed into kap-server.
-  initializeServerTelemetry({ version });
+  initializeServerTelemetry();
 
   let running: RoutedServer | undefined;
   let stopping = false;
@@ -294,7 +294,7 @@ async function runServerInProcess(
     // Seed the CLI's Kimi identity headers so the engine's outbound
     // requests (model, WebSearch, FetchURL) carry the same User-Agent +
     // X-Msh-* identity as direct CLI runs.
-    seeds: hostRequestHeadersSeed(buildKimiDefaultHeaders(version)),
+    seeds: hostRequestHeadersSeed(buildKimiDefaultHeaders()),
     webAssetsDir,
   });
   logger.info('serving the REST/WS API and the bundled web UI');
