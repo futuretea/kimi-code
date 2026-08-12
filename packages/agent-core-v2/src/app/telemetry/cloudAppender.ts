@@ -1,9 +1,9 @@
 /**
- * `telemetry` domain (L1) — `CloudAppender`, an `ITelemetryAppender` that
+ * `telemetry` domain — `CloudAppender`, an `ITelemetryAppender` that
  * batches events, drops non-primitive properties, redacts PII from string
  * values, enriches events with common context, and posts them to the
  * telemetry endpoint through `CloudTransport`, which persists failed events
- * through the `storage` byte layer. Reads host facts (`clientVersion`, env,
+ * through the `storage` byte layer. Reads host facts (`clientIdentity`, env,
  * platform/arch) from `IBootstrapService`; `createCloudAppender` assembles
  * one from a `ServicesAccessor` so hosts only supply identity facts.
  * App-scoped; independent of `@moonshot-ai/kimi-telemetry`.
@@ -186,7 +186,7 @@ function sanitizeProperties(input?: TelemetryProperties): CloudProperties {
 
 function buildContext(options: CloudAppenderOptions): CloudContext {
   const { bootstrap } = options;
-  const telemetryVersion = options.telemetryVersion ?? bootstrap.clientVersion;
+  const telemetryVersion = options.telemetryVersion ?? bootstrap.clientIdentity.version;
   const context: CloudContext = {
     app_name: options.appName,
     client_version: telemetryVersion,

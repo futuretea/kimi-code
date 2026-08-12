@@ -7,27 +7,76 @@
  * Wiring: real v2 engine bootstrapped on a temp KIMI_CODE_HOME; no provider calls.
  * Run: pnpm exec vitest run test/sdk-rpc-client-v2.test.ts
  */
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { IBootstrapService } from '@moonshot-ai/agent-core-v2';
-
-import { createKimiHarnessV2, ErrorCodes, KimiError, KimiHarness, SDKRpcClientV2 } from '#/index';
+import {
+  createKimiHarnessV2,
+  ErrorCodes,
+  KimiError,
+  KimiHarness,
+  removeProviderFromConfig,
+  SDKRpcClientV2,
+  type KimiConfig,
+} from '#/index';
 import { foldAgentWireReplay } from '#/v2/resume-replay';
+import {
+  drainQueryStoreDisposals,
+  drainSessionIndexMirror,
+  HostProcessError,
+  IHostRequestHeaders,
+  OsProcessErrors,
+} from '@moonshot-ai/agent-core-v2';
+
+import { McpOAuthService } from '../../agent-core/src/mcp/oauth/service';
 
 import { TEST_IDENTITY } from './test-identity';
+import { startMcpAuthStatusServer } from './mcp-auth-status-server';
 import { recordingTelemetry, type TelemetryRecord } from './telemetry';
+
+const hostEnvProbe = vi.hoisted(() => ({ failWithMissingShell: false }));
+
+vi.mock('@moonshot-ai/agent-core-v2/_base/execEnv/environmentProbe', async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import('@moonshot-ai/agent-core-v2/_base/execEnv/environmentProbe')
+  >();
+  return {
+    ...actual,
+    probeHostEnvironmentFromNode: () =>
+      hostEnvProbe.failWithMissingShell
+        ? Promise.reject(
+            new actual.ProbeShellNotFoundError('Git Bash missing (stubbed)', [
+              'C:\\Program Files\\Git\\bin\\bash.exe',
+            ]),
+          )
+        : actual.probeHostEnvironmentFromNode(),
+  };
+});
 
 const tempDirs: string[] = [];
 
 afterEach(async () => {
+  // The read-model mirror/query-store close asynchronously on dispose; await
+  // the drains so the rm below never races their final flush (ENOTEMPTY).
+  await drainSessionIndexMirror();
+  await drainQueryStoreDisposals();
   for (const dir of tempDirs.splice(0)) {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+function stubProcessPlatform(platform: NodeJS.Platform): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+  return () => {
+    if (descriptor !== undefined) {
+      Object.defineProperty(process, 'platform', descriptor);
+    }
+  };
+}
 
 async function makeHarness(): Promise<{ harness: KimiHarness; homeDir: string }> {
   const homeDir = await mkdtemp(join(tmpdir(), 'kimi-sdk-v2-'));
@@ -36,18 +85,135 @@ async function makeHarness(): Promise<{ harness: KimiHarness; homeDir: string }>
 }
 
 describe('SDKRpcClientV2 (agent-core-v2 wiring MVP)', () => {
-  it('separates the local runtime version from the outbound identity', async () => {
+  it('reports global MCP authorization from the persisted v2 credential store', async () => {
     const homeDir = await mkdtemp(join(tmpdir(), 'kimi-sdk-v2-'));
     tempDirs.push(homeDir);
-    const rpc = new SDKRpcClientV2({
-      homeDir,
-      identity: { ...TEST_IDENTITY, version: '0.30.0' },
-      clientVersion: '0.1.1',
-    });
+    const statusServer = await startMcpAuthStatusServer();
+    const authorizedUrl = 'https://authorized.example.test/mcp';
+    const requiredUrl = 'https://required.example.test/mcp';
+    const externalOAuth = new McpOAuthService({ kimiHomeDir: homeDir });
+    externalOAuth
+      .getProvider('oauth-authorized', authorizedUrl)
+      .saveTokens({ access_token: 'test-access-token', token_type: 'Bearer' });
+    externalOAuth
+      .getProvider('sse', statusServer.oauthUrl)
+      .saveTokens({ access_token: 'stale-sse-token', token_type: 'Bearer' });
+    await writeFile(
+      join(homeDir, 'mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          stdio: { command: 'local-command' },
+          plain: { transport: 'http', url: statusServer.plainUrl },
+          detected: { transport: 'http', url: statusServer.oauthUrl },
+          sse: { transport: 'sse', url: statusServer.oauthUrl },
+          'sse-oauth': { transport: 'sse', url: statusServer.oauthUrl, auth: 'oauth' },
+          bearer: {
+            transport: 'http',
+            url: 'https://bearer.example.test/mcp',
+            bearerTokenEnvVar: 'EXAMPLE_MCP_TOKEN',
+          },
+          'oauth-required': {
+            transport: 'http',
+            url: requiredUrl,
+            auth: 'oauth',
+          },
+          'oauth-authorized': {
+            transport: 'http',
+            url: authorizedUrl,
+            auth: 'oauth',
+          },
+        },
+      }),
+      'utf-8',
+    );
+    const harness = createKimiHarnessV2({ homeDir, identity: TEST_IDENTITY });
+
     try {
-      expect(rpc.engineAccessor.get(IBootstrapService).clientVersion).toBe('0.1.1');
+      await expect(harness.listMcpServerAuthStatuses()).resolves.toEqual([
+        { name: 'stdio', authStatus: 'not-applicable' },
+        { name: 'plain', authStatus: 'not-applicable' },
+        { name: 'detected', authStatus: 'oauth-required' },
+        { name: 'sse', authStatus: 'not-applicable' },
+        { name: 'sse-oauth', authStatus: 'oauth-required' },
+        { name: 'bearer', authStatus: 'bearer-token' },
+        { name: 'oauth-required', authStatus: 'oauth-required' },
+        { name: 'oauth-authorized', authStatus: 'oauth-authorized' },
+      ]);
+
+      externalOAuth
+        .getProvider('oauth-required', requiredUrl)
+        .saveTokens({ access_token: 'new-test-access-token', token_type: 'Bearer' });
+      externalOAuth.invalidate('oauth-authorized', authorizedUrl, 'tokens');
+
+      await expect(harness.listMcpServerAuthStatuses()).resolves.toEqual([
+        { name: 'stdio', authStatus: 'not-applicable' },
+        { name: 'plain', authStatus: 'not-applicable' },
+        { name: 'detected', authStatus: 'oauth-required' },
+        { name: 'sse', authStatus: 'not-applicable' },
+        { name: 'sse-oauth', authStatus: 'oauth-required' },
+        { name: 'bearer', authStatus: 'bearer-token' },
+        { name: 'oauth-required', authStatus: 'oauth-authorized' },
+        { name: 'oauth-authorized', authStatus: 'oauth-required' },
+      ]);
     } finally {
-      await rpc.close();
+      await harness.close();
+      await statusServer.close();
+    }
+  }, 15_000);
+
+  it('seeds the host request headers (User-Agent + X-Msh-*) into the engine', async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'kimi-sdk-v2-'));
+    tempDirs.push(homeDir);
+    const client = new SDKRpcClientV2({ homeDir, identity: TEST_IDENTITY });
+    try {
+      // Without this seed the managed vendors go out with the SDK's default
+      // User-Agent and no X-Msh-* — the interactive-v2 path's identity bug.
+      const headers = client.engineAccessor.get(IHostRequestHeaders).headers;
+      expect(headers['User-Agent']).toBe(`kimi-code-cli/${TEST_IDENTITY.version}`);
+      expect(headers['X-Msh-Platform']).toBe('kimi_code_cli');
+      expect(headers['X-Msh-Version']).toBe(TEST_IDENTITY.version);
+      expect(headers['X-Msh-Device-Id']).toBeTruthy();
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('surfaces a missing Git Bash probe failure during ensureConfigFile on Windows', async () => {
+    hostEnvProbe.failWithMissingShell = true;
+    const restorePlatform = stubProcessPlatform('win32');
+    try {
+      const homeDir = await mkdtemp(join(tmpdir(), 'kimi-sdk-v2-'));
+      tempDirs.push(homeDir);
+      const harness = createKimiHarnessV2({ homeDir, identity: TEST_IDENTITY });
+      try {
+        await expect(harness.ensureConfigFile()).rejects.toBeInstanceOf(HostProcessError);
+        await expect(harness.ensureConfigFile()).rejects.toMatchObject({
+          code: OsProcessErrors.codes.SHELL_GIT_BASH_NOT_FOUND,
+        });
+      } finally {
+        await harness.close();
+      }
+    } finally {
+      hostEnvProbe.failWithMissingShell = false;
+      restorePlatform();
+    }
+  });
+
+  it('does not block ensureConfigFile on the host environment probe on POSIX', async () => {
+    hostEnvProbe.failWithMissingShell = true;
+    const restorePlatform = stubProcessPlatform('darwin');
+    try {
+      const homeDir = await mkdtemp(join(tmpdir(), 'kimi-sdk-v2-'));
+      tempDirs.push(homeDir);
+      const harness = createKimiHarnessV2({ homeDir, identity: TEST_IDENTITY });
+      try {
+        await expect(harness.ensureConfigFile()).resolves.toBeUndefined();
+      } finally {
+        await harness.close();
+      }
+    } finally {
+      hostEnvProbe.failWithMissingShell = false;
+      restorePlatform();
     }
   });
 
@@ -143,6 +309,60 @@ describe('SDKRpcClientV2 (agent-core-v2 wiring MVP)', () => {
     }
   });
 
+  it('persists removeProvider as one atomic cascade (providers, models, defaults)', async () => {
+    const { harness } = await makeHarness();
+    try {
+      await harness.setConfig({
+        providers: {
+          a: { type: 'openai', baseUrl: 'https://a.example.test/v1', apiKey: 'sk-a' },
+          b: { type: 'openai', baseUrl: 'https://b.example.test/v1', apiKey: 'sk-b' },
+        },
+        models: {
+          'a/m1': { provider: 'a', model: 'm1', maxContextSize: 100 },
+          'b/m1': { provider: 'b', model: 'm1', maxContextSize: 100 },
+        },
+        defaultModel: 'b/m1',
+        defaultProvider: 'b',
+      });
+      const next = await harness.removeProvider('b');
+      expect(next.providers['b']).toBeUndefined();
+      expect(next.providers['a']).toBeDefined();
+      expect(next.models?.['b/m1']).toBeUndefined();
+      expect(next.models?.['a/m1']).toBeDefined();
+      expect(next.defaultModel).toBeUndefined();
+      expect(next.defaultProvider).toBeUndefined();
+      // A fresh read from disk sees the same state — the cascade landed as a
+      // single atomic write, never a halfway-removed intermediate.
+      const reread = await harness.getConfig({ reload: true });
+      expect(reread.providers['b']).toBeUndefined();
+      expect(reread.models?.['b/m1']).toBeUndefined();
+      expect(reread.defaultModel).toBeUndefined();
+      expect(reread.defaultProvider).toBeUndefined();
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('replaces config sections atomically and clears undefined sections', async () => {
+    const { harness } = await makeHarness();
+    try {
+      expect(harness.supportsAtomicSectionReplace()).toBe(true);
+      await harness.setConfig({
+        providers: { a: { type: 'openai', baseUrl: 'https://a.example.test/v1', apiKey: 'sk-a' } },
+        models: { 'a/m1': { provider: 'a', model: 'm1', maxContextSize: 100 } },
+        defaultModel: 'a/m1',
+      });
+      await harness.replaceConfigSections({ defaultModel: undefined });
+      const next = await harness.getConfig({ reload: true });
+      expect(next.defaultModel).toBeUndefined();
+      // Sections absent from the write stay untouched.
+      expect(next.providers['a']).toBeDefined();
+      expect(next.models?.['a/m1']).toBeDefined();
+    } finally {
+      await harness.close();
+    }
+  });
+
   it('fails loudly with not_implemented for methods not yet migrated', async () => {
     const { harness } = await makeHarness();
     try {
@@ -153,6 +373,87 @@ describe('SDKRpcClientV2 (agent-core-v2 wiring MVP)', () => {
       await expect(harness.deleteSession('session_missing')).rejects.toMatchObject({
         code: ErrorCodes.NOT_IMPLEMENTED,
       });
+    } finally {
+      await harness.close();
+    }
+  });
+});
+
+describe('SDKRpcClientV2 workspace trust', () => {
+  it('reports an untrusted workspace with the project MCP servers it gates', async () => {
+    const { harness } = await makeHarness();
+    const workDir = await mkdtemp(join(tmpdir(), 'kimi-sdk-v2-work-'));
+    tempDirs.push(workDir);
+    await writeFile(
+      join(workDir, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          'root-server': {
+            command: 'root-cmd',
+            args: ['--safe'],
+            cwd: '/tmp/root',
+            env: { SECRET: 'hidden' },
+          },
+          'http-server': {
+            transport: 'http',
+            url: 'https://example.test/mcp',
+            headers: { Authorization: 'Bearer hidden' },
+            bearerTokenEnvVar: 'TOKEN',
+          },
+        },
+      }),
+      'utf-8',
+    );
+    await mkdir(join(workDir, '.kimi-code'), { recursive: true });
+    await writeFile(
+      join(workDir, '.kimi-code', 'mcp.json'),
+      JSON.stringify({ mcpServers: { 'nested-server': { command: 'nested-cmd' } } }),
+      'utf-8',
+    );
+    try {
+      const info = await harness.getWorkspaceTrustInfo(workDir);
+      expect(info.trusted).toBe(false);
+      expect(info.gatedMcpServers).toEqual([
+        { name: 'http-server', transport: 'http', url: 'https://example.test/mcp' },
+        { name: 'nested-server', transport: 'stdio', command: 'nested-cmd' },
+        { name: 'root-server', transport: 'stdio', command: 'root-cmd', args: ['--safe'], cwd: '/tmp/root' },
+      ]);
+      const serialized = JSON.stringify(info);
+      expect(serialized).not.toContain('hidden');
+      expect(serialized).not.toContain('SECRET');
+      expect(serialized).not.toContain('TOKEN');
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('degrades the gated-server list to empty on an invalid project mcp.json', async () => {
+    const { harness } = await makeHarness();
+    const workDir = await mkdtemp(join(tmpdir(), 'kimi-sdk-v2-work-'));
+    tempDirs.push(workDir);
+    await writeFile(join(workDir, '.mcp.json'), '{not json', 'utf-8');
+    try {
+      const info = await harness.getWorkspaceTrustInfo(workDir);
+      expect(info).toEqual({ trusted: false, gatedMcpServers: [] });
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('trustWorkspace flips the state and persists the marker in the kimi home', async () => {
+    const { harness, homeDir } = await makeHarness();
+    const workDir = await mkdtemp(join(tmpdir(), 'kimi-sdk-v2-work-'));
+    tempDirs.push(workDir);
+    try {
+      await harness.trustWorkspace(workDir);
+      expect(await harness.getWorkspaceTrustInfo(workDir)).toEqual({
+        trusted: true,
+        gatedMcpServers: [],
+      });
+      // The trust marker lives in the kimi home, never in the checkout.
+      const markers = await readdir(join(homeDir, 'workspace-trust'));
+      expect(markers.length).toBe(1);
+      expect(await readdir(workDir)).not.toContain('workspace-trust');
     } finally {
       await harness.close();
     }
@@ -273,8 +574,58 @@ describe('SDKRpcClientV2 engine telemetry', () => {
   });
 });
 
-async function writeSkill(dir: string, name: string): Promise<void> {
-  await mkdir(dir, { recursive: true });
+describe('removeProviderFromConfig', () => {
+  it('drops the provider, its models and dangling default pointers without mutating the input', () => {
+    const config = {
+      providers: {
+        a: { type: 'openai', baseUrl: 'https://a.example.test/v1' },
+        b: { type: 'openai', baseUrl: 'https://b.example.test/v1' },
+      },
+      models: {
+        'a/m1': { provider: 'a', model: 'm1', maxContextSize: 100 },
+        'b/m1': { provider: 'b', model: 'm1', maxContextSize: 100 },
+        'my-b': { provider: 'b', model: 'm1', maxContextSize: 100 },
+      },
+      defaultModel: 'my-b',
+      defaultProvider: 'b',
+    } as unknown as KimiConfig;
+
+    const next = removeProviderFromConfig(config, 'b');
+
+    expect(Object.keys(next.providers)).toEqual(['a']);
+    expect(Object.keys(next.models ?? {})).toEqual(['a/m1']);
+    expect(next.defaultModel).toBeUndefined();
+    expect(next.defaultProvider).toBeUndefined();
+    // The input config is left untouched (the staging host threads the copy).
+    expect(config.providers['b']).toBeDefined();
+    expect(config.models?.['b/m1']).toBeDefined();
+    expect(config.defaultModel).toBe('my-b');
+  });
+
+  it('keeps the default pointers when they do not dangle', () => {
+    const config = {
+      providers: {
+        a: { type: 'openai' },
+        b: { type: 'openai' },
+      },
+      models: {
+        'a/m1': { provider: 'a', model: 'm1', maxContextSize: 100 },
+        'b/m1': { provider: 'b', model: 'm1', maxContextSize: 100 },
+      },
+      defaultModel: 'a/m1',
+      defaultProvider: 'a',
+    } as unknown as KimiConfig;
+
+    const next = removeProviderFromConfig(config, 'b');
+
+    expect(Object.keys(next.providers)).toEqual(['a']);
+    expect(Object.keys(next.models ?? {})).toEqual(['a/m1']);
+    expect(next.defaultModel).toBe('a/m1');
+    expect(next.defaultProvider).toBe('a');
+  });
+});
+
+async function writeSkill(dir: string, name: string): Promise<void> {  await mkdir(dir, { recursive: true });
   await writeFile(
     join(dir, 'SKILL.md'),
     `---\nname: ${name}\ndescription: Skill ${name} for the escape-hatch test\n---\n\nBody of ${name}.\n`,

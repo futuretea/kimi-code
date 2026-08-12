@@ -59,7 +59,7 @@ function harness() {
       reg.define(IAgentPromptService, AgentPromptService);
     }
   });
-  return { prompt: ix.get(IAgentPromptService), loop, context, fullCompaction };
+  return { prompt: ix.get(IAgentPromptService), loop, context, fullCompaction, eventBus: ix.get(IEventBus) };
 }
 
 describe('AgentPromptService', () => {
@@ -77,6 +77,20 @@ describe('AgentPromptService', () => {
     const first = await prompt.enqueue({ message: message('one') });
     const second = await prompt.enqueue({ message: message('two') });
     expect(prompt.list().pending.map((item) => item.id)).toEqual([first.id, second.id]);
+  });
+
+  it('publishes prompt.queued only for prompts that cannot launch immediately', async () => {
+    const { prompt, eventBus } = harness();
+    const queued: Array<{ promptId: string; queueLength: number }> = [];
+    eventBus.subscribe('prompt.queued', (e) => {
+      queued.push({ promptId: e.promptId, queueLength: e.queueLength });
+    });
+
+    await prompt.enqueue({ id: 'active', message: message('active') });
+    expect(queued).toEqual([]);
+
+    await prompt.enqueue({ id: 'waiting', message: message('waiting') });
+    expect(queued).toEqual([{ promptId: 'waiting', queueLength: 1 }]);
   });
 
   it('atomically rejects steer when any id is not pending', async () => {
@@ -118,6 +132,33 @@ describe('AgentPromptService', () => {
     prompt.hooks.onBeforeSubmitPrompt.register('block', async (ctx, next) => { ctx.block = true; await next(); });
     const handle = await prompt.enqueue({ message: message('blocked') });
     await expect(handle.completion).resolves.toMatchObject({ state: 'blocked' });
+  });
+
+  it('delivers a blocked prompt’s compression captions right after their host message', async () => {
+    const { prompt, context } = harness();
+    prompt.hooks.onBeforeSubmitPrompt.register('block', async (ctx, next) => { ctx.block = true; await next(); });
+    const handle = await prompt.enqueue({
+      id: 'prompt-caption',
+      message: message(
+        '<system>Image compressed to fit model limits: 800x600</system>look at this',
+      ),
+    });
+    await expect(handle.completion).resolves.toMatchObject({ state: 'blocked' });
+
+    const history = context.get();
+    expect(history).toHaveLength(2);
+    expect(history[0]?.origin).toEqual({
+      kind: 'injection',
+      variant: 'image_compression',
+      ownerPromptId: 'prompt-caption',
+    });
+    expect(history[1]?.origin).toEqual({ kind: 'user' });
+    expect(history[1]?.content).toEqual([{ type: 'text', text: 'look at this' }]);
+    const captionPart = history[0]?.content[0];
+    expect(captionPart?.type).toBe('text');
+    expect((captionPart as { text: string }).text).toContain(
+      'Image compressed to fit model limits: 800x600',
+    );
   });
 
   it('settles the prompt as failed when the loop throws on launch', async () => {

@@ -100,6 +100,8 @@ import type {
   EnterSwarmPayload,
   GoalSnapshot,
   GoalToolResult,
+  GlobalMcpServerAuthState,
+  GlobalMcpServerAuthStatus,
   GlobalMcpServerConfig,
   GlobalMcpServerNamePayload,
   GlobalMcpServerTestResult,
@@ -346,12 +348,14 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
         );
       }
     };
+    await this.pluginsReady;
     const agentCatalog = new SessionAgentProfileCatalog({
       workDir,
       brandHomeDir: this.homeDir,
       osHomeDir: this.userHomeDir,
       extraDirs: config.extraAgentDirs,
       explicitFiles: options.agentFiles,
+      pluginRoots: this.plugins.pluginAgentRoots(),
       warn: (message, error) => {
         agentCatalogWarnings.push({ message, error });
       },
@@ -416,6 +420,7 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       telemetry: sessionTelemetry,
       pluginSessionStarts,
       pluginCommands,
+      pluginSystemPrompts: this.plugins.enabledSystemPrompts(),
       appVersion: this.appVersion,
       additionalDirs,
       drainAgentTasksOnStop: options.drainAgentTasksOnStop,
@@ -497,6 +502,7 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       kaos?: Kaos;
       persistenceKaos?: Kaos;
       forcePluginSessionStartReminder?: boolean;
+      refreshPluginAgents?: boolean;
     },
   ): Promise<ResumeSessionResult> {
     const summary = await this.sessionStore.get(input.sessionId);
@@ -566,6 +572,9 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       agents: {
         userHomeDir: this.userHomeDir,
         extraDirs: config.extraAgentDirs,
+        pluginRoots:
+          overrides.refreshPluginAgents === true ? this.plugins.pluginAgentRoots() : undefined,
+        refreshPluginAgents: overrides.refreshPluginAgents,
       },
       mcpConfig,
       experimentalFlags: this.experimentalFlags,
@@ -574,6 +583,7 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       initializeMainAgent: false,
       pluginSessionStarts,
       pluginCommands,
+      pluginSystemPrompts: this.plugins.enabledSystemPrompts(),
       appVersion: this.appVersion,
       additionalDirs,
     });
@@ -583,6 +593,9 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       warning = resumeResult.warning;
       await session.assertMainProfileSelection(input.agentProfile);
       await this.refreshSessionRuntimeConfig(session, config);
+      if (overrides.refreshPluginAgents === true) {
+        await session.writeMetadata();
+      }
     } catch (error) {
       await session.close().catch(() => {});
       withTelemetryContext(this.telemetry, { sessionId: summary.id }).track('session_load_failed', {
@@ -626,7 +639,10 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
     }
     return this.resumeSessionWithOverrides(
       { sessionId: summary.id },
-      { forcePluginSessionStartReminder: input.forcePluginSessionStartReminder },
+      {
+        forcePluginSessionStartReminder: input.forcePluginSessionStartReminder,
+        refreshPluginAgents: true,
+      },
     );
   }
 
@@ -752,6 +768,18 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
     return this.globalMcpConfig.list();
   }
 
+  async listGlobalMcpServerAuthStatuses(
+    _input?: EmptyPayload,
+  ): Promise<readonly GlobalMcpServerAuthStatus[]> {
+    const servers = await this.globalMcpConfig.list();
+    return Promise.all(
+      servers.map(async (server) => ({
+        name: server.name,
+        authStatus: await this.globalMcpServerAuthState(server),
+      })),
+    );
+  }
+
   async addGlobalMcpServer(
     { server }: PutGlobalMcpServerPayload,
   ): Promise<readonly GlobalMcpServerConfig[]> {
@@ -829,7 +857,16 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
     { name, cwd }: TestGlobalMcpServerPayload,
   ): Promise<GlobalMcpServerTestResult> {
     const server = await this.globalMcpConfig.get(name);
-    const config = mcpConfigWithoutName(server);
+    return this.withGlobalMcpServerProbe(server, cwd, (manager) =>
+      standaloneMcpTestResult(server.name, manager),
+    );
+  }
+
+  private async withGlobalMcpServerProbe<T>(
+    server: GlobalMcpServerConfig,
+    cwd: string | undefined,
+    inspect: (manager: McpConnectionManager) => T,
+  ): Promise<T> {
     const manager = new McpConnectionManager({
       stdioCwd: cwd,
       oauthService: this.globalMcpOAuth,
@@ -837,11 +874,28 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       defaultToolTimeoutMs: resolveMcpToolTimeoutMs(this.config.mcp?.toolTimeoutMs),
     });
     try {
-      await manager.connectAll({ [server.name]: config });
-      return standaloneMcpTestResult(server.name, manager);
+      await manager.connectAll({ [server.name]: mcpConfigWithoutName(server) });
+      return inspect(manager);
     } finally {
       await manager.shutdown();
     }
+  }
+
+  private async globalMcpServerAuthState(
+    server: GlobalMcpServerConfig,
+  ): Promise<GlobalMcpServerAuthState> {
+    if (server.transport === 'stdio') return 'not-applicable';
+    if (server.bearerTokenEnvVar !== undefined) return 'bearer-token';
+    // Keep status classification aligned with the existing connection manager:
+    // unmarked static headers are not treated as OAuth credentials.
+    if (server.headers !== undefined && server.auth !== 'oauth') return 'not-applicable';
+    if (server.transport !== 'http' && server.auth !== 'oauth') return 'not-applicable';
+    if (this.globalMcpOAuth.hasTokens(server.name, server.url)) return 'oauth-authorized';
+    if (server.auth === 'oauth') return 'oauth-required';
+
+    return this.withGlobalMcpServerProbe(server, undefined, (manager) =>
+      manager.get(server.name)?.status === 'needs-auth' ? 'oauth-required' : 'not-applicable',
+    );
   }
 
   prompt({ sessionId, ...payload }: SessionAgentPayload<PromptPayload>) {
@@ -1178,10 +1232,10 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
   }
 
   async reloadPlugins(_: EmptyPayload): Promise<ReloadPluginsResult> {
+    let summary: ReloadPluginsResult;
     try {
-      const summary = await this.plugins.reload();
+      summary = await this.plugins.reload();
       this.pluginsLoadError = undefined;
-      return summary;
     } catch (error) {
       this.pluginsLoadError = error instanceof Error ? error : new Error(String(error));
       throw new KimiError(
@@ -1190,6 +1244,14 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
         { cause: error, details: { kimiHomeDir: this.homeDir } },
       );
     }
+    // Live sessions pick up the reloaded plugin system-prompt contributions
+    // here — the same point where plugin skills take effect. Install / enable
+    // / disable / remove without a reload leave live prompts unchanged.
+    const pluginSystemPrompts = this.plugins.enabledSystemPrompts();
+    for (const session of this.sessions.values()) {
+      await session.setPluginSystemPrompts(pluginSystemPrompts);
+    }
+    return summary;
   }
 
   async getPluginInfo({ id }: GetPluginInfoPayload): Promise<PluginInfo> {

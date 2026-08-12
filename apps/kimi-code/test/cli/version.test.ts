@@ -4,7 +4,6 @@ import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildKimiDefaultHeaders,
   createKimiCodeHostIdentity,
   createKimiCodeUserAgent,
   getHostPackageJsonPath,
@@ -23,14 +22,15 @@ describe('cli version helpers', () => {
     expect(getVersion()).toBe(pkg.version);
   });
 
-  it('uses the upstream version for the Kimi host identity and outbound headers', () => {
-    expect(getUpstreamVersion()).toBe('0.30.0');
+  it('uses the upstream version for the Kimi host identity and ad-hoc fetches', () => {
+    expect(getUpstreamVersion()).toBe('0.35.0');
     expect(createKimiCodeHostIdentity()).toEqual({
-      userAgentProduct: 'kimi-code-cli',
-      version: '0.30.0',
+      productName: 'kimi-code-cli',
+      version: '0.35.0',
+      platform: 'kimi_code_cli',
     });
 
-    expect(buildKimiDefaultHeaders()['User-Agent']).toBe('kimi-code-cli/0.30.0');
-    expect(createKimiCodeUserAgent()).toBe('kimi-code-cli/0.30.0');
+    expect(createKimiCodeUserAgent()).toBe('kimi-code-cli/0.35.0');
+    expect(createKimiCodeUserAgent('1.2.3')).toBe('kimi-code-cli/1.2.3');
   });
 });

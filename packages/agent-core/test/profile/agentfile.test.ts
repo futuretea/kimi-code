@@ -22,6 +22,7 @@ import {
   SessionAgentProfileCatalog,
   agentProfileFromFile,
   parseAgentFileText,
+  type AgentFileRoot,
   type SystemPromptContext,
 } from '../../src/profile';
 import { AgentFileParseError } from '../../src/profile/agentfile/parser';
@@ -262,6 +263,7 @@ describe('SessionAgentProfileCatalog', () => {
     osHomeDir: string;
     extraDirs?: readonly string[];
     explicitFiles?: readonly string[];
+    pluginRoots?: readonly AgentFileRoot[];
     warnings?: string[];
   }): SessionAgentProfileCatalog {
     return new SessionAgentProfileCatalog({
@@ -270,6 +272,7 @@ describe('SessionAgentProfileCatalog', () => {
       osHomeDir: options.osHomeDir,
       extraDirs: options.extraDirs,
       explicitFiles: options.explicitFiles,
+      pluginRoots: options.pluginRoots,
       warn: (message) => options.warnings?.push(message),
     });
   }
@@ -311,6 +314,24 @@ describe('SessionAgentProfileCatalog', () => {
     expect(c.get('shared')?.description).toBe('From project.');
   });
 
+  it('discovers plugin agents and lets the user source shadow them', async () => {
+    const { workDir, brandHome, osHome } = await makeLayout();
+    const pluginDir = await makeTempDir();
+    await writeAgent(pluginDir, 'shared.md', agentFileText({ description: 'From plugin.' }));
+    await writeAgent(pluginDir, 'plugin-only.md', agentFileText({ description: 'Plugin agent.' }));
+    await writeAgent(join(brandHome, 'agents'), 'shared.md', agentFileText({ description: 'From user.' }));
+
+    const c = catalog({
+      workDir,
+      brandHomeDir: brandHome,
+      osHomeDir: osHome,
+      pluginRoots: [{ path: pluginDir, source: 'plugin' }],
+    });
+    await c.ready;
+    expect(c.get('shared')?.description).toBe('From user.');
+    expect(c.get('plugin-only')?.description).toBe('Plugin agent.');
+  });
+
   it('requires override: true before a file replaces a same-name builtin', async () => {
     const { workDir, brandHome, osHome } = await makeLayout();
     const warnings: string[] = [];
@@ -349,6 +370,33 @@ describe('SessionAgentProfileCatalog', () => {
       Object.keys(DEFAULT_AGENT_PROFILES['agent']!.subagents ?? {}),
     );
     expect(c.delegatableSubagents('agent')).not.toHaveProperty('agent');
+  });
+
+  it('keeps builtin profiles session-local when a caller rewrites them in place', async () => {
+    const { workDir, brandHome, osHome } = await makeLayout();
+
+    const first = catalog({ workDir, brandHomeDir: brandHome, osHomeDir: osHome });
+    await first.ready;
+    const firstCoder = first.get('coder');
+    expect(firstCoder).toBeDefined();
+    // Host runtimes may project a session's catalog entries onto the session
+    // tool surface by rewriting them in place (host subagent projection).
+    firstCoder!.tools = ['Read'];
+
+    // The process-wide defaults stay pristine, and a later session's catalog
+    // seeds from them rather than from the rewritten objects.
+    expect(DEFAULT_AGENT_PROFILES['coder']!.tools).toContain('Bash');
+    const second = catalog({ workDir, brandHomeDir: brandHome, osHomeDir: osHome });
+    await second.ready;
+    expect(second.get('coder')?.tools).toEqual(DEFAULT_AGENT_PROFILES['coder']!.tools);
+
+    // The delegation graph is re-linked to the session-local copies, so an
+    // in-place projection reaches what useProfile and the Agent tool
+    // description actually read.
+    expect(first.delegatableSubagents('agent')['coder']).toBe(firstCoder);
+    expect(second.delegatableSubagents('agent')['coder']?.tools).toEqual(
+      DEFAULT_AGENT_PROFILES['coder']!.tools,
+    );
   });
 
   it('extends SYSTEM.md delegation with custom agents without allowing self-delegation', async () => {

@@ -60,7 +60,7 @@ describe('collectWebAssets', () => {
     const appRoot = mkdtempSync(join(tmpdir(), 'kimi-web-assets-missing-'));
     try {
       await expect(collectWebAssets({ appRoot, target: 'test-target' })).rejects.toThrow(
-        /Kimi web build output was not found/,
+        /Tea Code web assets were not found.*pnpm --filter @futuretea\/tea-code run build/,
       );
     } finally {
       rmSync(appRoot, { recursive: true, force: true });

@@ -7,11 +7,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-import { createKimiDefaultHeaders, createKimiUserAgent, type KimiHostIdentity } from '@moonshot-ai/kimi-code-oauth';
+import { createKimiUserAgent, KIMI_CODE_PLATFORM, type KimiHostIdentity } from '@moonshot-ai/kimi-code-oauth';
 
 import { CLI_USER_AGENT_PRODUCT } from '#/constant/app';
 
-import { getDataDir } from '../utils/paths';
 import { KIMI_BUILD_INFO } from './build-info';
 
 const MODULE_DIR = import.meta.dirname;
@@ -54,8 +53,9 @@ export function getUpstreamVersion(): string {
 
 export function createKimiCodeHostIdentity(version = getUpstreamVersion()): KimiHostIdentity {
   return {
-    userAgentProduct: CLI_USER_AGENT_PRODUCT,
+    productName: CLI_USER_AGENT_PRODUCT,
     version,
+    platform: KIMI_CODE_PLATFORM,
   };
 }
 
@@ -65,11 +65,4 @@ export function createKimiCodeHostIdentity(version = getUpstreamVersion()): Kimi
  */
 export function createKimiCodeUserAgent(version = getUpstreamVersion()): string {
   return createKimiUserAgent(createKimiCodeHostIdentity(version));
-}
-
-export function buildKimiDefaultHeaders(version = getUpstreamVersion()): Record<string, string> {
-  return createKimiDefaultHeaders({
-    homeDir: getDataDir(),
-    ...createKimiCodeHostIdentity(version),
-  });
 }
