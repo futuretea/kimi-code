@@ -2,9 +2,11 @@ name: CI
 
 on:
   pull_request:
+    branches:
+      - 'tea/**'
   push:
     branches:
-      - main
+      - 'tea/**'
 
 permissions:
   contents: read

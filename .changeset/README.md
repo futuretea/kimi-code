@@ -103,7 +103,7 @@ Commit messages must follow Conventional Commit style. Do not include any author
 
 ### 4. CI generates the release PR
 
-Once the changeset file is merged into `futuretea`, `.github/workflows/release.yml` uses `changesets/action@v1` to create or update a release PR.
+Once the changeset file is merged into `tea/moonshot-030`, `.github/workflows/release.yml` uses `changesets/action@v1` to create or update a release PR.
 
 The release PR runs:
 
@@ -113,7 +113,7 @@ The release PR runs:
 
 ### 5. Merge the release PR
 
-Once the release PR is merged into `futuretea`, the same workflow runs:
+Once the release PR is merged into `tea/moonshot-030`, the same workflow runs:
 
 - `pnpm install --frozen-lockfile`
 - `pnpm build`

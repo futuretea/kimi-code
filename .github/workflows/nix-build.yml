@@ -3,10 +3,10 @@ name: Nix Build
 on:
   pull_request:
     branches:
-      - futuretea
+      - 'tea/**'
   push:
     branches:
-      - futuretea
+      - 'tea/**'
 
 permissions:
   contents: read

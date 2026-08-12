@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     branches:
-      - futuretea
+      - 'tea/**'
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 

@@ -4,7 +4,7 @@
   "fixed": [],
   "linked": [],
   "access": "public",
-  "baseBranch": "futuretea",
+  "baseBranch": "tea/moonshot-030",
   "updateInternalDependencies": "patch",
   "ignore": [
     "@moonshot-ai/vis",
