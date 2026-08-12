@@ -1,5 +1,11 @@
 # @futuretea/tea-code
 
+## 0.2.0
+
+### Minor Changes
+
+- Sync Tea Code with Kimi Code 0.35.0, including the bundled web interface and current protocol support.
+
 ## 0.1.1
 
 ### Patch Changes

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 
@@ -27,6 +27,7 @@ function prepareDefaultInvocationFixture(): string {
   mkdirSync(join(root, 'scripts'), { recursive: true });
   cpSync(join(REPO_ROOT, 'package.json'), join(root, 'package.json'));
   cpSync(join(REPO_ROOT, 'scripts/version-release.mjs'), join(root, 'scripts/version-release.mjs'));
+  symlinkSync(join(REPO_ROOT, 'node_modules'), join(root, 'node_modules'), 'dir');
   return root;
 }
 
@@ -73,12 +74,25 @@ function appVersion(root: string): string {
   return JSON.parse(readFileSync(join(root, 'apps/kimi-code/package.json'), 'utf8')).version as string;
 }
 
-function fixtureSnapshot(root: string, changeset: string): Record<string, string> {
+function fixtureSnapshot(root: string, changesets: readonly string[]) {
+  const changelogPath = join(root, 'apps/kimi-code/CHANGELOG.md');
   return {
     appManifest: readFileSync(join(root, 'apps/kimi-code/package.json'), 'utf8'),
-    changeset: readFileSync(join(root, '.changeset', changeset), 'utf8'),
+    changelog: existsSync(changelogPath) ? readFileSync(changelogPath, 'utf8') : undefined,
+    changesets: Object.fromEntries(
+      changesets.map((changeset) => [changeset, readFileSync(join(root, '.changeset', changeset), 'utf8')]),
+    ),
     upstream: readFileSync(join(root, 'UPSTREAM_VERSION'), 'utf8'),
   };
+}
+
+function addForeignChangeset(root: string, selector: string): string {
+  const changeset = 'foreign-package.md';
+  writeFileSync(
+    join(root, '.changeset', changeset),
+    `---\n${selector}\n---\n\nForeign package changesets must not be consumed by the Tea release command.\n`,
+  );
+  return changeset;
 }
 
 describe('version:release Tea package version', () => {
@@ -124,26 +138,43 @@ describe('version:release Tea package version', () => {
 
   it('rejects an upstream package selector without writing a version', () => {
     const root = prepareFixture('old-selector');
-    const before = fixtureSnapshot(root, 'old-selector.md');
+    const before = fixtureSnapshot(root, ['old-selector.md']);
 
     const result = runRelease(root);
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).not.toContain('Cannot find module');
     expect(result.stderr).toMatch(/selector|futuretea|tea-code/i);
-    expect(fixtureSnapshot(root, 'old-selector.md')).toEqual(before);
+    expect(fixtureSnapshot(root, ['old-selector.md'])).toEqual(before);
+  });
+
+  it.each([
+    '"@moonshot-ai/agent-core-v2": patch',
+    "'@moonshot-ai/agent-core-v2': patch",
+    'foreign-package: patch',
+    "'@moonshot-ai/agent-core-v2': none",
+  ])('rejects a queue containing %s before writing release artifacts', (selector) => {
+    const root = prepareFixture('mixed-selectors');
+    const foreignChangeset = addForeignChangeset(root, selector);
+    const before = fixtureSnapshot(root, ['tea-code-minor.md', foreignChangeset]);
+
+    const result = runRelease(root);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/selector|futuretea|tea-code/i);
+    expect(fixtureSnapshot(root, ['tea-code-minor.md', foreignChangeset])).toEqual(before);
   });
 
   it('rejects an invalid upstream version before mutating normal release artifacts', () => {
     const root = prepareFixture('base-not-incremented');
-    const before = fixtureSnapshot(root, 'tea-code-patch.md');
+    const before = fixtureSnapshot(root, ['tea-code-patch.md']);
 
     const result = runRelease(root);
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).not.toContain('Cannot find module');
     expect(result.stderr).toMatch(/upstream|semver|version/i);
-    expect(fixtureSnapshot(root, 'tea-code-patch.md')).toEqual(before);
+    expect(fixtureSnapshot(root, ['tea-code-patch.md'])).toEqual(before);
   });
 
   it('documents the wrapper as the only manual version command', () => {
