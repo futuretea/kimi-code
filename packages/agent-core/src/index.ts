@@ -48,6 +48,7 @@ export type {
 } from './agent/background';
 export type { CronTaskSnapshot } from './agent/cron';
 export type { ToolServices } from './tools/support/services';
+export type { SessionAgentProfileConfig } from './profile';
 
 // Image compression — prompt-ingestion sites (CLI paste, server upload
 // resolution, ACP) call compressBase64ForModel / compressImageForModel per

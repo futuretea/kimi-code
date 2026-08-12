@@ -63,6 +63,7 @@ describe('server bootstrap, health, and error handling', () => {
       return {
         createSession: () => Promise.reject(new Error(rawMessage)),
         resumeSession: (input) => inner.resumeSession(input),
+        withInteractiveAgent: (agentId, fn) => inner.withInteractiveAgent(agentId, fn),
       };
     };
     handle = await bootTestServer({ harnessFactory: factory });
@@ -88,6 +89,7 @@ describe('server bootstrap, health, and error handling', () => {
           return session;
         },
         resumeSession: (input) => inner.resumeSession(input),
+        withInteractiveAgent: (agentId, fn) => inner.withInteractiveAgent(agentId, fn),
       };
     };
     handle = await bootTestServer({ harnessFactory: factory });
@@ -101,6 +103,7 @@ describe('server bootstrap, health, and error handling', () => {
       type: 'session.error',
       code: 'internal_error',
       message: 'An internal error occurred.',
+      frame_id: '1',
     });
     expect(frames[1]).toEqual({ type: 'prompt_done', stop_reason: 'failed' });
     expect(JSON.stringify(frames)).not.toContain('/internal/core');

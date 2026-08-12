@@ -229,20 +229,29 @@ describe('interaction routes (approvals / questions / tool-results)', () => {
         tool_call_id: 'call_1',
         resolution: 'completed',
         output: '{"rows":3}',
+        system_message: 'use the result as evidence',
       });
       expect(accepted.status).toBe(202);
       expect(accepted.body).toEqual({ accepted: true });
       expect(fake().sessions.get('ses_1')?.toolCallResponses).toEqual([
         { output: '{"rows":3}', isError: false },
       ]);
+      expect(fake().sessions.get('ses_1')?.systemMessages).toEqual(['use the result as evidence']);
+      expect(fake().sessions.get('ses_1')?.operations).toEqual([
+        'prompt',
+        'system_message',
+        'tool_call_response',
+      ]);
 
       const duplicate = await postJson(base(), '/sessions/ses_1/tool-results', {
         tool_call_id: 'call_1',
         resolution: 'completed',
         output: '{}',
+        system_message: 'this retry must not be injected',
       });
       expect(duplicate.status).toBe(409);
       expectErrorEnvelope(duplicate.body, 'request_not_pending');
+      expect(fake().sessions.get('ses_1')?.systemMessages).toEqual(['use the result as evidence']);
 
       const frames = await collectNdjson(stream.reader);
       expect(frames.at(-1)).toEqual({ type: 'prompt_done', stop_reason: 'completed' });
@@ -255,9 +264,11 @@ describe('interaction routes (approvals / questions / tool-results)', () => {
       const missing = await postJson(base(), '/sessions/ses_1/tool-results', {
         tool_call_id: 'call_1',
         resolution: 'completed',
+        system_message: 'this invalid result must not be injected',
       });
       expect(missing.status).toBe(400);
       expectErrorEnvelope(missing.body, 'invalid_request');
+      expect(fake().sessions.get('ses_1')?.systemMessages).toEqual([]);
 
       // The call is still pending: a corrected retry is accepted.
       const retry = await postJson(base(), '/sessions/ses_1/tool-results', {
@@ -267,6 +278,39 @@ describe('interaction routes (approvals / questions / tool-results)', () => {
       });
       expect(retry.status).toBe(202);
       await collectNdjson(stream.reader);
+    });
+
+    it('fails closed when a system-message handoff is not durably confirmed', async () => {
+      handle = await bootTestServer();
+      const { stream } = await startBlockedTurn(TOOL_CALL_STEPS, 'external_tool_request');
+      const session = fake().sessions.get('ses_1');
+      expect(session).toBeDefined();
+      session!.appendSystemMessageError = new Error('runtime system-message write failed');
+
+      const first = await postJson(base(), '/sessions/ses_1/tool-results', {
+        tool_call_id: 'call_1',
+        resolution: 'completed',
+        output: '{"rows":3}',
+        system_message: 'use the result as evidence',
+      });
+      expect(first.status).toBe(500);
+      expectErrorEnvelope(first.body, 'internal_error');
+      expect(session!.systemMessages).toEqual([]);
+      expect(session!.toolCallResponses).toEqual([
+        { output: 'The external tool result could not be finalized.', isError: true },
+      ]);
+
+      session!.appendSystemMessageError = undefined;
+      const retry = await postJson(base(), '/sessions/ses_1/tool-results', {
+        tool_call_id: 'call_1',
+        resolution: 'completed',
+        output: '{"rows":3}',
+        system_message: 'use the result as evidence',
+      });
+      expect(retry.status).toBe(409);
+      expectErrorEnvelope(retry.body, 'session_state_conflict');
+      expect(session!.systemMessages).toEqual([]);
+      stream.reader.close();
     });
 
     it('maps a failed resolution to an error tool response', async () => {
@@ -290,9 +334,11 @@ describe('interaction routes (approvals / questions / tool-results)', () => {
       const res = await postJson(base(), '/sessions/ses_1/tool-results', {
         tool_call_id: 'nope',
         resolution: 'skipped',
+        system_message: 'this unknown result must not be injected',
       });
       expect(res.status).toBe(409);
       expectErrorEnvelope(res.body, 'request_not_pending');
+      expect(fake().sessions.get('ses_1')?.systemMessages).toEqual([]);
     });
 
     it('rejects a kind-mismatched pending id (409 request_not_pending)', async () => {

@@ -14,6 +14,7 @@ const toolResultBodySchema = z.object({
   tool_call_id: z.string().min(1),
   resolution: z.enum(['completed', 'failed', 'skipped']),
   output: z.string().optional(),
+  system_message: z.string().min(1).optional(),
 });
 
 const sessionParamsSchema = z.object({ id: z.string().min(1) });
@@ -22,10 +23,13 @@ export function registerToolResultRoutes(app: FastifyInstance, ctx: RouteContext
   const route = defineRoute(
     { method: 'POST', path: '/sessions/{id}/tool-results', params: sessionParamsSchema, body: toolResultBodySchema },
     async (req, reply) => {
-      ctx.registry.resolveToolResult(req.params.id, {
+      await ctx.registry.resolveToolResult(req.params.id, {
         toolCallId: req.body.tool_call_id,
         resolution: req.body.resolution,
         ...(req.body.output !== undefined ? { output: req.body.output } : {}),
+        ...(req.body.system_message !== undefined
+          ? { systemMessage: req.body.system_message }
+          : {}),
       });
       return reply.code(202).send({ accepted: true });
     },

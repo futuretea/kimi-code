@@ -101,6 +101,34 @@ describe('event bridge: public-aligned events', () => {
     expect(sink.turnEnds).toEqual([{ sessionId: 'ses_1', stopReason: 'completed' }]);
   });
 
+  it('does not publish built-in tool events for a custom tool callback', async () => {
+    const { fake, harness, sink } = await setup();
+    await harness.updateSessionConfig('ses_1', {
+      tools: [{
+        type: 'custom',
+        name: 'lookup_order',
+        description: 'Look up an order',
+        inputSchema: { type: 'object' },
+      }],
+    });
+    fake.setScript('ses_1', [
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'tool.call.started', turnId: 1, toolCallId: 'call_custom', name: 'lookup_order', args: { order_id: 'o_1' },
+        }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({ type: 'tool.result', turnId: 1, toolCallId: 'call_custom', output: 'shipped' }),
+      },
+    ]);
+
+    await harness.prompt('ses_1', 'look up order');
+
+    expect(sink.events).toEqual([]);
+  });
+
   it('maps qualified server tool calls to the dedicated facade events', async () => {
     const { sink, fake, harness } = await setup();
     fake.setScript('ses_1', [
@@ -129,6 +157,213 @@ describe('event bridge: public-aligned events', () => {
         arguments: { month: '2026-07' },
       },
       { type: 'agent.mcp_tool_result', id: 'call_9', output: 'bad auth', is_error: true },
+    ]);
+  });
+
+  it('routes child thinking and tool events to its lifecycle identity without leaking reasoning', async () => {
+    const { sink, fake, harness } = await setup();
+    fake.setScript('ses_1', [
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'subagent.spawned',
+          subagentId: 'runtime_child_1',
+          subagentName: 'roster_1',
+          parentToolCallId: 'call_parent',
+          runInBackground: false,
+        }),
+      },
+      { kind: 'event', event: runtimeEvent({ type: 'subagent.started', subagentId: 'runtime_child_1' }) },
+      {
+        kind: 'event',
+        event: runtimeEvent({ type: 'thinking.delta', agentId: 'runtime_child_1', turnId: 2, delta: 'private child reasoning' }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({ type: 'thinking.delta', agentId: 'runtime_child_1', turnId: 2, delta: 'still private' }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'assistant.delta',
+          agentId: 'runtime_child_1',
+          turnId: 2,
+          delta: 'private child output',
+        }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'tool.call.started',
+          agentId: 'runtime_child_1',
+          turnId: 2,
+          toolCallId: 'child_call_1',
+          name: 'Read',
+          args: { path: 'README.md' },
+        }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'tool.result',
+          agentId: 'runtime_child_1',
+          turnId: 2,
+          toolCallId: 'child_call_1',
+          output: 'file body',
+        }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'tool.call.started',
+          agentId: 'runtime_child_1',
+          turnId: 2,
+          toolCallId: 'child_call_2',
+          name: 'mcp__billing__get_invoice',
+          args: { invoice: 'inv_1' },
+        }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'tool.result',
+          agentId: 'runtime_child_1',
+          turnId: 2,
+          toolCallId: 'child_call_2',
+          output: 'not found',
+          isError: true,
+        }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'turn.ended',
+          agentId: 'runtime_child_1',
+          turnId: 2,
+          reason: 'completed',
+        }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'subagent.failed',
+          subagentId: 'runtime_child_1',
+          error: 'private child failure',
+        }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'subagent.suspended',
+          subagentId: 'runtime_child_1',
+          reason: 'private child suspension',
+        }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'subagent.completed',
+          subagentId: 'runtime_child_1',
+          resultSummary: 'private child conclusion',
+        }),
+      },
+      { kind: 'event', event: runtimeEvent({ type: 'assistant.delta', turnId: 1, delta: 'parent output' }) },
+      { kind: 'event', event: runtimeEvent({ type: 'turn.ended', turnId: 1, reason: 'completed' }) },
+    ]);
+
+    await harness.prompt('ses_1', 'hi');
+
+    expect(sink.events.map(({ event }) => event)).toEqual([
+      { type: 'subagent.spawned', runtime_agent_id: 'runtime_child_1', profile_name: 'roster_1' },
+      { type: 'subagent.started', runtime_agent_id: 'runtime_child_1' },
+      { type: 'subagent.thinking', runtime_agent_id: 'runtime_child_1' },
+      { type: 'subagent.message', runtime_agent_id: 'runtime_child_1', content: 'private child output' },
+      {
+        type: 'subagent.tool_use',
+        runtime_agent_id: 'runtime_child_1',
+        id: 'child_call_1',
+        name: 'Read',
+        arguments: { path: 'README.md' },
+      },
+      {
+        type: 'subagent.tool_result',
+        runtime_agent_id: 'runtime_child_1',
+        id: 'child_call_1',
+        output: 'file body',
+      },
+      {
+        type: 'subagent.mcp_tool_use',
+        runtime_agent_id: 'runtime_child_1',
+        id: 'child_call_2',
+        server_name: 'billing',
+        tool_name: 'get_invoice',
+        arguments: { invoice: 'inv_1' },
+      },
+      {
+        type: 'subagent.mcp_tool_result',
+        runtime_agent_id: 'runtime_child_1',
+        id: 'child_call_2',
+        output: 'not found',
+        is_error: true,
+      },
+      { type: 'subagent.failed', runtime_agent_id: 'runtime_child_1' },
+      { type: 'subagent.suspended', runtime_agent_id: 'runtime_child_1' },
+      { type: 'subagent.completed', runtime_agent_id: 'runtime_child_1' },
+      { type: 'agent.message', content: 'parent output' },
+      { type: 'session.status_idle' },
+    ]);
+    expect(sink.turnEnds).toEqual([{ sessionId: 'ses_1', stopReason: 'completed' }]);
+    const serialized = JSON.stringify(sink.events);
+    expect(serialized).not.toContain('private child failure');
+    expect(serialized).not.toContain('private child conclusion');
+    expect(serialized).not.toContain('private child reasoning');
+    expect(serialized).not.toContain('still private');
+  });
+
+  it('keeps colliding child tool call IDs scoped to their runtime identities', async () => {
+    const { sink, fake, harness } = await setup();
+    fake.setScript('ses_1', [
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'subagent.spawned', subagentId: 'runtime_child_1', subagentName: 'roster_1', parentToolCallId: 'parent_1', runInBackground: false,
+        }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'subagent.spawned', subagentId: 'runtime_child_2', subagentName: 'roster_2', parentToolCallId: 'parent_2', runInBackground: false,
+        }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({ type: 'tool.call.started', agentId: 'runtime_child_1', turnId: 2, toolCallId: 'shared_call', name: 'Read', args: {} }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({ type: 'tool.call.started', agentId: 'runtime_child_2', turnId: 3, toolCallId: 'shared_call', name: 'mcp__billing__get_invoice', args: {} }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({ type: 'tool.result', agentId: 'runtime_child_1', turnId: 2, toolCallId: 'shared_call', output: 'file body' }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({ type: 'tool.result', agentId: 'runtime_child_2', turnId: 3, toolCallId: 'shared_call', output: 'invoice body' }),
+      },
+    ]);
+
+    await harness.prompt('ses_1', 'hi');
+
+    expect(sink.events.map(({ event }) => event)).toEqual([
+      { type: 'subagent.spawned', runtime_agent_id: 'runtime_child_1', profile_name: 'roster_1' },
+      { type: 'subagent.spawned', runtime_agent_id: 'runtime_child_2', profile_name: 'roster_2' },
+      { type: 'subagent.tool_use', runtime_agent_id: 'runtime_child_1', id: 'shared_call', name: 'Read', arguments: {} },
+      {
+        type: 'subagent.mcp_tool_use', runtime_agent_id: 'runtime_child_2', id: 'shared_call', server_name: 'billing', tool_name: 'get_invoice', arguments: {},
+      },
+      { type: 'subagent.tool_result', runtime_agent_id: 'runtime_child_1', id: 'shared_call', output: 'file body' },
+      { type: 'subagent.mcp_tool_result', runtime_agent_id: 'runtime_child_2', id: 'shared_call', output: 'invoice body' },
     ]);
   });
 
@@ -179,6 +414,45 @@ describe('event bridge: public-aligned events', () => {
 });
 
 describe('pending call bridge: approval', () => {
+  it('auto-approves a custom tool so its client callback has no confirmation round trip', async () => {
+    const { registry, sink, fake, harness } = await setup();
+    await harness.updateSessionConfig('ses_1', {
+      tools: [{
+        type: 'custom',
+        name: 'lookup_order',
+        description: 'Look up an order',
+        inputSchema: { type: 'object' },
+      }],
+    });
+    const handler = fake.sessions.get('ses_1')?.approvalHandler;
+    expect(handler).toBeDefined();
+
+    const approval = handler!({
+      toolCallId: 'call_custom',
+      toolName: 'lookup_order',
+      action: 'execute',
+      display: { kind: 'generic', summary: 'look up order' },
+    });
+    let timedOut = false;
+    try {
+      const result = await Promise.race([
+        approval,
+        new Promise<{ timedOut: true }>((resolve) => {
+          setTimeout(() => resolve({ timedOut: true }), 25);
+        }),
+      ]);
+      timedOut = 'timedOut' in result;
+      expect(result).toEqual({ decision: 'approved' });
+      expect(sink.events).toEqual([]);
+      expect(registry.listPendingCalls('ses_1')).toEqual([]);
+    } finally {
+      if (timedOut) {
+        registry.resolveApproval('ses_1', { toolCallId: 'call_custom', decision: 'approved' });
+        await approval;
+      }
+    }
+  });
+
   it('emits approval_request and resolves the runtime handler from the registry', async () => {
     const { registry, sink, fake, harness } = await setup();
     fake.setScript('ses_1', [
@@ -227,6 +501,68 @@ describe('pending call bridge: approval', () => {
     ]);
   });
 
+  it('approves approval-worthy actions without a round trip under always_allow', async () => {
+    const workDir = await mkdtemp(join(tmpdir(), 'oca-facade-bridge-'));
+    tempDirs.push(workDir);
+    const registry = new SessionRegistry();
+    registry.createSession('ses_1');
+    const sink = makeSink();
+    const { fake, createHarness } = createFakeHarness();
+    const harness = new LiveHarnessFactory({ registry, sink, createHarness });
+    await harness.createSession({
+      sessionId: 'ses_1',
+      workDir,
+      tools: [{
+        type: 'agent_toolset_20260401',
+        configs: [{ name: 'Bash', permissionPolicy: { type: 'always_allow' } }],
+      }],
+    });
+    fake.setScript('ses_1', [
+      { kind: 'approval', request: { toolCallId: 'call_1', toolName: 'Bash', action: 'execute', display: { kind: 'generic', summary: 'run tool' } } },
+    ]);
+
+    await harness.prompt('ses_1', 'hi');
+
+    expect(sink.events).toEqual([]);
+    expect(registry.listPendingCalls('ses_1')).toEqual([]);
+    expect(fake.sessions.get('ses_1')?.approvalResponses).toEqual([{ decision: 'approved' }]);
+  });
+
+  it('requests confirmation under explicit always_ask', async () => {
+    const workDir = await mkdtemp(join(tmpdir(), 'oca-facade-bridge-'));
+    tempDirs.push(workDir);
+    const registry = new SessionRegistry();
+    registry.createSession('ses_1');
+    const sink = makeSink();
+    const { fake, createHarness } = createFakeHarness();
+    const harness = new LiveHarnessFactory({ registry, sink, createHarness });
+    await harness.createSession({
+      sessionId: 'ses_1',
+      workDir,
+      tools: [{
+        type: 'agent_toolset_20260401',
+        configs: [{ name: 'Bash', permissionPolicy: { type: 'always_ask' } }],
+      }],
+    });
+    fake.setScript('ses_1', [
+      { kind: 'approval', request: { toolCallId: 'call_1', toolName: 'Bash', action: 'execute', display: { kind: 'generic', summary: 'run tool' } } },
+    ]);
+
+    const promptDone = harness.prompt('ses_1', 'hi');
+    expect(sink.events.map(({ event }) => event)).toEqual([
+      {
+        type: 'approval_request',
+        tool_call_id: 'call_1',
+        tool_name: 'Bash',
+        action: 'execute',
+        display: { kind: 'generic', summary: 'run tool' },
+      },
+    ]);
+    registry.resolveApproval('ses_1', { toolCallId: 'call_1', decision: 'approved' });
+    await promptDone;
+    expect(fake.sessions.get('ses_1')?.approvalResponses).toEqual([{ decision: 'approved' }]);
+  });
+
   it('denies approval-worthy actions without a round trip under always_deny', async () => {
     const workDir = await mkdtemp(join(tmpdir(), 'oca-facade-bridge-'));
     tempDirs.push(workDir);
@@ -235,7 +571,14 @@ describe('pending call bridge: approval', () => {
     const sink = makeSink();
     const { fake, createHarness } = createFakeHarness();
     const harness = new LiveHarnessFactory({ registry, sink, createHarness });
-    await harness.createSession({ sessionId: 'ses_1', workDir, permissionPolicy: 'always_deny' });
+    await harness.createSession({
+      sessionId: 'ses_1',
+      workDir,
+      tools: [{
+        type: 'agent_toolset_20260401',
+        configs: [{ name: 'Bash', permissionPolicy: { type: 'always_deny' } }],
+      }],
+    });
     fake.setScript('ses_1', [
       { kind: 'approval', request: { toolCallId: 'call_1', toolName: 'Bash', action: 'execute', display: { kind: 'generic', summary: 'run tool' } } },
     ]);
@@ -318,7 +661,7 @@ describe('pending call bridge: external tool', () => {
       { id: 'call_9a2', kind: 'external_tool', state: 'pending' },
     ]);
 
-    registry.resolveToolResult('ses_1', {
+    await registry.resolveToolResult('ses_1', {
       toolCallId: 'call_9a2',
       resolution: 'completed',
       output: '{"rows":3}',
@@ -338,9 +681,9 @@ describe('pending call bridge: external tool', () => {
       { kind: 'tool_call', request: { toolCallId: 'call_s', args: {} } },
     ]);
     const promptDone = harness.prompt('ses_1', 'hi');
-    registry.resolveToolResult('ses_1', { toolCallId: 'call_f', resolution: 'failed', output: 'boom' });
+    await registry.resolveToolResult('ses_1', { toolCallId: 'call_f', resolution: 'failed', output: 'boom' });
     await waitForPendingCall(registry, 'ses_1', 'call_s');
-    registry.resolveToolResult('ses_1', { toolCallId: 'call_s', resolution: 'skipped' });
+    await registry.resolveToolResult('ses_1', { toolCallId: 'call_s', resolution: 'skipped' });
     await promptDone;
     expect(fake.sessions.get('ses_1')?.toolCallResponses).toEqual([
       { output: 'boom', isError: true },
@@ -355,18 +698,18 @@ describe('pending call bridge: external tool', () => {
       { kind: 'tool_call', request: { toolCallId: 'call_a', args: {} } },
     ]);
     const promptDone = harness.prompt('ses_1', 'hi');
-    expect(() =>
+    await expect(
       registry.resolveToolResult('ses_1', { toolCallId: 'call_zzz', resolution: 'skipped' }),
-    ).toThrowError(expect.objectContaining({ code: 'request_not_pending' }) as Error);
+    ).rejects.toThrowError(expect.objectContaining({ code: 'request_not_pending' }) as Error);
     expect(registry.listPendingCalls('ses_1')).toEqual([
       { id: 'call_a', kind: 'external_tool', state: 'pending' },
     ]);
-    registry.resolveToolResult('ses_1', { toolCallId: 'call_a', resolution: 'skipped' });
+    await registry.resolveToolResult('ses_1', { toolCallId: 'call_a', resolution: 'skipped' });
     await promptDone;
     // A duplicate result for the settled call is still rejected.
-    expect(() =>
+    await expect(
       registry.resolveToolResult('ses_1', { toolCallId: 'call_a', resolution: 'skipped' }),
-    ).toThrowError(expect.objectContaining({ code: 'request_not_pending' }) as Error);
+    ).rejects.toThrowError(expect.objectContaining({ code: 'request_not_pending' }) as Error);
   });
 });
 

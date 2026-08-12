@@ -1,6 +1,7 @@
 import type {
   ExportSessionManifest,
   ResumeSessionResult,
+  SessionAgentProfileConfig,
   ShellEnvironment,
   TelemetryClient,
   TelemetryContextPatch,
@@ -61,6 +62,7 @@ export type {
   ResumedAgentState,
   ServicesConfig,
   ShellEnvironment,
+  SessionAgentProfileConfig,
   SkillSummary,
   ThinkingConfig,
   ToolInfo,
@@ -114,6 +116,8 @@ export interface CreateSessionOptions {
    * interactive / SDK sessions.
    */
   readonly drainAgentTasksOnStop?: boolean;
+  /** Immutable per-session agent profile registry. */
+  readonly agentProfiles?: SessionAgentProfileConfig;
 }
 
 export interface RenameSessionInput {

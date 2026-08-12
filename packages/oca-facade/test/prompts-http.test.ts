@@ -112,6 +112,20 @@ describe('prompt route', () => {
     expect(frames.at(-1)).toEqual({ type: 'prompt_done', stop_reason: 'completed' });
   });
 
+  it('passes an optional system message with the prompt', async () => {
+    handle = await bootTestServer();
+    setCompletingScript();
+    await createSession();
+
+    const stream = await postStream(base(), '/sessions/ses_1/prompt', {
+      content: 'summarize the release',
+      system_message: 'answer in one paragraph',
+    });
+    expect(stream.response.status).toBe(200);
+    await collectNdjson(stream.reader);
+    expect(fake().sessions.get('ses_1')?.promptSystemMessages).toEqual(['answer in one paragraph']);
+  });
+
   it('rejects a prompt without content (400 invalid_request)', async () => {
     handle = await bootTestServer();
     await createSession();

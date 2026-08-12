@@ -14,8 +14,7 @@ export {
 
 export {
   LiveHarnessFactory,
-  PERMISSION_MODE_BY_POLICY,
-  permissionModeForPolicy,
+  QODER_PERMISSION_MODE,
   type FacadeHarness,
   type HarnessFactory,
   type HarnessSession,

@@ -19,6 +19,7 @@ import type { KimiConfig, KimiConfigPatch, McpServerConfig } from '#/config';
 import type { ExperimentalFeatureState } from '#/flags';
 import type { ResumeSessionResult } from '#/rpc/resumed';
 import type { SessionMeta } from '#/session';
+import type { SessionAgentProfileConfig } from '../profile';
 import type { ContentPart } from '@moonshot-ai/kosong';
 import type { SessionWarning } from '@moonshot-ai/protocol';
 
@@ -42,7 +43,7 @@ export type PromptPart = Extract<ContentPart, { type: 'text' | 'image_url' | 'vi
 export type PromptInput = readonly PromptPart[];
 
 export type EmptyPayload = {};
-export type SessionMetadataPatch = Partial<Omit<SessionMeta, 'agents'>>;
+export type SessionMetadataPatch = Partial<Omit<SessionMeta, 'agents' | 'agentProfiles'>>;
 
 export interface ClientTelemetryInfo {
   readonly id?: string | undefined;
@@ -56,12 +57,14 @@ export interface CreateSessionPayload {
   readonly workDir: string;
   readonly model?: string | undefined;
   readonly thinking?: string | undefined;
+  readonly contextWindow?: number | undefined;
   readonly permission?: PermissionMode | undefined;
   readonly metadata?: JsonObject | undefined;
   readonly mcpServers?: Readonly<Record<string, McpServerConfig>>;
   readonly additionalDirs?: readonly string[];
   readonly client?: ClientTelemetryInfo | undefined;
   readonly drainAgentTasksOnStop?: boolean;
+  readonly agentProfiles?: SessionAgentProfileConfig;
 }
 
 export interface CloseSessionPayload {
@@ -70,6 +73,10 @@ export interface CloseSessionPayload {
 
 export interface ArchiveSessionPayload {
   readonly sessionId: string;
+}
+
+export interface RemoveAgentPayload {
+  readonly agentId: string;
 }
 
 export interface ResumeSessionPayload {
@@ -172,6 +179,11 @@ export interface SessionSummary {
 
 export interface PromptPayload {
   readonly input: readonly ContentPart[];
+  readonly systemMessage?: string;
+}
+
+export interface AppendSystemMessagePayload {
+  readonly content: string;
 }
 export interface RunShellCommandPayload {
   readonly command: string;
@@ -387,6 +399,7 @@ export interface GetCronTasksResult {
 
 export interface AgentAPI {
   prompt: (payload: PromptPayload) => void;
+  appendSystemMessage: (payload: AppendSystemMessagePayload) => void;
   runShellCommand: (payload: RunShellCommandPayload) => Promise<ShellCommandResult>;
   cancelShellCommand: (payload: CancelShellCommandPayload) => void;
   steer: (payload: SteerPayload) => void;
@@ -445,6 +458,7 @@ export interface SessionAPI extends AgentAPIWithId {
   waitForBackgroundTasksOnPrint: (payload: EmptyPayload) => void;
   handlePrintMainTurnCompleted: (payload: EmptyPayload) => 'finish' | 'continue';
   addAdditionalDir: (payload: AddAdditionalDirPayload) => AddAdditionalDirResult;
+  removeAgent: (payload: RemoveAgentPayload) => void;
 }
 
 type SessionAPIWithId = WithSessionId<SessionAPI>;

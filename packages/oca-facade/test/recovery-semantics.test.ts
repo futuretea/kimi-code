@@ -39,6 +39,20 @@ function expectFacadeError(fn: () => unknown, code: FacadeErrorCode): void {
   throw new Error(`expected FacadeError ${code}, but no error was thrown`);
 }
 
+async function expectAsyncFacadeError(
+  fn: () => Promise<unknown>,
+  code: FacadeErrorCode,
+): Promise<void> {
+  try {
+    await fn();
+  } catch (error) {
+    expect(error).toBeInstanceOf(FacadeError);
+    expect((error as FacadeError).code).toBe(code);
+    return;
+  }
+  throw new Error(`expected FacadeError ${code}, but no error was thrown`);
+}
+
 const APPROVAL_STEP: FakeScriptStep = {
   kind: 'approval',
   request: {
@@ -74,16 +88,16 @@ async function registryWithRecoveredUnknownCall(): Promise<SessionRegistry> {
 describe('unknown external call settlement (skip semantics)', () => {
   it('accepts resolution=skipped on an unknown call and terminates it', async () => {
     const registry = await registryWithRecoveredUnknownCall();
-    expect(
+    await expect(
       registry.resolveToolResult('ses_1', { toolCallId: 'call_ext', resolution: 'skipped' }),
-    ).toEqual({ accepted: true });
+    ).resolves.toEqual({ accepted: true });
     // Terminal: removed from the pending table, nothing left to correlate.
     expect(registry.listPendingCalls('ses_1')).toEqual([]);
   });
 
   it('rejects resolution=completed on an unknown call (request_not_pending)', async () => {
     const registry = await registryWithRecoveredUnknownCall();
-    expectFacadeError(
+    await expectAsyncFacadeError(
       () =>
         registry.resolveToolResult('ses_1', {
           toolCallId: 'call_ext',
@@ -100,7 +114,7 @@ describe('unknown external call settlement (skip semantics)', () => {
 
   it('rejects resolution=failed on an unknown call (request_not_pending)', async () => {
     const registry = await registryWithRecoveredUnknownCall();
-    expectFacadeError(
+    await expectAsyncFacadeError(
       () => registry.resolveToolResult('ses_1', { toolCallId: 'call_ext', resolution: 'failed' }),
       'request_not_pending',
     );
@@ -111,15 +125,15 @@ describe('unknown external call settlement (skip semantics)', () => {
 
   it('rejects a duplicate skip and a late original result after the skip', async () => {
     const registry = await registryWithRecoveredUnknownCall();
-    expect(
+    await expect(
       registry.resolveToolResult('ses_1', { toolCallId: 'call_ext', resolution: 'skipped' }),
-    ).toEqual({ accepted: true });
+    ).resolves.toEqual({ accepted: true });
 
-    expectFacadeError(
+    await expectAsyncFacadeError(
       () => registry.resolveToolResult('ses_1', { toolCallId: 'call_ext', resolution: 'skipped' }),
       'request_not_pending',
     );
-    expectFacadeError(
+    await expectAsyncFacadeError(
       () =>
         registry.resolveToolResult('ses_1', {
           toolCallId: 'call_ext',
@@ -133,7 +147,7 @@ describe('unknown external call settlement (skip semantics)', () => {
   it('rejects a skip addressed to another session (cross-session correlation)', async () => {
     const registry = await registryWithRecoveredUnknownCall();
     registry.createSession('ses_2');
-    expectFacadeError(
+    await expectAsyncFacadeError(
       () => registry.resolveToolResult('ses_2', { toolCallId: 'call_ext', resolution: 'skipped' }),
       'request_not_pending',
     );
@@ -148,7 +162,7 @@ describe('unknown external call settlement (skip semantics)', () => {
     // The user asks the agent to redo the work: a functional retry is a NEW
     // call with a NEW id; the old unknown id must not latch onto it.
     registry.registerPendingCall('ses_1', { id: 'call_new', kind: 'external_tool' });
-    expectFacadeError(
+    await expectAsyncFacadeError(
       () =>
         registry.resolveToolResult('ses_1', {
           toolCallId: 'call_ext',
@@ -157,9 +171,12 @@ describe('unknown external call settlement (skip semantics)', () => {
         }),
       'request_not_pending',
     );
-    expect(
-      registry.resolveToolResult('ses_1', { toolCallId: 'call_new', resolution: 'skipped' }),
-    ).toEqual({ accepted: true });
+    const waiting = registry.waitForToolResultDelivery('ses_1', 'call_new');
+    const accepted = registry.resolveToolResult('ses_1', { toolCallId: 'call_new', resolution: 'skipped' });
+    const delivery = await waiting;
+    registry.beginToolResultDelivery('ses_1', 'call_new', delivery);
+    registry.completeToolResultDelivery('ses_1', 'call_new', delivery);
+    await expect(accepted).resolves.toEqual({ accepted: true });
   });
 });
 
@@ -288,6 +305,9 @@ describe('pending-call journal fail-closed registration', () => {
       register: () => {
         throw new Error('disk full');
       },
+      stageToolResult: () => {},
+      setToolResultDeliveryState: () => {},
+      settleUnknownToolCall: () => {},
       settle: () => {},
       read: () => [],
     };

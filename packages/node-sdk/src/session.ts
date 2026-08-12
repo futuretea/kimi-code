@@ -103,11 +103,22 @@ export class Session {
     this.rpc.setQuestionHandler(this.id, handler);
   }
 
-  async prompt(input: string | PromptInput): Promise<void> {
+  async prompt(input: string | PromptInput, options?: { systemMessage?: string }): Promise<void> {
     this.ensureOpen();
     await this.rpc.prompt({
       sessionId: this.id,
       input: normalizePromptInput(input),
+      ...(options?.systemMessage !== undefined
+        ? { systemMessage: normalizeSystemMessage(options.systemMessage) }
+        : {}),
+    });
+  }
+
+  async appendSystemMessage(content: string): Promise<void> {
+    this.ensureOpen();
+    await this.rpc.appendSystemMessage({
+      sessionId: this.id,
+      content: normalizeSystemMessage(content),
     });
   }
 
@@ -185,6 +196,16 @@ export class Session {
   async cancel(): Promise<void> {
     this.ensureOpen();
     await this.rpc.cancel({ sessionId: this.id });
+  }
+
+  async removeAgent(agentId: string): Promise<void> {
+    this.ensureOpen();
+    const normalized = normalizeRequiredString(
+      agentId,
+      'Agent id cannot be empty',
+      ErrorCodes.REQUEST_INVALID,
+    );
+    await this.rpc.removeAgent({ sessionId: this.id, agentId: normalized });
   }
 
   async setModel(model: string): Promise<void> {
@@ -666,6 +687,13 @@ function normalizePromptInput(input: string | PromptInput): PromptInput {
     }
   }
   return input;
+}
+
+function normalizeSystemMessage(content: string): string {
+  if (content.trim().length === 0) {
+    throw new KimiError(ErrorCodes.REQUEST_PROMPT_INPUT_EMPTY, 'System message cannot be empty');
+  }
+  return content;
 }
 
 function normalizeRequiredString(

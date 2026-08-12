@@ -45,7 +45,11 @@ export class FakeSession implements HarnessSession {
   }
 
   readonly prompts: Array<string | PromptInput> = [];
+  readonly promptSystemMessages: Array<string | undefined> = [];
+  readonly systemMessages: string[] = [];
+  readonly operations: string[] = [];
   readonly registeredTools: RegisterToolInput[] = [];
+  readonly unregisteredTools: string[] = [];
   readonly activeToolsCalls: Array<readonly string[]> = [];
   readonly approvalRequests: ApprovalRequest[] = [];
   readonly approvalResponses: ApprovalResponse[] = [];
@@ -53,8 +57,13 @@ export class FakeSession implements HarnessSession {
   readonly questionResults: QuestionResult[] = [];
   readonly toolCallRequests: ToolCallRequest[] = [];
   readonly toolCallResponses: ToolCallResponse[] = [];
+  readonly removedAgentIDs: string[] = [];
+  removeAgentError: Error | undefined;
+  appendSystemMessageError: Error | undefined;
+  reloadSessionError: Error | undefined;
   cancelCalls = 0;
   closeCalls = 0;
+  reloadSessionCalls = 0;
 
   approvalHandler: ApprovalHandler | undefined;
   questionHandler: QuestionHandler | undefined;
@@ -86,9 +95,16 @@ export class FakeSession implements HarnessSession {
     this.toolCallHandler = handler;
   }
 
+  async reloadSession(): Promise<void> {
+	this.reloadSessionCalls += 1;
+	if (this.reloadSessionError !== undefined) throw this.reloadSessionError;
+  }
+
   /** Records the prompt, then replays the script in order, awaiting handlers. */
-  async prompt(input: string | PromptInput): Promise<void> {
+  async prompt(input: string | PromptInput, _options?: { systemMessage?: string }): Promise<void> {
     this.prompts.push(input);
+    this.promptSystemMessages.push(_options?.systemMessage);
+    this.operations.push('prompt');
     for (const step of this.script) {
       switch (step.kind) {
         case 'event':
@@ -112,14 +128,28 @@ export class FakeSession implements HarnessSession {
           this.toolCallRequests.push(step.request);
           const handler = this.requireHandler(this.toolCallHandler, 'tool call');
           this.toolCallResponses.push(await handler(step.request));
+          this.operations.push('tool_call_response');
           break;
         }
       }
     }
   }
 
+  async appendSystemMessage(content: string): Promise<void> {
+    if (this.appendSystemMessageError !== undefined) {
+      throw this.appendSystemMessageError;
+    }
+    this.systemMessages.push(content);
+    this.operations.push('system_message');
+  }
+
   async cancel(): Promise<void> {
     this.cancelCalls += 1;
+  }
+
+  async removeAgent(agentId: string): Promise<void> {
+    if (this.removeAgentError !== undefined) throw this.removeAgentError;
+    this.removedAgentIDs.push(agentId);
   }
 
   async close(): Promise<void> {
@@ -128,6 +158,10 @@ export class FakeSession implements HarnessSession {
 
   async registerTool(tool: RegisterToolInput): Promise<void> {
     this.registeredTools.push(tool);
+  }
+
+  async unregisterTool(name: string): Promise<void> {
+    this.unregisteredTools.push(name);
   }
 
   async setActiveTools(names: readonly string[]): Promise<void> {
@@ -169,6 +203,7 @@ export class FakeHarness implements HarnessSessionFactory {
   readonly created: CreateSessionOptions[] = [];
   readonly resumed: ResumeSessionInput[] = [];
   readonly sessions = new Map<string, FakeSession>();
+  readonly interactiveAgentIDs: string[] = [];
   /** Scripted per-id resume failures (journal miss / unreadable journal). */
   readonly resumeErrors = new Map<string, Error>();
   private readonly scripts = new Map<string, readonly FakeScriptStep[]>();
@@ -198,6 +233,11 @@ export class FakeHarness implements HarnessSessionFactory {
     const session = new FakeSession(input.id, this.scripts);
     this.sessions.set(input.id, session);
     return Promise.resolve(session);
+  }
+
+  withInteractiveAgent<T>(agentId: string, fn: () => T): T {
+    this.interactiveAgentIDs.push(agentId);
+    return fn();
   }
 }
 

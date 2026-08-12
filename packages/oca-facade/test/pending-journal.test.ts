@@ -8,12 +8,15 @@ import { FacadeError, type FacadeErrorCode } from '../src/errors';
 import {
   readPendingCalls,
   removePendingCall,
+  settleUnknownPendingToolCall,
+  stagePendingToolResult,
   writePendingCall,
 } from '../src/pending-journal';
 import {
   SessionRegistry,
   type PendingCall,
   type PendingCallJournal,
+  type StagedToolResult,
 } from '../src/session-registry';
 
 /**
@@ -114,6 +117,38 @@ describe('pending-call journal file primitives', () => {
     ]);
   });
 
+  it('retains a terminal external-tool correlation without reporting it as pending', async () => {
+    const dir = await makeSessionDir();
+    writePendingCall(dir, { id: 'call_1', kind: 'external_tool' });
+    settleUnknownPendingToolCall(dir, 'call_1');
+    expect(readPendingCalls(dir)).toEqual([
+      { id: 'call_1', kind: 'external_tool', state: 'settled' },
+    ]);
+  });
+
+  it('persists a staged external-tool result without settling the call', async () => {
+    const dir = await makeSessionDir();
+    writePendingCall(dir, { id: 'call_1', kind: 'external_tool' });
+    stagePendingToolResult(dir, 'call_1', {
+      resolution: 'completed',
+      output: '{"rows":3}',
+      systemMessage: 'use the result as evidence',
+    });
+    expect(readPendingCalls(dir)).toEqual([
+      {
+        id: 'call_1',
+        kind: 'external_tool',
+        state: 'pending',
+        stagedToolResult: {
+          resolution: 'completed',
+          output: '{"rows":3}',
+          systemMessage: 'use the result as evidence',
+        },
+        toolResultDeliveryState: 'staged',
+      },
+    ]);
+  });
+
   it('throws on a corrupted journal instead of silently skipping it', async () => {
     const dir = await makeSessionDir();
     writePendingCall(dir, { id: 'call_1', kind: 'external_tool' });
@@ -127,6 +162,8 @@ describe('pending-call journal file primitives', () => {
 /** In-memory PendingCallJournal double with failure switches. */
 class SpyPendingJournal implements PendingCallJournal {
   readonly registered: Array<{ sessionId: string; call: PendingCall }> = [];
+  readonly staged: Array<{ sessionId: string; callId: string }> = [];
+  readonly deliveryStates: Array<{ sessionId: string; callId: string; state: string }> = [];
   readonly settled: Array<{ sessionId: string; callId: string }> = [];
   private readonly store = new Map<string, PendingCall[]>();
   failRegister = false;
@@ -143,6 +180,32 @@ class SpyPendingJournal implements PendingCallJournal {
     const calls = this.store.get(sessionId) ?? [];
     calls.push({ ...call });
     this.store.set(sessionId, calls);
+  }
+
+  stageToolResult(sessionId: string, callId: string, result: StagedToolResult): void {
+    this.staged.push({ sessionId, callId });
+    const calls = this.store.get(sessionId) ?? [];
+    const call = calls.find((item) => item.id === callId && item.kind === 'external_tool');
+    if (call === undefined) throw new Error('missing call');
+    call.stagedToolResult = result;
+    call.toolResultDeliveryState = 'staged';
+  }
+
+  setToolResultDeliveryState(sessionId: string, callId: string, state: 'staged' | 'delivering' | 'delivered'): void {
+    this.deliveryStates.push({ sessionId, callId, state });
+    const call = (this.store.get(sessionId) ?? []).find(
+      (item) => item.id === callId && item.kind === 'external_tool',
+    );
+    if (call?.stagedToolResult === undefined) throw new Error('missing staged call');
+    call.toolResultDeliveryState = state;
+  }
+
+  settleUnknownToolCall(sessionId: string, callId: string): void {
+    const call = (this.store.get(sessionId) ?? []).find(
+      (item) => item.id === callId && item.kind === 'external_tool',
+    );
+    if (call === undefined) throw new Error('missing external tool call');
+    call.state = 'settled';
   }
 
   settle(sessionId: string, callId: string): void {
@@ -194,16 +257,39 @@ describe('registry pending-call journal integration', () => {
     expect(journal.read('ses_1')).toEqual([]);
   });
 
-  it('tolerates a journal delete failure on settle (the crash window closes at recovery)', () => {
+  it('does not replay a confirmed tool result when journal cleanup fails', async () => {
     const journal = new SpyPendingJournal();
     const registry = new SessionRegistry({ pendingJournal: journal });
     registry.createSession('ses_1');
     registry.registerPendingCall('ses_1', { id: 'call_1', kind: 'external_tool' });
     journal.failSettle = true;
-    expect(
-      registry.resolveToolResult('ses_1', { toolCallId: 'call_1', resolution: 'skipped' }),
-    ).toEqual({ accepted: true });
+    const waiting = registry.waitForToolResultDelivery('ses_1', 'call_1');
+    const accepted = registry.resolveToolResult('ses_1', { toolCallId: 'call_1', resolution: 'skipped' });
+    const delivery = await waiting;
+    registry.beginToolResultDelivery('ses_1', 'call_1', delivery);
+    registry.completeToolResultDelivery('ses_1', 'call_1', delivery);
+    await expect(accepted).resolves.toEqual({ accepted: true });
     expect(registry.listPendingCalls('ses_1')).toEqual([]);
+    expect(journal.read('ses_1')).toEqual([
+      expect.objectContaining({ id: 'call_1', toolResultDeliveryState: 'delivered' }),
+    ]);
+
+    const restarted = new SessionRegistry({
+      pendingJournal: journal,
+      recoverFromJournal: async () => ({ pendingCalls: [] }),
+    });
+    await expect(restarted.resumeSession('ses_1')).resolves.toEqual({
+      sessionId: 'ses_1',
+      status: 'active',
+      pendingCalls: [{ id: 'call_1', kind: 'external_tool', state: 'unknown' }],
+    });
+    journal.failSettle = false;
+    await expect(
+      restarted.resolveToolResult('ses_1', { toolCallId: 'call_1', resolution: 'skipped' }),
+    ).resolves.toEqual({ accepted: true });
+    expect(journal.read('ses_1')).toEqual([
+      expect.objectContaining({ id: 'call_1', state: 'settled' }),
+    ]);
   });
 
   it('rebuilds pending calls from the journal on recovery: approvals/questions auto-skipped, external unknown', async () => {
@@ -223,6 +309,76 @@ describe('registry pending-call journal integration', () => {
     // Approvals and questions are auto-skipped (dead-turn no-op), so they are
     // NOT reported; the external tool call stays unknown for the user to skip.
     expect(result.pendingCalls).toEqual([{ id: 'call_ext', kind: 'external_tool', state: 'unknown' }]);
+  });
+
+  it('exposes an in-progress runtime handoff as unknown after restart', async () => {
+    const journal = new SpyPendingJournal();
+    journal.seed('ses_1', [
+      {
+        id: 'call_ext',
+        kind: 'external_tool',
+        state: 'pending',
+        stagedToolResult: { resolution: 'completed', output: '{"rows":3}' },
+        toolResultDeliveryState: 'delivering',
+      },
+    ]);
+    const registry = new SessionRegistry({
+      pendingJournal: journal,
+      recoverFromJournal: async () => ({ pendingCalls: [] }),
+    });
+
+    await expect(registry.resumeSession('ses_1')).resolves.toMatchObject({
+      pendingCalls: [{ id: 'call_ext', kind: 'external_tool', state: 'unknown' }],
+    });
+  });
+
+  it('replays a staged tool result after a failed handoff and settles it once', async () => {
+    const journal = new SpyPendingJournal();
+    const registry = new SessionRegistry({
+      pendingJournal: journal,
+      recoverFromJournal: async () => ({ pendingCalls: [] }),
+    });
+    registry.createSession('ses_1');
+    registry.registerPendingCall('ses_1', { id: 'call_ext', kind: 'external_tool' });
+
+    const firstWait = registry.waitForToolResultDelivery('ses_1', 'call_ext');
+    const firstAttempt = registry.resolveToolResult('ses_1', {
+      toolCallId: 'call_ext',
+      resolution: 'completed',
+      output: '{"rows":3}',
+      systemMessage: 'use the result as evidence',
+    });
+    const firstDelivery = await firstWait;
+    registry.failToolResultDelivery('ses_1', 'call_ext', firstDelivery);
+    await expect(firstAttempt).rejects.toMatchObject({ code: 'internal_error' });
+    expect(journal.read('ses_1')).toEqual([
+      expect.objectContaining({
+        id: 'call_ext',
+        stagedToolResult: {
+          resolution: 'completed',
+          output: '{"rows":3}',
+          systemMessage: 'use the result as evidence',
+        },
+      }),
+    ]);
+
+    registry.markFailed('ses_1');
+    const resumed = await registry.resumeSession('ses_1');
+    expect(resumed.pendingCalls).toEqual([
+      { id: 'call_ext', kind: 'external_tool', state: 'pending' },
+    ]);
+
+    registry.registerPendingCall('ses_1', { id: 'call_ext', kind: 'external_tool' });
+    const replay = await registry.waitForToolResultDelivery('ses_1', 'call_ext');
+    expect(replay.result).toEqual({
+      resolution: 'completed',
+      output: '{"rows":3}',
+      systemMessage: 'use the result as evidence',
+    });
+    registry.beginToolResultDelivery('ses_1', 'call_ext', replay);
+    registry.completeToolResultDelivery('ses_1', 'call_ext', replay);
+    expect(journal.settled).toEqual([{ sessionId: 'ses_1', callId: 'call_ext' }]);
+    expect(registry.listPendingCalls('ses_1')).toEqual([]);
   });
 
   it('surfaces a corrupted journal as session_resume_failed on recovery', async () => {

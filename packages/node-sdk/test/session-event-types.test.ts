@@ -116,6 +116,8 @@ describe('Event public types', () => {
         case 'prompt.completed':
         case 'prompt.aborted':
         case 'prompt.steered':
+        case 'model.request.started':
+        case 'model.request.ended':
           return;
         default:
           assertNever(event);

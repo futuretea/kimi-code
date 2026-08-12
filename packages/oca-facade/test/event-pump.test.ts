@@ -61,13 +61,19 @@ function pumpWithActiveTurn(intervalMs?: number): {
 
 const MESSAGE: FacadeEvent = { type: 'agent.message', content: 'hi' };
 const THINKING: FacadeEvent = { type: 'agent.thinking', content: 'hmm' };
-// Contract-schema event with no current runtime source: the wire schema
-// accepts the frame and the pump delivers it unchanged.
+// Contract-schema event with no current runtime source: the pump preserves
+// the documented field names unchanged.
 const ARTIFACT: FacadeEvent = {
   type: 'agent.artifact_delivered',
   file_id: 'file_1',
-  file_name: 'report.md',
+  original_filename: 'report.md',
+  size: 42,
+  content_type: 'text/markdown',
 };
+
+function withFrameID(event: FacadeEvent, frameID: string): FacadeEvent {
+  return { ...event, frame_id: frameID };
+}
 
 describe('clampDeltaFlushIntervalMs', () => {
   it('clamps into the 50–5000 window and defaults at 100', () => {
@@ -115,13 +121,13 @@ describe('EventPump', () => {
     pump.turnEnded('ses_1', 'completed');
 
     expect(turn.frames).toEqual([
-      MESSAGE,
-      THINKING,
+      withFrameID(MESSAGE, '1'),
+      withFrameID(THINKING, '2'),
       { type: 'prompt_done', stop_reason: 'completed' },
     ]);
     expect(turn.ended()).toBe(true);
     // The terminal frame never reaches the SSE channel.
-    expect(seen.map((entry) => entry.event)).toEqual([MESSAGE, THINKING]);
+    expect(seen.map((entry) => entry.event)).toEqual([withFrameID(MESSAGE, '1'), withFrameID(THINKING, '2')]);
   });
 
   it('passes an agent.artifact_delivered frame through to both channels unchanged', () => {
@@ -134,8 +140,8 @@ describe('EventPump', () => {
     pump.emit('ses_1', ARTIFACT);
     pump.turnEnded('ses_1', 'completed');
 
-    expect(turn.frames).toEqual([ARTIFACT, { type: 'prompt_done', stop_reason: 'completed' }]);
-    expect(seen.map((entry) => entry.event)).toEqual([ARTIFACT]);
+    expect(turn.frames).toEqual([withFrameID(ARTIFACT, '1'), { type: 'prompt_done', stop_reason: 'completed' }]);
+    expect(seen.map((entry) => entry.event)).toEqual([withFrameID(ARTIFACT, '1')]);
   });
 
   it('ends an open turn stream from the cancel path with the given terminal frame', () => {
@@ -159,7 +165,7 @@ describe('EventPump', () => {
 
     pump.failTurn('ses_1', new Error('raw runtime text /internal/path'));
     expect(turn.frames).toEqual([
-      { type: 'session.error', code: 'internal_error', message: 'An internal error occurred.' },
+      { type: 'session.error', code: 'internal_error', message: 'An internal error occurred.', frame_id: '1' },
       { type: 'prompt_done', stop_reason: 'failed' },
     ]);
     expect(JSON.stringify(turn.frames)).not.toContain('/internal/path');
@@ -176,6 +182,25 @@ describe('EventPump', () => {
     pump.emit('ses_1', MESSAGE);
     await new Promise((resolve) => setTimeout(resolve, 80));
     expect(turn.frames).toHaveLength(0);
-    expect(seen.map((entry) => entry.event)).toEqual([MESSAGE]);
+    expect(seen.map((entry) => entry.event)).toEqual([withFrameID(MESSAGE, '1')]);
+  });
+
+  it('assigns distinct frame identities to adjacent equal payloads', () => {
+    const { pump } = pumpWithActiveTurn(5000);
+    const turn = collector();
+    const { sub, seen } = subscriber();
+    pump.attachTurn('ses_1', turn.stream);
+    pump.subscribe('ses_1', sub);
+
+    pump.emit('ses_1', MESSAGE);
+    pump.emit('ses_1', MESSAGE);
+    pump.turnEnded('ses_1', 'completed');
+
+    expect(turn.frames).toEqual([
+      withFrameID(MESSAGE, '1'),
+      withFrameID(MESSAGE, '2'),
+      { type: 'prompt_done', stop_reason: 'completed' },
+    ]);
+    expect(seen.map((entry) => entry.event)).toEqual([withFrameID(MESSAGE, '1'), withFrameID(MESSAGE, '2')]);
   });
 });

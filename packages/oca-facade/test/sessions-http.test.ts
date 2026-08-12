@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { ErrorCodes, KimiError } from '@moonshot-ai/kimi-code-sdk';
 
 import type { HarnessFactory, HarnessSessionFactory } from '../src/harness';
 
@@ -34,6 +38,7 @@ function failingCreateHarness(
           ? Promise.reject(new Error(rawMessage))
           : inner.createSession(createOptions),
       resumeSession: (input) => inner.resumeSession(input),
+      withInteractiveAgent: (agentId, fn) => inner.withInteractiveAgent(agentId, fn),
     };
   };
   return { factory, fake };
@@ -97,35 +102,64 @@ describe('session routes', () => {
 
     it('binds the create configuration and applies it to the runtime session', async () => {
       handle = await bootTestServer();
+      const downloadURL = 'https://storage.example.test/file_1';
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        if (String(input) === downloadURL) {
+          return Promise.resolve(new Response('attached\n', {
+            status: 200,
+            headers: { 'content-length': '9' },
+          }));
+        }
+        return realFetch(input, init);
+      }) as typeof fetch;
       fake().setScript('ses_1', [
         { kind: 'event', event: runtimeEvent({ type: 'turn.started' }) },
         { kind: 'event', event: runtimeEvent({ type: 'turn.ended', reason: 'completed' }) },
       ]);
-      const res = await postJson(base(), '/sessions', {
-        session_id: 'ses_1',
-        work_dir: workDir(),
-        system: 'You are a coding agent.',
-        model: 'model-x',
-        thinking: 'high',
-        permission_policy: 'always_ask',
-        plan_mode: true,
-        metadata: { tenant: 't-1' },
-        tools: [
-          { type: 'builtin', enabled_tools: ['Read', 'Glob'], permission_policy: 'always_allow' },
-          { name: 'query_billing', description: 'Query billing', parameters: { type: 'object' } },
-        ],
-        mcp_servers: [{ type: 'http', name: 'docs', url: 'https://example.invalid/mcp' }],
-        resources: [{ id: 'res_1', type: 'file', file_id: 'file_1', mount_path: '/mnt/a' }],
-        memory_store_entries: [{ path: '/memory/a.md', content: 'remember this' }],
-        skills: [{ id: 'skill_1', name: 'review', version: 2 }],
-      });
+      let res: Awaited<ReturnType<typeof postJson>>;
+      try {
+        res = await postJson(base(), '/sessions', {
+          session_id: 'ses_1',
+          work_dir: workDir(),
+          system: 'You are a coding agent.',
+          model: 'model-x',
+          thinking: 'high',
+          context_window: 262144,
+          plan_mode: true,
+          metadata: { tenant: 't-1' },
+          tools: [
+            {
+              type: 'agent_toolset_20260401',
+              enabled_tools: ['Read', 'Glob'],
+              configs: [{ name: 'Read', permission_policy: { type: 'always_allow' } }],
+            },
+            { type: 'custom', name: 'query_billing', description: 'Query billing', input_schema: { type: 'object' } },
+          ],
+          mcp_servers: [{ type: 'url', name: 'docs', url: 'https://example.invalid/mcp' }],
+			resources: [{ id: 'res_1', type: 'file', file_id: 'file_1', mount_path: 'attached.txt', pvc_path: 'attached.txt', download_url: downloadURL, size: 9 }],
+          skills: [{
+            id: 'skill_1',
+            name: 'review',
+            version: 2,
+            files: [{
+              path: 'SKILL.md',
+              content_base64: Buffer.from('---\nname: review\ndescription: Review code\n---\n').toString('base64'),
+            }],
+          }],
+        });
+      } finally {
+        globalThis.fetch = realFetch;
+      }
       expect(res.status).toBe(201);
+      await expect(readFile(join(workDir(), 'attached.txt'), 'utf-8')).resolves.toBe('attached\n');
 
       expect(fake().created[0]).toMatchObject({
         id: 'ses_1',
         workDir: workDir(),
         model: 'model-x',
         thinking: 'high',
+        contextWindow: 262144,
         permission: 'manual',
         planMode: true,
         metadata: { tenant: 't-1' },
@@ -144,10 +178,168 @@ describe('session routes', () => {
       expect(Array.isArray(firstPrompt)).toBe(true);
       const texts = (firstPrompt as Array<{ type: string; text: string }>).map((part) => part.text);
       expect(texts[0]).toBe('You are a coding agent.');
-      expect(texts.some((text) => text.includes('remember this'))).toBe(true);
       expect(texts.some((text) => text.includes('res_1'))).toBe(true);
-      expect(texts.some((text) => text.includes('skill_1'))).toBe(true);
+      expect(texts.some((text) => text.includes(downloadURL))).toBe(false);
+      expect(texts.some((text) => text.includes('skill_1'))).toBe(false);
+      await expect(readFile(join(workDir(), '.agents/skills/review/SKILL.md'), 'utf8')).resolves.toContain('name: review');
       expect(texts.at(-1)).toBe('hello');
+    });
+
+    it('passes an immutable agent profile registry to the runtime session', async () => {
+      handle = await bootTestServer();
+
+      const res = await postJson(base(), '/sessions', {
+        session_id: 'ses_profiles',
+        work_dir: workDir(),
+        agent_profiles: {
+          main_profile: 'coordinator',
+          profiles: [
+            {
+              name: 'coordinator',
+              system_prompt_template: 'Coordinate the task.',
+              tools: ['Agent', 'Read'],
+              subagents: { reviewer: { description: 'Review focused changes.' } },
+            },
+            {
+              name: 'reviewer',
+              description: 'Review focused changes.',
+              system_prompt_template: 'Review the task.',
+              tools: ['Read'],
+              model_alias: 'reviewer-model',
+              thinking_effort: 'low',
+              context_window: 64000,
+            },
+          ],
+        },
+      });
+
+      expect(res.status).toBe(201);
+      expect(fake().created[0]?.agentProfiles).toEqual({
+        mainProfile: 'coordinator',
+        maxAgents: 25,
+        profiles: [
+          {
+            name: 'coordinator',
+            systemPromptTemplate: 'Coordinate the task.',
+            tools: ['Agent', 'Read'],
+            subagents: { reviewer: { description: 'Review focused changes.' } },
+          },
+          {
+            name: 'reviewer',
+            description: 'Review focused changes.',
+            systemPromptTemplate: 'Review the task.',
+            tools: ['Read'],
+            modelAlias: 'reviewer-model',
+            thinkingEffort: 'low',
+            contextWindow: 64000,
+          },
+        ],
+      });
+    });
+
+    it('rejects an invalid agent profile graph before allocating the Session ID', async () => {
+      handle = await bootTestServer();
+      const invalidRegistries = [
+        {
+          main_profile: 'missing',
+          profiles: [{ name: 'coordinator' }],
+        },
+        {
+          main_profile: 'coordinator',
+          profiles: [{ name: 'coordinator' }, { name: 'coordinator' }],
+        },
+        {
+          main_profile: 'coordinator',
+          profiles: [{ name: 'coordinator', subagents: { missing: {} } }],
+        },
+      ];
+
+      for (const agentProfiles of invalidRegistries) {
+        const res = await postJson(base(), '/sessions', {
+          session_id: 'ses_invalid_profiles',
+          work_dir: workDir(),
+          agent_profiles: agentProfiles,
+        });
+        expect(res.status).toBe(400);
+        expectErrorEnvelope(res.body, 'invalid_request');
+      }
+
+      const usable = await postJson(base(), '/sessions', {
+        session_id: 'ses_invalid_profiles',
+        work_dir: workDir(),
+      });
+      expect(usable.status).toBe(201);
+      expect(fake().created).toHaveLength(1);
+    });
+
+    it('rejects unsupported profile source and template fields', async () => {
+      handle = await bootTestServer();
+      const unsupportedFields = [
+        { extends: 'base' },
+        { system_prompt_path: './mutable.md' },
+        { prompt_vars: { tenant: 'untrusted' } },
+      ];
+
+      for (const profile of unsupportedFields) {
+        const res = await postJson(base(), '/sessions', {
+          session_id: `ses_unsupported_${Object.keys(profile)[0]}`,
+          work_dir: workDir(),
+          agent_profiles: {
+            main_profile: 'coordinator',
+            profiles: [{ name: 'coordinator', ...profile }],
+          },
+        });
+        expect(res.status).toBe(400);
+        expectErrorEnvelope(res.body, 'invalid_request');
+      }
+      expect(fake().created).toHaveLength(0);
+    });
+
+    it('materializes a File attached after session creation before the next prompt', async () => {
+      handle = await bootTestServer();
+      await createSession();
+      const downloadURL = 'https://storage.example.test/file_2';
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        if (String(input) === downloadURL) {
+          return Promise.resolve(new Response('dynamic\n', {
+            status: 200,
+            headers: { 'content-length': '8' },
+          }));
+        }
+        return realFetch(input, init);
+      }) as typeof fetch;
+      try {
+        const res = await postJson(base(), '/sessions/ses_1/resources', {
+          resources: [{
+            id: 'res_2',
+            type: 'file',
+            file_id: 'file_2',
+            mount_path: 'dynamic.txt',
+            pvc_path: 'dynamic.txt',
+            download_url: downloadURL,
+            size: 8,
+          }],
+        });
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ accepted: true });
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+      await expect(readFile(join(workDir(), 'dynamic.txt'), 'utf-8')).resolves.toBe('dynamic\n');
+
+      fake().setScript('ses_1', [
+        { kind: 'event', event: runtimeEvent({ type: 'turn.started' }) },
+        { kind: 'event', event: runtimeEvent({ type: 'turn.ended', reason: 'completed' }) },
+      ]);
+      const stream = await postStream(base(), '/sessions/ses_1/prompt', { content: 'inspect the new file' });
+      expect(stream.response.status).toBe(200);
+      await collectNdjson(stream.reader);
+      const prompt = fake().sessions.get('ses_1')?.prompts[0] as Array<{ type: string; text: string }>;
+      const texts = prompt.map((part) => part.text);
+      expect(texts.some((text) => text.includes('res_2'))).toBe(true);
+      expect(texts.some((text) => text.includes(downloadURL))).toBe(false);
+      expect(texts.at(-1)).toBe('inspect the new file');
     });
 
     it.each(['closed', 'failed'] as const)(
@@ -172,6 +364,99 @@ describe('session routes', () => {
         expectErrorEnvelope(res.body, 'session_state_conflict');
       },
     );
+  });
+
+  describe('POST /sessions/{id}/agents/{agent_id}/archive', () => {
+    it('removes the internal runtime child without exposing it through the public API', async () => {
+      handle = await bootTestServer();
+      await createSession();
+
+      const res = await postJson(base(), '/sessions/ses_1/agents/agent-0/archive', {});
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ accepted: true });
+      expect(fake().sessions.get('ses_1')?.removedAgentIDs).toEqual(['agent-0']);
+    });
+
+    it('reports an active runtime child as a neutral state conflict', async () => {
+      handle = await bootTestServer();
+      await createSession();
+      const session = fake().sessions.get('ses_1');
+      if (session === undefined) throw new Error('expected fake runtime session');
+      session.removeAgentError = new KimiError(ErrorCodes.SESSION_STATE_INVALID, 'child turn is still active');
+
+      const res = await postJson(base(), '/sessions/ses_1/agents/agent-0/archive', {});
+
+      expect(res.status).toBe(409);
+      expectErrorEnvelope(res.body, 'session_state_conflict');
+      expect(session.removedAgentIDs).toEqual([]);
+    });
+  });
+
+  describe('POST /sessions/{id}/agents/{agent_id}/interrupt', () => {
+    it('cancels only the requested runtime agent context', async () => {
+      handle = await bootTestServer();
+      await createSession();
+
+      const res = await postJson(base(), '/sessions/ses_1/agents/agent-0/interrupt', {});
+
+      expect(res.status).toBe(202);
+      expect(res.body).toEqual({ accepted: true });
+      expect(fake().interactiveAgentIDs).toEqual(['agent-0']);
+      expect(fake().sessions.get('ses_1')?.cancelCalls).toBe(1);
+    });
+  });
+
+  describe('Memory Store synchronization', () => {
+    it('exposes changed files and accepts the persisted baseline', async () => {
+      handle = await bootTestServer();
+      const awareness = join(workDir(), 'awareness');
+      const priorAwareness = process.env['OCA_AWARENESS_ROOT'];
+      process.env['OCA_AWARENESS_ROOT'] = awareness;
+      try {
+        const create = await postJson(base(), '/sessions', {
+          session_id: 'ses_1',
+          work_dir: workDir(),
+          resources: [{
+            id: 'res_memory_1',
+            type: 'memory_store',
+            memory_store_id: 'memstore_1',
+            memory_entries: [{ id: 'mem_1', path: 'notes.md', content: 'before', content_sha256: 'hash-before' }],
+          }],
+        });
+        expect(create.status).toBe(201);
+        await writeFile(join(awareness, 'notes.md'), 'after', 'utf8');
+
+        const snapshot = await fetch(`${base()}/sessions/ses_1/memory-snapshot`);
+        expect(snapshot.status).toBe(200);
+        expect(await snapshot.json()).toEqual({
+          resources: [{
+            resource_id: 'res_memory_1', memory_store_id: 'memstore_1',
+            entries: [{ id: 'mem_1', path: 'notes.md', content_sha256: 'hash-before', deleted: false, content: 'after' }],
+          }],
+        });
+
+        const acknowledge = await postJson(base(), '/sessions/ses_1/memory-acknowledgement', {
+          resources: [{
+            resource_id: 'res_memory_1', memory_store_id: 'memstore_1',
+            entries: [{ id: 'mem_1', path: 'notes.md', content: 'after', content_sha256: 'hash-after' }],
+          }],
+        });
+        expect(acknowledge.status).toBe(200);
+
+        const synchronized = await fetch(`${base()}/sessions/ses_1/memory-snapshot`);
+        expect(await synchronized.json()).toMatchObject({
+          resources: [{ entries: [{ content_sha256: 'hash-after', content: 'after' }] }],
+        });
+
+			const invalid = await postJson(base(), '/sessions/ses_1/memory-acknowledgement', { resources: [] });
+			expect(invalid.status).toBe(400);
+			expectErrorEnvelope(invalid.body, 'invalid_request');
+      } finally {
+        if (priorAwareness === undefined) delete process.env['OCA_AWARENESS_ROOT'];
+        else process.env['OCA_AWARENESS_ROOT'] = priorAwareness;
+      }
+    });
   });
 
   describe('POST /sessions/{id}/resume', () => {
@@ -255,6 +540,85 @@ describe('session routes', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ session_id: 'ses_1', status: 'active', pending_calls: [] });
       expect(localFake.resumed).toEqual([{ id: 'ses_1' }]);
+    });
+  });
+
+  describe('POST /sessions/{id}/config', () => {
+    it('replaces the live tool configuration', async () => {
+      handle = await bootTestServer();
+      await createSession();
+      const res = await postJson(base(), '/sessions/ses_1/config', {
+        tools: [{
+          type: 'agent_toolset_20260401',
+          enabled_tools: ['Read'],
+          configs: [{ name: 'Read', permission_policy: { type: 'always_allow' } }],
+        }],
+        mcp_servers: [],
+      });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ accepted: true });
+      expect(fake().sessions.get('ses_1')?.activeToolsCalls).toEqual([['Read']]);
+    });
+
+    it('uses an ephemeral credential snapshot for a live MCP replacement', async () => {
+      handle = await bootTestServer();
+      await createSession();
+      const res = await postJson(base(), '/sessions/ses_1/config', {
+        tools: [],
+        mcp_servers: [{ type: 'url', name: 'docs', url: 'https://mcp.example.test' }],
+        mcp_credentials: { 'https://mcp.example.test': 'test-live-token' },
+      });
+      expect(res.status).toBe(200);
+
+      const config = JSON.parse(await readFile(join(workDir(), '.kimi-code/mcp.json'), 'utf-8')) as {
+        mcpServers: { docs: { bearerTokenEnvVar?: string } };
+      };
+      const envVar = config.mcpServers.docs.bearerTokenEnvVar;
+      expect(envVar).toMatch(/^OCA_MCP_BEARER_/);
+      expect(process.env[envVar ?? '']).toBe('test-live-token');
+      expect(JSON.stringify(config)).not.toContain('test-live-token');
+      if (envVar !== undefined) delete process.env[envVar];
+    });
+
+    it('accepts a Vault environment-only replacement without null configuration fields', async () => {
+      handle = await bootTestServer();
+      await createSession();
+      const priorServiceKey = process.env['SERVICE_KEY'];
+      try {
+        const res = await postJson(base(), '/sessions/ses_1/config', {
+          vault_environment_variables: { SERVICE_KEY: 'vault-live-value' },
+        });
+        expect(res.status).toBe(200);
+        expect(process.env['SERVICE_KEY']).toBe('vault-live-value');
+      } finally {
+        if (priorServiceKey === undefined) delete process.env['SERVICE_KEY'];
+        else process.env['SERVICE_KEY'] = priorServiceKey;
+      }
+    });
+
+    it('restores the MCP replacement and reports a retryable conflict while a turn is active', async () => {
+      handle = await bootTestServer();
+      await createSession();
+      fake().sessions.get('ses_1')!.reloadSessionError = new KimiError(ErrorCodes.TURN_AGENT_BUSY, 'turn is active');
+
+      const res = await postJson(base(), '/sessions/ses_1/config', {
+        mcp_servers: [{ type: 'url', name: 'docs', url: 'https://mcp.example.test' }],
+      });
+
+      expect(res.status).toBe(409);
+      expectErrorEnvelope(res.body, 'session_state_conflict');
+      expect(fake().sessions.get('ses_1')?.reloadSessionCalls).toBe(1);
+      await expect(readFile(join(workDir(), '.kimi-code/mcp.json'), 'utf-8')).rejects.toThrow();
+    });
+
+    it('rejects invalid tool union members', async () => {
+      handle = await bootTestServer();
+      await createSession();
+      const res = await postJson(base(), '/sessions/ses_1/config', {
+        tools: [{ type: 'custom', name: 'lookup', description: 'Lookup', input_schema: { type: 'object' }, enabled_tools: ['Read'] }],
+      });
+      expect(res.status).toBe(400);
+      expectErrorEnvelope(res.body, 'invalid_request');
     });
   });
 

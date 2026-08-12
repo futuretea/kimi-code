@@ -19,6 +19,12 @@ export const RawAgentProfileSchema = z.object({
   // Exact builtin/user tool names, plus optional MCP glob patterns
   // (`mcp__*`, `mcp__github__*`) that gate which MCP tools the profile sees.
   tools: z.array(z.string()).optional(),
+  // Session-local profiles can select a distinct configured model and
+  // thinking effort for a child agent. These are persisted with the profile
+  // registry and applied before its first prompt and on later resume/retry.
+  modelAlias: z.string().min(1).optional(),
+  thinkingEffort: z.string().min(1).optional(),
+  contextWindow: z.number().int().positive().optional(),
   whenToUse: z.string().optional(),
   subagents: z.record(z.string(), RawSubagentProfileSchema).optional(),
 });
@@ -51,6 +57,9 @@ export interface ResolvedAgentProfile {
   description?: string;
   systemPrompt: SystemPromptRenderer;
   tools: string[];
+  modelAlias?: string;
+  thinkingEffort?: string;
+  contextWindow?: number;
   whenToUse?: string;
   subagents?: Record<string, ResolvedAgentProfile>;
 }

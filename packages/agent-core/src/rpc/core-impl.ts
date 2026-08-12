@@ -12,6 +12,7 @@ import type { PromisableMethods } from '#/utils/types';
 import { getCoreVersion } from '#/version';
 import { resolveThinkingEffort } from '../agent/config/thinking';
 import { Agent } from '../agent';
+import { resolveSessionAgentProfiles } from '../profile';
 import {
   applyPrintModeConfigDefaults,
   ensureKimiHome,
@@ -63,6 +64,7 @@ import type {
   ActivatePluginCommandPayload,
   AddAdditionalDirPayload,
   AddAdditionalDirResult,
+  AppendSystemMessagePayload,
   ArchiveSessionPayload,
   BeginCompactionPayload,
   CancelPayload,
@@ -102,6 +104,7 @@ import type {
   ReloadSessionPayload,
   ReloadPluginsResult,
   RemoveKimiProviderPayload,
+  RemoveAgentPayload,
   RemovePluginPayload,
   RenameSessionPayload,
   ResumeSessionPayload,
@@ -245,7 +248,11 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
   ): Promise<SessionSummary> {
     const options = input;
     const workDir = requiredWorkDir('createSession', options.workDir);
-    const config = this.reloadProviderManager();
+    const config = this.withSessionContextWindow(
+      this.reloadProviderManager(),
+      options.model,
+      options.contextWindow,
+    );
     const sessionConfig = this.withPrintModeDefaults(config);
     const id = options.id ?? createSessionId();
     const modelAlias = options.model ?? config.defaultModel;
@@ -284,6 +291,9 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       ...localWorkspaceDirs.additionalDirs,
       ...callerAdditionalDirs,
     ]);
+    if (options.agentProfiles !== undefined) {
+      resolveSessionAgentProfiles(options.agentProfiles);
+    }
     const summary = await this.sessionStore.create({
       id,
       workDir,
@@ -322,7 +332,11 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       homedir: summary.sessionDir,
       kimiHomeDir: this.homeDir,
       rpc: proxyWithExtraPayload(await this.sdk, { sessionId: summary.id }),
-      providerManager: this.resolveProviderManager(summary.id),
+      providerManager: this.resolveProviderManager(
+        summary.id,
+        options.model ?? this.config.defaultModel,
+        options.contextWindow,
+      ),
       background: sessionConfig.background,
       hooks: [...(config.hooks ?? []), ...this.plugins.enabledHooks()],
       permissionRules: config.permission?.rules,
@@ -336,6 +350,7 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
       appVersion: this.appVersion,
       additionalDirs,
       drainAgentTasksOnStop: options.drainAgentTasksOnStop,
+      agentProfiles: options.agentProfiles,
     });
     try {
       session.metadata = {
@@ -641,6 +656,10 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
     return this.sessionApi(sessionId).prompt(payload);
   }
 
+  appendSystemMessage({ sessionId, ...payload }: SessionAgentPayload<AppendSystemMessagePayload>) {
+    return this.sessionApi(sessionId).appendSystemMessage(payload);
+  }
+
   runShellCommand({ sessionId, ...payload }: SessionAgentPayload<RunShellCommandPayload>) {
     return this.sessionApi(sessionId).runShellCommand(payload);
   }
@@ -880,6 +899,13 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
     return this.requireSession(sessionId).addAdditionalDir(payload.path, payload.persist);
   }
 
+  removeAgent({
+    sessionId,
+    ...payload
+  }: SessionScopedPayload<RemoveAgentPayload>): Promise<void> {
+    return this.sessionApi(sessionId).removeAgent(payload);
+  }
+
   startBtw({ sessionId, ...payload }: SessionAgentPayload<EmptyPayload>): Promise<string> {
     return this.sessionApi(sessionId).startBtw(payload);
   }
@@ -1030,9 +1056,13 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
     };
   }
 
-  private resolveProviderManager(sessionId: string): ProviderManager {
+  private resolveProviderManager(
+    sessionId: string,
+    contextWindowModel: string | undefined = undefined,
+    contextWindow: number | undefined = undefined,
+  ): ProviderManager {
     return new ProviderManager({
-      config: () => this.config,
+      config: () => this.withConfiguredSessionContextWindow(this.config, contextWindowModel, contextWindow),
       kimiRequestHeaders: this.kimiRequestHeaders,
       resolveOAuthTokenProvider: this.resolveOAuthTokenProvider,
       promptCacheKey: sessionId,
@@ -1136,6 +1166,46 @@ export class KimiCore implements PromisableMethods<CoreAPI> {
    */
   private withPrintModeDefaults(config: KimiConfig): KimiConfig {
     return this.printMode ? applyPrintModeConfigDefaults(config) : config;
+  }
+
+  private withSessionContextWindow(
+    config: KimiConfig,
+    requestedModel: string | undefined,
+    contextWindow: number | undefined,
+  ): KimiConfig {
+    if (contextWindow === undefined) return config;
+    if (!Number.isInteger(contextWindow) || contextWindow <= 0) {
+      throw new KimiError(ErrorCodes.CONFIG_INVALID, 'contextWindow must be a positive integer.');
+    }
+    const modelAlias = requestedModel ?? config.defaultModel;
+    const model = modelAlias === undefined ? undefined : config.models?.[modelAlias];
+    if (model === undefined || modelAlias === undefined) {
+      throw new KimiError(ErrorCodes.CONFIG_INVALID, 'contextWindow requires a configured model.');
+    }
+    return {
+      ...config,
+      models: {
+        ...config.models,
+        [modelAlias]: { ...model, maxContextSize: contextWindow },
+      },
+    };
+  }
+
+  private withConfiguredSessionContextWindow(
+    config: KimiConfig,
+    modelAlias: string | undefined,
+    contextWindow: number | undefined,
+  ): KimiConfig {
+    if (contextWindow === undefined || modelAlias === undefined || config.models?.[modelAlias] === undefined) {
+      return config;
+    }
+    return {
+      ...config,
+      models: {
+        ...config.models,
+        [modelAlias]: { ...config.models[modelAlias], maxContextSize: contextWindow },
+      },
+    };
   }
 
   private clearRuntimeCache(): void {

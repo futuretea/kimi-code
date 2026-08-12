@@ -53,6 +53,40 @@ export interface ModelProvider {
   resolveAuth?(model: string, options?: { readonly log?: Logger }): AuthorizedRequest | undefined;
 }
 
+// ContextWindowModelProvider applies an immutable Agent-profile context limit
+// without mutating the Session-wide model catalog. A Session can therefore run
+// children using the same model alias with different context windows.
+export class ContextWindowModelProvider implements ModelProvider {
+  constructor(
+    private readonly base: ModelProvider,
+    private readonly contextWindow: () => number | undefined,
+  ) {}
+
+  get defaultModel(): string | undefined {
+    return this.base.defaultModel;
+  }
+
+  resolveProviderConfig(model: string): ResolvedRuntimeProvider {
+    const resolved = this.base.resolveProviderConfig(model);
+    const contextWindow = this.contextWindow();
+    if (contextWindow === undefined) return resolved;
+    return {
+      ...resolved,
+      modelCapabilities: {
+        ...resolved.modelCapabilities,
+        max_context_tokens: contextWindow,
+      },
+    };
+  }
+
+  resolveAuth(
+    model: string,
+    options?: { readonly log?: Logger },
+  ): AuthorizedRequest | undefined {
+    return this.base.resolveAuth?.(model, options);
+  }
+}
+
 export class SingleModelProvider implements ModelProvider {
   constructor(
     private readonly providerConfig: KosongProviderConfig,

@@ -62,10 +62,19 @@ const MAIN_AGENT_ID = 'main';
 export interface SessionPromptRpcInput {
   readonly sessionId: string;
   readonly input: PromptInput;
+  readonly systemMessage?: string;
+}
+
+export interface SessionAppendSystemMessageRpcInput extends SessionIdRpcInput {
+  readonly content: string;
 }
 
 export interface SessionIdRpcInput {
   readonly sessionId: string;
+}
+
+export interface RemoveAgentRpcInput extends SessionIdRpcInput {
+  readonly agentId: string;
 }
 
 export interface ReloadSessionRpcInput extends SessionIdRpcInput {
@@ -200,6 +209,11 @@ export abstract class SDKRpcClientBase {
     return rpc.closeSession({ sessionId: input.sessionId });
   }
 
+  async removeAgent(input: RemoveAgentRpcInput): Promise<void> {
+    const rpc = await this.getRpc();
+    return rpc.removeAgent({ sessionId: input.sessionId, agentId: input.agentId });
+  }
+
   async listSessions(input: ListSessionsOptions = {}): Promise<readonly SessionSummary[]> {
     const rpc = await this.getRpc();
     return rpc.listSessions(input);
@@ -257,6 +271,16 @@ export abstract class SDKRpcClientBase {
       sessionId: input.sessionId,
       agentId,
       input: input.input,
+      ...(input.systemMessage !== undefined ? { systemMessage: input.systemMessage } : {}),
+    });
+  }
+
+  async appendSystemMessage(input: SessionAppendSystemMessageRpcInput): Promise<void> {
+    const rpc = await this.getRpc();
+    return rpc.appendSystemMessage({
+      sessionId: input.sessionId,
+      agentId: this.interactiveAgentId,
+      content: input.content,
     });
   }
 

@@ -10,13 +10,14 @@ import { defineRoute } from './define-route';
  * Prompt route: `POST /sessions/{id}/prompt` answers with an NDJSON stream of
  * this turn's facade events (the inline channel) plus a terminal
  * `prompt_done` frame. Idempotency is scoped by (session, idempotency_key):
- * an in-flight key rejects as busy, a finished key with identical content
+ * an in-flight key rejects as busy, a finished key with identical input
  * replays only the first terminal frame, and a finished key with different
  * content conflicts.
  */
 
 const promptBodySchema = z.object({
   content: z.string().min(1),
+  system_message: z.string().min(1).optional(),
   idempotency_key: z.string().min(1).optional(),
 });
 
@@ -35,13 +36,16 @@ export function registerPromptRoutes(app: FastifyInstance, ctx: RouteContext): v
       const content = req.body.content;
       const decision = ctx.registry.startPrompt(sessionId, {
         content,
+        ...(req.body.system_message !== undefined
+          ? { systemMessage: req.body.system_message }
+          : {}),
         ...(req.body.idempotency_key !== undefined
           ? { idempotencyKey: req.body.idempotency_key }
           : {}),
       });
 
       if (decision.status === 'replayed') {
-        // Finished key + identical content: the first terminal frame only —
+        // Finished key + identical input: the first terminal frame only —
         // no event replay, no re-execution.
         return reply
           .code(200)
@@ -69,7 +73,7 @@ export function registerPromptRoutes(app: FastifyInstance, ctx: RouteContext): v
         ctx.pump.detachTurn(sessionId, stream);
       });
       try {
-        await ctx.harness.prompt(sessionId, content);
+        await ctx.harness.prompt(sessionId, content, req.body.system_message);
       } catch (error) {
         ctx.pump.failTurn(sessionId, error);
       }

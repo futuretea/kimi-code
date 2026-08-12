@@ -5,6 +5,7 @@ import type {
   ActivatePluginCommandPayload,
   AddAdditionalDirPayload,
   AddAdditionalDirResult,
+  AppendSystemMessagePayload,
   AgentAPI,
   BeginCompactionPayload,
   CancelPayload,
@@ -19,6 +20,7 @@ import type {
   McpServerInfo,
   McpStartupMetrics,
   PromptPayload,
+  RemoveAgentPayload,
   RunShellCommandPayload,
   ReconnectMcpServerPayload,
   RenameSessionPayload,
@@ -70,6 +72,7 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
       ...this.session.metadata,
       ...payload.metadata,
       agents: this.session.metadata.agents,
+      agentProfiles: this.session.metadata.agentProfiles,
     };
     await this.session.writeMetadata();
   }
@@ -119,11 +122,19 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
     return this.session.addAdditionalDir(payload.path, payload.persist);
   }
 
+  removeAgent(payload: RemoveAgentPayload): Promise<void> {
+    return this.session.removeAgent(payload.agentId);
+  }
+
   async prompt({ agentId, ...payload }: AgentScopedPayload<PromptPayload>) {
     if (agentId === 'main') {
       await this.updatePromptMetadata(promptMetadataTextFromPayload(payload));
     }
     return (await this.getAgent(agentId)).prompt(payload);
+  }
+
+  async appendSystemMessage({ agentId, ...payload }: AgentScopedPayload<AppendSystemMessagePayload>) {
+    return (await this.getAgent(agentId)).appendSystemMessage(payload);
   }
 
   async steer({ agentId, ...payload }: AgentScopedPayload<SteerPayload>) {

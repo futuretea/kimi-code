@@ -8,10 +8,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Agent, AgentOptions } from '../../src/agent';
 import { AGENT_WIRE_PROTOCOL_VERSION } from '../../src/agent/records';
-import type { ResolvedAgentProfile } from '../../src/profile';
+import {
+  DEFAULT_AGENT_PROFILES,
+  resolveSessionAgentProfiles,
+  type ResolvedAgentProfile,
+} from '../../src/profile';
 import type { SDKSessionRPC } from '../../src/rpc';
 import { Session } from '../../src/session';
 import { collectGitContext } from '../../src/session/git-context';
+import { ProviderManager } from '../../src/session/provider-manager';
 import {
   DEFAULT_SUBAGENT_TIMEOUT_MS,
   SessionSubagentHost,
@@ -478,6 +483,9 @@ describe('SessionSubagentHost', () => {
       {
         agents: new Map([['main', parent.agent]]),
         ensureAgentResumed: vi.fn(async () => parent.agent),
+        resolveSubagentProfile: vi.fn(() => {
+          throw new Error('Subagent profile "missing" was not found');
+        }),
         createAgent,
       } as never,
       'main',
@@ -504,6 +512,9 @@ describe('SessionSubagentHost', () => {
       {
         agents: new Map([['main', parent.agent]]),
         ensureAgentResumed: vi.fn(async () => parent.agent),
+        resolveSubagentProfile: vi.fn(() => {
+          throw new Error('Subagent profile "btw" was not found');
+        }),
         createAgent,
       } as never,
       'main',
@@ -941,6 +952,35 @@ describe('SessionSubagentHost', () => {
     );
   });
 
+  it('does not begin a resumed child run after an archive claim wins the race', async () => {
+    const parent = testAgent();
+    parent.configure();
+    const child = testAgent({ type: 'sub' });
+    child.configure();
+    child.agent.useProfile(profile({ name: 'explore', tools: [], systemPrompt: 'explore prompt' }));
+    const session = fakeSession(parent.agent, child.agent, {
+      'agent-0': {
+        homedir: '/tmp/kimi-session/agents/agent-0',
+        type: 'sub',
+        parentAgentId: 'main',
+      },
+    });
+    vi.mocked(session.claimAgentRun).mockReturnValue(false);
+    const host = new SessionSubagentHost(session, 'main');
+
+    const handle = await host.resume('agent-0', {
+      parentToolCallId: 'call_agent',
+      prompt: 'Continue from context',
+      description: 'Continue work',
+      runInBackground: false,
+      signal,
+    });
+
+    await expect(handle.completion).rejects.toThrow('cannot start while another operation is active');
+    expect(session.claimAgentRun).toHaveBeenCalledWith('agent-0');
+    expect(session.releaseAgentRun).not.toHaveBeenCalled();
+  });
+
   it('runQueued resumes tasks that carry an existing agent id', async () => {
     const parent = testAgent();
     parent.configure();
@@ -1081,16 +1121,40 @@ describe('SessionSubagentHost', () => {
       await callbacks?.onMessagePart?.({ type: 'text', text: summary });
       return textResult(summary);
     };
+    const profileModel = 'coder-profile-model';
     const child = testAgent({
       generate,
       initialConfig: {
-        providers: {},
+        providers: {
+          'profile-provider': {
+            type: 'kimi',
+            apiKey: 'test-key',
+          },
+        },
+        models: {
+          [profileModel]: {
+            provider: 'profile-provider',
+            model: profileModel,
+            maxContextSize: 128_000,
+            capabilities: ['thinking'],
+            supportEfforts: ['low', 'high'],
+            defaultEffort: 'high',
+          },
+        },
         loopControl: { maxRetriesPerStep: 1 },
       },
     });
     child.configure();
 
     const session = fakeSession(parent.agent, child.agent);
+    (session as unknown as { resolveSubagentProfile: () => ResolvedAgentProfile }).resolveSubagentProfile = () =>
+      profile({
+        name: 'coder',
+        tools: ['Read'],
+        systemPrompt: 'coder prompt',
+        modelAlias: profileModel,
+        thinkingEffort: 'high',
+      });
     const host = new SessionSubagentHost(session, 'main');
 
     const handle = await host.spawn({
@@ -1102,6 +1166,11 @@ describe('SessionSubagentHost', () => {
       signal,
     });
     await expect(handle.completion).rejects.toThrow('Rate limited');
+    expect(child.agent.config.modelAlias).toBe(profileModel);
+    expect(child.agent.config.thinkingEffort).toBe('high');
+
+    // Retry must not preserve a stale execution configuration from the failed turn.
+    child.agent.config.update({ modelAlias: 'stale-model-from-failed-turn', thinkingEffort: 'off' });
 
     const retryHandle = await host.retry(handle.agentId, {
       parentToolCallId: 'call_agent',
@@ -1113,18 +1182,23 @@ describe('SessionSubagentHost', () => {
 
     await expect(retryHandle.completion).resolves.toMatchObject({ result: summary.trim() });
     expect(generateCalls).toBe(2);
+    expect(child.agent.config.modelAlias).toBe(profileModel);
+    expect(child.agent.config.thinkingEffort).toBe('high');
     expect(userTextMessages(histories[1] ?? [])).toEqual(['Implement the retry-safe change']);
   });
 
-  it('realigns a resumed subagent to the parent agent current model', async () => {
+  it('restores a resumed subagent to its profile model instead of the parent model', async () => {
     const parent = testAgent();
     parent.configure();
     parent.agent.permission.setMode('yolo');
 
     const child = testAgent();
     child.configure({ tools: ['Read'] });
-    // The child was originally spawned with a model that no longer matches the
-    // parent agent's current model (as if the parent ran setModel afterwards).
+    const profileModel = 'reviewer-profile-model';
+    const childProvider = child.agent.config.data().provider;
+    if (childProvider === undefined) throw new Error('test child provider is missing');
+    child.configureRuntimeModel({ ...childProvider, model: profileModel });
+    // The persisted child was left on a stale model before resume.
     child.agent.config.update({ modelAlias: 'stale-model-from-initial-spawn' });
     child.agent.useProfile(
       profile({ name: 'explore', tools: ['Read'], systemPrompt: 'explore prompt' }),
@@ -1142,6 +1216,13 @@ describe('SessionSubagentHost', () => {
         parentAgentId: 'main',
       },
     });
+    (session as unknown as { resolveSubagentProfile: () => ResolvedAgentProfile }).resolveSubagentProfile = () =>
+      profile({
+        name: 'explore',
+        tools: ['Read'],
+        systemPrompt: 'explore prompt',
+        modelAlias: profileModel,
+      });
     const host = new SessionSubagentHost(session, 'main');
 
     const handle = await host.resume('agent-0', {
@@ -1153,10 +1234,9 @@ describe('SessionSubagentHost', () => {
     });
 
     await handle.completion;
-    // resume must realign the child to the parent agent's current model rather
-    // than leave it on the stale model from its initial spawn.
-    expect(child.agent.config.modelAlias).toBe(parent.agent.config.modelAlias);
+    expect(child.agent.config.modelAlias).toBe(profileModel);
     expect(child.agent.config.modelAlias).not.toBe('stale-model-from-initial-spawn');
+    expect(child.agent.config.modelAlias).not.toBe(parent.agent.config.modelAlias);
   });
 });
 
@@ -1562,6 +1642,491 @@ describe('Session.createAgent', () => {
     const sub = await session.createAgent({ type: 'sub' }, { parentAgentId: main.id });
     expect(sub.agent.mcp).toBe(session.mcp);
   });
+
+  it('uses and restores a session-local coordinator profile registry', async () => {
+    const agentProfiles = {
+      mainProfile: 'coordinator',
+      profiles: [
+        {
+          name: 'coordinator',
+          systemPromptTemplate: 'Coordinate the declared worker.',
+          tools: ['Agent'],
+          subagents: {
+            reviewer: { description: 'Review the implementation.' },
+          },
+        },
+        {
+          name: 'reviewer',
+          systemPromptTemplate: 'Review only.',
+          tools: ['Read'],
+        },
+      ],
+    };
+    const kaos = createFakeKaos({
+      mkdir: vi.fn().mockResolvedValue(undefined),
+      writeText: vi.fn().mockResolvedValue(0),
+    });
+    const session = new Session({
+      id: 'test-session-profile-registry',
+      kaos,
+      homedir: '/tmp/kimi-session',
+      rpc: createSessionRpc(),
+      initializeMainAgent: false,
+      agentProfiles,
+    });
+
+    try {
+      const main = await session.createMain();
+
+      expect(main.config.profileName).toBe('coordinator');
+      expect(main.subagentHost?.getAvailableProfiles()?.['reviewer']?.tools).toEqual(['Read']);
+      expect(session.metadata.agentProfiles).toEqual(agentProfiles);
+
+      const restored = new Session({
+        id: 'test-session-profile-registry-restored',
+        kaos,
+        persistenceKaos: createFakeKaos({
+          readText: vi.fn(async () => JSON.stringify(session.metadata)),
+        }),
+        homedir: '/tmp/kimi-session',
+        rpc: createSessionRpc(),
+        initializeMainAgent: false,
+      });
+      try {
+        await restored.readMetadata();
+        expect(restored.getSubagentProfiles('main')?.['reviewer']?.tools).toEqual(['Read']);
+      } finally {
+        await restored.close();
+      }
+    } finally {
+      await session.close();
+    }
+  });
+
+  it('rejects a child before instantiation when the persisted agent capacity is reached', async () => {
+    const agentProfiles = {
+      mainProfile: 'coordinator',
+      maxAgents: 2,
+      profiles: [
+        {
+          name: 'coordinator',
+          systemPromptTemplate: 'Coordinate the declared worker.',
+          tools: ['Agent'],
+          subagents: {
+            reviewer: { description: 'Review the implementation.' },
+          },
+        },
+        {
+          name: 'reviewer',
+          systemPromptTemplate: 'Review only.',
+          tools: ['Read'],
+        },
+      ],
+    };
+    const kaos = createFakeKaos({
+      mkdir: vi.fn().mockResolvedValue(undefined),
+      writeText: vi.fn().mockResolvedValue(0),
+    });
+    const session = new Session({
+      id: 'test-session-agent-capacity',
+      kaos,
+      homedir: '/tmp/kimi-session',
+      rpc: createSessionRpc(),
+      initializeMainAgent: false,
+      agentProfiles,
+    });
+
+    try {
+      await session.createMain();
+      await session.createAgent(
+        { type: 'sub' },
+        {
+          profile: session.resolveSubagentProfile('coordinator', 'reviewer'),
+          parentAgentId: 'main',
+        },
+      );
+
+      await expect(
+        session.createAgent(
+          { type: 'sub' },
+          {
+            profile: session.resolveSubagentProfile('coordinator', 'reviewer'),
+            parentAgentId: 'main',
+          },
+        ),
+      ).rejects.toThrow('Session agent capacity of 2 has been reached');
+      expect([...session.agents.keys()]).toEqual(['main', 'agent-0']);
+      expect(Object.keys(session.metadata.agents)).toEqual(['main', 'agent-0']);
+
+      const restored = new Session({
+        id: 'test-session-agent-capacity-restored',
+        kaos,
+        persistenceKaos: createFakeKaos({
+          readText: vi.fn(async () => JSON.stringify(session.metadata)),
+        }),
+        homedir: '/tmp/kimi-session',
+        rpc: createSessionRpc(),
+        initializeMainAgent: false,
+      });
+      try {
+        await restored.readMetadata();
+        await expect(restored.createAgent({ type: 'sub' })).rejects.toThrow(
+          'Session agent capacity of 2 has been reached',
+        );
+        expect([...restored.agents.keys()]).toEqual([]);
+      } finally {
+        await restored.close();
+      }
+    } finally {
+      await session.close();
+    }
+  });
+
+  it('removes an idle child from persisted metadata and releases its capacity slot', async () => {
+    const agentProfiles = {
+      mainProfile: 'coordinator',
+      maxAgents: 2,
+      profiles: [
+        {
+          name: 'coordinator',
+          systemPromptTemplate: 'Coordinate the declared worker.',
+          tools: ['Agent'],
+          subagents: { reviewer: { description: 'Review the implementation.' } },
+        },
+        { name: 'reviewer', systemPromptTemplate: 'Review only.', tools: ['Read'] },
+      ],
+    };
+    const session = new Session({
+      id: 'test-session-remove-agent',
+      kaos: createFakeKaos({
+        mkdir: vi.fn().mockResolvedValue(undefined),
+        writeText: vi.fn().mockResolvedValue(0),
+      }),
+      homedir: '/tmp/kimi-session',
+      rpc: createSessionRpc(),
+      initializeMainAgent: false,
+      agentProfiles,
+    });
+
+    try {
+      await session.createMain();
+      const profile = session.resolveSubagentProfile('coordinator', 'reviewer');
+      const child = await session.createAgent({ type: 'sub' }, { profile, parentAgentId: 'main' });
+      await session.removeAgent(child.id);
+
+      expect(session.agents.has(child.id)).toBe(false);
+      expect(session.metadata.agents[child.id]).toBeUndefined();
+      await expect(
+        session.createAgent({ type: 'sub' }, { profile, parentAgentId: 'main' }),
+      ).resolves.toMatchObject({ id: 'agent-1' });
+    } finally {
+      await session.close();
+    }
+  });
+
+  it('keeps a child retryable when its archive metadata write fails', async () => {
+    const writeText = vi.fn().mockResolvedValue(0);
+    const session = new Session({
+      id: 'test-session-remove-agent-write-retry',
+      kaos: createFakeKaos({ mkdir: vi.fn().mockResolvedValue(undefined), writeText }),
+      homedir: '/tmp/kimi-session',
+      rpc: createSessionRpc(),
+      initializeMainAgent: false,
+    });
+
+    try {
+      const main = await session.createAgent({ type: 'main' });
+      const child = await session.createAgent({ type: 'sub' }, { parentAgentId: main.id });
+      await session.flushMetadata();
+      writeText.mockRejectedValueOnce(new Error('metadata storage unavailable'));
+
+      await expect(session.removeAgent(child.id)).rejects.toThrow('metadata storage unavailable');
+      expect(session.agents.has(child.id)).toBe(true);
+      expect(session.metadata.agents[child.id]).toBeDefined();
+
+      await expect(session.removeAgent(child.id)).resolves.toBeUndefined();
+      expect(session.agents.has(child.id)).toBe(false);
+      expect(session.metadata.agents[child.id]).toBeUndefined();
+    } finally {
+      await session.close();
+    }
+  });
+
+  it('preserves a concurrently created child after an archive metadata write fails', async () => {
+    let persistedMetadata = '';
+    let rejectArchiveWrite!: (reason: unknown) => void;
+    const archiveWrite = new Promise<number>((_resolve, reject) => {
+      rejectArchiveWrite = reject;
+    });
+    const writeText = vi.fn(async (_path: string, text: string) => {
+      persistedMetadata = text;
+      return text.length;
+    });
+    const session = new Session({
+      id: 'test-session-remove-agent-concurrent-create',
+      kaos: createFakeKaos({ mkdir: vi.fn().mockResolvedValue(undefined), writeText }),
+      homedir: '/tmp/kimi-session',
+      rpc: createSessionRpc(),
+      initializeMainAgent: false,
+    });
+
+    try {
+      const main = await session.createAgent({ type: 'main' });
+      const archivedChild = await session.createAgent({ type: 'sub' }, { parentAgentId: main.id });
+      await session.flushMetadata();
+      const writeCountBeforeArchive = writeText.mock.calls.length;
+      writeText.mockImplementationOnce(() => archiveWrite);
+
+      const removal = session.removeAgent(archivedChild.id);
+      for (let attempt = 0; attempt < 10 && writeText.mock.calls.length === writeCountBeforeArchive; attempt += 1) {
+        await Promise.resolve();
+      }
+      if (writeText.mock.calls.length === writeCountBeforeArchive) {
+        throw new Error('archive metadata write did not start');
+      }
+      const newChild = await session.createAgent({ type: 'sub' }, { parentAgentId: main.id });
+      rejectArchiveWrite(new Error('metadata storage unavailable'));
+
+      await expect(removal).rejects.toThrow('metadata storage unavailable');
+      await session.flushMetadata();
+
+      expect(session.metadata.agents[archivedChild.id]).toBeDefined();
+      expect(session.metadata.agents[newChild.id]).toBeDefined();
+      const persisted = JSON.parse(persistedMetadata) as { agents: Record<string, unknown> };
+      expect(persisted.agents[archivedChild.id]).toBeDefined();
+      expect(persisted.agents[newChild.id]).toBeDefined();
+    } finally {
+      await session.close();
+    }
+  });
+
+  it('does not archive a child while its Session run claim is active', async () => {
+    const session = new Session({
+      id: 'test-session-remove-agent-active-claim',
+      kaos: createFakeKaos({
+        mkdir: vi.fn().mockResolvedValue(undefined),
+        writeText: vi.fn().mockResolvedValue(0),
+      }),
+      homedir: '/tmp/kimi-session',
+      rpc: createSessionRpc(),
+      initializeMainAgent: false,
+    });
+
+    try {
+      const main = await session.createAgent({ type: 'main' });
+      const child = await session.createAgent({ type: 'sub' }, { parentAgentId: main.id });
+      expect(session.claimAgentRun(child.id)).toBe(true);
+
+      await expect(session.removeAgent(child.id)).rejects.toThrow('being removed');
+      expect(session.agents.has(child.id)).toBe(true);
+      expect(session.metadata.agents[child.id]).toBeDefined();
+
+      session.releaseAgentRun(child.id);
+    } finally {
+      await session.close();
+    }
+  });
+
+  it('reserves a child capacity slot while profile bootstrap is pending', async () => {
+    const agentProfiles = {
+      mainProfile: 'coordinator',
+      maxAgents: 2,
+      profiles: [
+        {
+          name: 'coordinator',
+          systemPromptTemplate: 'Coordinate the declared worker.',
+          tools: ['Agent'],
+          subagents: {
+            reviewer: { description: 'Review the implementation.' },
+          },
+        },
+        {
+          name: 'reviewer',
+          systemPromptTemplate: 'Review only.',
+          tools: ['Read'],
+        },
+      ],
+    };
+    const session = new Session({
+      id: 'test-session-agent-capacity-reservation',
+      kaos: createFakeKaos({
+        mkdir: vi.fn().mockResolvedValue(undefined),
+        writeText: vi.fn().mockResolvedValue(0),
+      }),
+      homedir: '/tmp/kimi-session',
+      rpc: createSessionRpc(),
+      initializeMainAgent: false,
+      agentProfiles,
+    });
+
+    try {
+      await session.createMain();
+      const profile = session.resolveSubagentProfile('coordinator', 'reviewer');
+      const outcomes = await Promise.allSettled([
+        session.createAgent({ type: 'sub' }, { profile, parentAgentId: 'main' }),
+        session.createAgent({ type: 'sub' }, { profile, parentAgentId: 'main' }),
+      ]);
+
+      expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+      expect(outcomes).toContainEqual(
+        expect.objectContaining({
+          status: 'rejected',
+          reason: expect.objectContaining({ message: 'Session agent capacity of 2 has been reached' }),
+        }),
+      );
+      expect([...session.agents.keys()]).toHaveLength(2);
+    } finally {
+      await session.close();
+    }
+  });
+
+  it('applies a child profile context window on creation and retry', async () => {
+    const agentProfiles = {
+      mainProfile: 'coordinator',
+      profiles: [
+        {
+          name: 'coordinator',
+          systemPromptTemplate: 'Coordinate the declared worker.',
+          tools: ['Agent'],
+          modelAlias: 'coordinator-model',
+          contextWindow: 128000,
+          subagents: {
+            reviewer: { description: 'Review the implementation.' },
+            editor: { description: 'Review the implementation independently.' },
+          },
+        },
+        {
+          name: 'reviewer',
+          systemPromptTemplate: 'Review only.',
+          tools: ['Read'],
+          modelAlias: 'reviewer-model',
+          thinkingEffort: 'high',
+          contextWindow: 64000,
+        },
+        {
+          name: 'editor',
+          systemPromptTemplate: 'Review independently.',
+          tools: ['Read'],
+          modelAlias: 'reviewer-model',
+          thinkingEffort: 'low',
+          contextWindow: 32000,
+        },
+      ],
+    };
+    const providerManager = new ProviderManager({
+      config: {
+        defaultModel: 'coordinator-model',
+        providers: {
+          profiles: { type: 'kimi', apiKey: 'test-key' },
+        },
+        models: {
+          'coordinator-model': {
+            provider: 'profiles',
+            model: 'coordinator-model',
+            maxContextSize: 256000,
+            capabilities: ['thinking'],
+            supportEfforts: ['low', 'high'],
+            defaultEffort: 'high',
+          },
+          'reviewer-model': {
+            provider: 'profiles',
+            model: 'reviewer-model',
+            maxContextSize: 256000,
+            capabilities: ['thinking'],
+            supportEfforts: ['low', 'high'],
+            defaultEffort: 'high',
+          },
+        },
+      },
+    });
+    const summary =
+      'The reviewer completed the scoped analysis with enough detail for the coordinator to continue without repeating the work. '.repeat(
+        2,
+      );
+    let generateCalls = 0;
+    const generate: GenerateFn = async (_provider, _systemPrompt, _tools, _history, callbacks) => {
+      generateCalls += 1;
+      if (generateCalls === 1) throw new Error('Temporary child failure');
+      await callbacks?.onMessagePart?.({ type: 'text', text: summary });
+      return textResult(summary);
+    };
+    const kaos = createFakeKaos({
+      mkdir: vi.fn().mockResolvedValue(undefined),
+      writeText: vi.fn().mockResolvedValue(0),
+    });
+    const session = new Session({
+      id: 'test-profile-context-window',
+      kaos,
+      homedir: '/tmp/kimi-session',
+      rpc: createSessionRpc(),
+      initializeMainAgent: false,
+      providerManager,
+      agentProfiles,
+    });
+
+    try {
+      const registry = resolveSessionAgentProfiles(agentProfiles);
+      const main = await session.createAgent(
+        { type: 'main', generate },
+        { profile: registry.mainProfile },
+      );
+      main.agent.config.update({ modelAlias: 'coordinator-model', thinkingEffort: 'high' });
+
+      const initial = await main.agent.subagentHost!.spawn({
+        profileName: 'reviewer',
+        parentToolCallId: 'call_review',
+        prompt: 'Review the change',
+        description: 'Review implementation',
+        runInBackground: false,
+        signal,
+      });
+      await expect(initial.completion).rejects.toThrow('Temporary child failure');
+
+      const child = session.getReadyAgent(initial.agentId);
+      if (child === undefined) throw new Error('reviewer child is missing');
+      expect(child.config.modelAlias).toBe('reviewer-model');
+      expect(child.config.modelCapabilities.max_context_tokens).toBe(64000);
+
+      child.config.update({ modelAlias: 'coordinator-model', thinkingEffort: 'off' });
+      const retried = await main.agent.subagentHost!.retry(initial.agentId, {
+        parentToolCallId: 'call_review',
+        prompt: 'Review the change',
+        description: 'Review implementation',
+        runInBackground: false,
+        signal,
+      });
+      await expect(retried.completion).resolves.toMatchObject({ result: summary.trim() });
+
+      expect(generateCalls).toBe(2);
+      expect(child.config.modelAlias).toBe('reviewer-model');
+      expect(child.config.modelCapabilities.max_context_tokens).toBe(64000);
+
+      const editor = await main.agent.subagentHost!.spawn({
+        profileName: 'editor',
+        parentToolCallId: 'call_editor',
+        prompt: 'Review the change independently',
+        description: 'Review implementation independently',
+        runInBackground: false,
+        signal,
+      });
+      await expect(editor.completion).resolves.toMatchObject({ result: summary.trim() });
+
+      const editorAgent = session.getReadyAgent(editor.agentId);
+      if (editorAgent === undefined) throw new Error('editor child is missing');
+      expect(editorAgent.config.modelAlias).toBe('reviewer-model');
+      expect(editorAgent.config.modelCapabilities.max_context_tokens).toBe(32000);
+      expect(session.getReadyAgent(initial.agentId)?.config.modelCapabilities.max_context_tokens).toBe(
+        64000,
+      );
+      expect(main.agent.config.modelCapabilities.max_context_tokens).toBe(128000);
+      expect(providerManager.resolveProviderConfig('reviewer-model').modelCapabilities.max_context_tokens).toBe(
+        256000,
+      );
+      expect(generateCalls).toBe(3);
+    } finally {
+      await session.close();
+    }
+  });
 });
 
 function fakeSession(
@@ -1585,8 +2150,20 @@ function fakeSession(
       custom: {},
     },
     writeMetadata: vi.fn(async () => {}),
+    isAgentRemovalPending: vi.fn(() => false),
+    claimAgentRun: vi.fn(() => true),
+    releaseAgentRun: vi.fn(),
     systemContextKaos: vi.fn((cwd: string) => parent.kaos.withCwd(cwd)),
     getReadyAgent: vi.fn((id: string) => agents.get(id)),
+    resolveSubagentProfile: vi.fn((parentProfileName: string | undefined, profileName: string) => {
+      const profile =
+        DEFAULT_AGENT_PROFILES[parentProfileName ?? 'agent']?.subagents?.[profileName] ??
+        DEFAULT_AGENT_PROFILES['agent']?.subagents?.[profileName];
+      if (profile === undefined) {
+        throw new Error(`Subagent profile "${profileName}" was not found`);
+      }
+      return profile;
+    }),
     ensureAgentResumed: vi.fn(async (id: string) => {
       const agent = agents.get(id);
       if (agent === undefined) {
@@ -1652,6 +2229,8 @@ function profile(input: {
   readonly tools: readonly string[];
   readonly systemPrompt: string;
   readonly description?: string | undefined;
+  readonly modelAlias?: string | undefined;
+  readonly thinkingEffort?: string | undefined;
   readonly subagents?: Record<string, ResolvedAgentProfile> | undefined;
 }): ResolvedAgentProfile {
   return {
@@ -1659,6 +2238,8 @@ function profile(input: {
     description: input.description,
     systemPrompt: () => input.systemPrompt,
     tools: [...input.tools],
+    modelAlias: input.modelAlias,
+    thinkingEffort: input.thinkingEffort,
     subagents: input.subagents,
   };
 }

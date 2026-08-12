@@ -11,7 +11,6 @@ import { DenyAllPermissionPolicy } from '../agent/permission/policies/deny-all';
 import { InMemoryAgentRecordPersistence } from '../agent/records';
 import { isAbortError } from '../loop/errors';
 import {
-  DEFAULT_AGENT_PROFILES,
   prepareSystemPromptContext,
   type ResolvedAgentProfile,
 } from '../profile';
@@ -136,6 +135,7 @@ export type SubagentHandle = {
 };
 
 export class SessionSubagentHost {
+  private profileName: string | undefined;
   private readonly activeChildren = new Map<
     string,
     {
@@ -179,10 +179,11 @@ export class SessionSubagentHost {
   async resume(agentId: string, options: RunSubagentOptions): Promise<SubagentHandle> {
     options.signal.throwIfAborted();
     const { parent, child, profileName } = await this.ensureIdleSubagent(agentId);
+    const profile = this.resolveProfile(parent, profileName);
     const completion = this.runWithActiveChild(agentId, options, async (runOptions) => {
       this.emitSubagentSpawned(parent, agentId, profileName, runOptions);
       try {
-        child.config.update({ modelAlias: parent.config.modelAlias });
+        this.applyProfileExecutionConfig(parent, child, profile);
         return await this.runPromptTurn(parent, agentId, child, profileName, runOptions);
       } catch (error) {
         this.emitSubagentFailed(parent, agentId, runOptions, error);
@@ -195,10 +196,11 @@ export class SessionSubagentHost {
   async retry(agentId: string, options: RunSubagentOptions): Promise<SubagentHandle> {
     options.signal.throwIfAborted();
     const { parent, child, profileName } = await this.ensureIdleSubagent(agentId);
+    const profile = this.resolveProfile(parent, profileName);
     const completion = this.runWithActiveChild(agentId, options, async (runOptions) => {
       try {
         runOptions.signal.throwIfAborted();
-        child.config.update({ modelAlias: parent.config.modelAlias });
+        this.applyProfileExecutionConfig(parent, child, profile);
         this.emitSubagentStarted(parent, agentId);
         const turnId = child.turn.retry('agent-host');
         if (turnId === null) {
@@ -225,7 +227,13 @@ export class SessionSubagentHost {
     if (metadata.parentAgentId !== this.ownerAgentId) {
       throw new Error(`Agent instance "${agentId}" does not belong to this parent agent`);
     }
+    if (this.session.isAgentRemovalPending(agentId)) {
+      throw new Error(`Agent instance "${agentId}" is being removed`);
+    }
     const child = await this.session.ensureAgentResumed(agentId);
+    if (this.session.isAgentRemovalPending(agentId)) {
+      throw new Error(`Agent instance "${agentId}" is being removed`);
+    }
     if (this.activeChildren.has(agentId) || child.turn.hasActiveTurn) {
       throw new Error(`Agent instance "${agentId}" is already running and cannot run concurrently`);
     }
@@ -286,6 +294,10 @@ export class SessionSubagentHost {
     }
   }
 
+  isActive(agentId: string): boolean {
+    return this.activeChildren.has(agentId);
+  }
+
   markActiveChildDetached(agentId: string): void {
     const child = this.activeChildren.get(agentId);
     if (child !== undefined) child.runInBackground = true;
@@ -307,14 +319,16 @@ export class SessionSubagentHost {
     return metadata.swarmItem;
   }
 
+  setProfileName(profileName: string): void {
+    this.profileName = profileName;
+  }
+
+  getAvailableProfiles(): ResolvedAgentProfile['subagents'] | undefined {
+    return this.session.getSubagentProfiles(this.ownerAgentId, this.profileName);
+  }
+
   private resolveProfile(parent: Agent, profileName: string): ResolvedAgentProfile {
-    const profile =
-      DEFAULT_AGENT_PROFILES[parent.config.profileName ?? 'agent']?.subagents?.[profileName] ??
-      DEFAULT_AGENT_PROFILES['agent']?.subagents?.[profileName];
-    if (profile === undefined) {
-      throw new Error(`Subagent profile "${profileName}" was not found`);
-    }
-    return profile;
+    return this.session.resolveSubagentProfile(parent.config.profileName, profileName);
   }
 
   private runWithActiveChild(
@@ -322,6 +336,9 @@ export class SessionSubagentHost {
     options: RunSubagentOptions,
     run: (options: RunSubagentOptions) => Promise<SubagentCompletion>,
   ): Promise<SubagentCompletion> {
+    if (!this.session.claimAgentRun(childId)) {
+      return Promise.reject(new Error(`Agent instance "${childId}" cannot start while another operation is active`));
+    }
     const controller = new AbortController();
     const unlinkAbortSignal = linkAbortSignal(options.signal, controller);
     this.activeChildren.set(childId, {
@@ -332,6 +349,7 @@ export class SessionSubagentHost {
     return run({ ...options, signal: controller.signal }).finally(() => {
       unlinkAbortSignal();
       this.activeChildren.delete(childId);
+      this.session.releaseAgentRun(childId);
     });
   }
 
@@ -400,12 +418,10 @@ export class SessionSubagentHost {
     child: Agent,
     profile: ResolvedAgentProfile,
   ): Promise<void> {
-    // A subagent always inherits the parent agent's model.
     child.config.update({
       cwd: parent.config.cwd,
-      modelAlias: parent.config.modelAlias,
-      thinkingEffort: parent.config.thinkingEffort,
     });
+    this.applyProfileExecutionConfig(parent, child, profile);
 
     const context = await prepareSystemPromptContext(
       this.session.systemContextKaos(child.kaos.getcwd()),
@@ -414,6 +430,17 @@ export class SessionSubagentHost {
     );
     child.useProfile(profile, context, this.session.options.kimiHomeDir);
     child.tools.inheritUserTools(parent.tools);
+  }
+
+  private applyProfileExecutionConfig(
+    parent: Agent,
+    child: Agent,
+    profile: ResolvedAgentProfile,
+  ): void {
+    child.config.update({
+      modelAlias: profile.modelAlias ?? parent.config.modelAlias,
+      thinkingEffort: profile.thinkingEffort ?? parent.config.thinkingEffort,
+    });
   }
 
   private async triggerSubagentStart(

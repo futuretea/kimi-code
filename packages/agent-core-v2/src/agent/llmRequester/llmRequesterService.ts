@@ -19,7 +19,7 @@
  * reports provider failures through `telemetry`. Bound at Agent scope.
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { InstantiationType } from '#/_base/di/extensions';
 import { LifecycleScope, registerScopedService } from '#/_base/di/scope';
 import { IAgentContextMemoryService } from '#/agent/contextMemory/contextMemory';
@@ -306,6 +306,8 @@ export class AgentLLMRequesterService implements IAgentLLMRequesterService {
         throw faultToError(fault);
       }
 
+      const requestId = randomUUID();
+      this.eventBus.publish({ type: 'model.request.started', requestId });
       let message: Message | undefined;
       let usage = emptyUsage();
       let timing: LLMStreamTiming | undefined;
@@ -316,30 +318,37 @@ export class AgentLLMRequesterService implements IAgentLLMRequesterService {
         onRequestTrace(normalized);
       };
 
-      for await (const event of request.model.request(input, signal, { onTraceId: setTraceId })) {
-        switch (event.type) {
-          case 'part':
-            await onPart(event.part);
-            break;
-          case 'usage':
-            usage = event.usage;
-            break;
-          case 'finish':
-            finish = event;
-            message = event.message;
-            setTraceId(event.traceId);
-            break;
-          case 'timing': {
-            const { type: _type, ...streamTiming } = event;
-            timing = streamTiming;
-            break;
+      try {
+        for await (const event of request.model.request(input, signal, { onTraceId: setTraceId })) {
+          switch (event.type) {
+            case 'part':
+              await onPart(event.part);
+              break;
+            case 'usage':
+              usage = event.usage;
+              break;
+            case 'finish':
+              finish = event;
+              message = event.message;
+              setTraceId(event.traceId);
+              break;
+            case 'timing': {
+              const { type: _type, ...streamTiming } = event;
+              timing = streamTiming;
+              break;
+            }
           }
         }
+
+        if (message === undefined || finish === undefined) {
+          throw new Error('LLM request stream ended without a finish event.');
+        }
+      } catch (error) {
+        this.eventBus.publish({ type: 'model.request.ended', requestId, isError: true });
+        throw error;
       }
 
-      if (message === undefined || finish === undefined) {
-        throw new Error('LLM request stream ended without a finish event.');
-      }
+      this.eventBus.publish({ type: 'model.request.ended', requestId, isError: false });
 
       this.usage.record(request.modelAlias, usage, request.source);
       this.contextSize.measured(request.messages, [message], usage);

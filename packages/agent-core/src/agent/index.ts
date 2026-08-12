@@ -33,7 +33,7 @@ import {
 } from './compaction';
 import { CronManager } from './cron';
 import { ConfigState } from './config';
-import { ContextMemory } from './context';
+import { ContextMemory, USER_PROMPT_ORIGIN } from './context';
 import { GoalMode } from './goal';
 import { HookEngine } from '../session/hooks';
 import { InjectionManager } from './injection/manager';
@@ -272,30 +272,49 @@ export class Agent {
     return async (provider, systemPrompt, tools, history, callbacks, options) => {
       const { requestLogFields, generateOptions } = splitGenerateOptions(options);
       const modelAlias = this.config.modelAlias;
-      const run = (requestOptions: Parameters<typeof generate>[5]) => {
+      const run = async (requestOptions: Parameters<typeof generate>[5]) => {
         // Mirror kosong generate()'s pre-flight abort check: a call whose
         // signal is already aborted never reaches the wire (generate throws
         // before dispatching), so it must not leave a request trace or a
         // diagnostic log line claiming a request was sent.
-        if (requestOptions?.signal?.aborted !== true) {
-          this.warnAboutAnthropicThinkingEffort(provider, modelAlias);
-          this.llmRequestLogger.logRequest({
-            provider,
-            modelAlias,
-            systemPrompt,
-            tools,
-            messages: history,
-            fields: requestLogFields,
-          });
-          this.llmRequestRecorder.record({
-            provider,
-            systemPrompt,
-            tools,
-            messages: history,
-            fields: requestLogFields,
-          });
+        if (requestOptions?.signal?.aborted === true) {
+          return this.rawGenerate(provider, systemPrompt, tools, history, callbacks, requestOptions);
         }
-        return this.rawGenerate(provider, systemPrompt, tools, history, callbacks, requestOptions);
+
+        this.warnAboutAnthropicThinkingEffort(provider, modelAlias);
+        this.llmRequestLogger.logRequest({
+          provider,
+          modelAlias,
+          systemPrompt,
+          tools,
+          messages: history,
+          fields: requestLogFields,
+        });
+        this.llmRequestRecorder.record({
+          provider,
+          systemPrompt,
+          tools,
+          messages: history,
+          fields: requestLogFields,
+        });
+
+        const requestId = randomUUID();
+        this.emitEvent({ type: 'model.request.started', requestId });
+        try {
+          const result = await this.rawGenerate(
+            provider,
+            systemPrompt,
+            tools,
+            history,
+            callbacks,
+            requestOptions,
+          );
+          this.emitEvent({ type: 'model.request.ended', requestId, isError: false });
+          return result;
+        } catch (error) {
+          this.emitEvent({ type: 'model.request.ended', requestId, isError: true });
+          throw error;
+        }
       };
       if (generateOptions?.auth !== undefined) {
         return run(generateOptions);
@@ -446,6 +465,10 @@ export class Agent {
   setActiveProfile(profile: ResolvedAgentProfile, brandHome?: string): void {
     this.activeProfile = profile;
     this.brandHome = brandHome;
+    this.subagentHost?.setProfileName?.(profile.name);
+    if (this.config.hasProvider) {
+      this.tools.refreshBuiltinTools();
+    }
   }
 
   /**
@@ -499,7 +522,13 @@ export class Agent {
   get rpcMethods(): PromisableMethods<AgentAPI> {
     return {
       prompt: (payload) => {
-        this.turn.prompt(payload.input);
+        this.turn.prompt(payload.input, USER_PROMPT_ORIGIN, payload.systemMessage);
+      },
+      appendSystemMessage: (payload) => {
+        this.context.appendSystemReminder(payload.content, {
+          kind: 'injection',
+          variant: 'system_message',
+        });
       },
       runShellCommand: (payload) => this.tools.runShellCommand(payload.command, payload.commandId),
       cancelShellCommand: (payload) => this.tools.cancelShellCommand(payload.commandId),

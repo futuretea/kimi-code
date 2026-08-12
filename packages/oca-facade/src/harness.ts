@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { accessSync, constants, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createKimiHarness, resolveKimiHome } from '@moonshot-ai/kimi-code-sdk';
+import { ErrorCodes, createKimiHarness, isKimiError, resolveKimiHome } from '@moonshot-ai/kimi-code-sdk';
 import type {
   ApprovalHandler,
   CreateSessionOptions,
@@ -15,20 +15,26 @@ import type {
   ResumeSessionInput,
   TextPromptPart,
   ToolCallHandler,
+  ToolCallResponse,
   Unsubscribe,
 } from '@moonshot-ai/kimi-code-sdk';
 
 import { FacadeError, toFacadeError } from './errors';
 import type {
-  ExternalToolDefinition,
   FacadeCreateConfig,
+  FacadeMcpServer,
+  FacadeResource,
+	FacadeSessionConfig,
+	FacadeMemorySnapshotResource,
+	FacadeMemorySyncResource,
   FacadeToolEntry,
   HarnessEventSink,
-  PermissionPolicy,
+  PermissionPolicyType,
 } from './facade-types';
-import { isExternalToolDefinition } from './facade-types';
-import { writeSessionMcpConfig } from './mcp-config';
-import type { SessionRegistry } from './session-registry';
+import { hydrateSessionMcpCredentials, restoreSessionMcpConfig, snapshotSessionMcpConfig, writeSessionMcpConfig } from './mcp-config';
+import { configureGitHubTokenEnvironment, materializeReadOnlyMemoryStoreResources, materializeSessionResources, snapshotMemoryStoreResources, validateDistinctWorkspacePVCPaths } from './resource-materializer';
+import type { PendingCallRegistration, SessionRegistry, StagedToolResult } from './session-registry';
+import { materializeSessionSkills } from './skill-materializer';
 
 // The facade vocabulary lives in `./facade-types`; re-exported so this module
 // stays the single import surface for the harness layer.
@@ -46,27 +52,13 @@ export * from './facade-types';
 // ---------------------------------------------------------------------------
 
 /**
- * Neutral mapping from the facade permission policy to the runtime permission
- * mode (`types.ts`: 'yolo' | 'manual' | 'auto'):
- * - always_allow -> yolo: run approval-worthy actions without asking.
- * - always_ask   -> manual: every approval-worthy action is bridged to the
- *   facade approval flow.
- * - always_deny  -> manual: the runtime has no deny-all mode; the approval
- *   handler short-circuits to `rejected` without an ask round trip (see
- *   installApprovalHandler), which matches the previous runtime's behavior of
- *   erroring every policy-checked call. Residual gap: read-only tools that
- *   never require approval still run; no caller sends a session-level
- *   always_deny today (denied toolsets are dropped upstream instead).
+ * The runtime stays in manual mode so the facade can apply Qoder's per-tool
+ * policy in one approval handler. It immediately approves always_allow,
+ * bridges always_ask, and rejects always_deny.
  */
-export const PERMISSION_MODE_BY_POLICY = {
-  always_allow: 'yolo',
-  always_ask: 'manual',
-  always_deny: 'manual',
-} as const satisfies Record<PermissionPolicy, PermissionMode>;
-
-export function permissionModeForPolicy(policy: PermissionPolicy): PermissionMode {
-  return PERMISSION_MODE_BY_POLICY[policy];
-}
+export const QODER_PERMISSION_MODE: PermissionMode = 'manual';
+const QODER_MAX_SESSION_THREADS = 25;
+const VAULT_ENVIRONMENT_NAMES_MARKER = 'OCA_FACADE_VAULT_ENV_NAMES';
 
 // ---------------------------------------------------------------------------
 // Harness abstraction (the single extension point; tests inject a fake).
@@ -79,27 +71,38 @@ export interface HarnessSession {
   setApprovalHandler(handler: ApprovalHandler | undefined): void;
   setQuestionHandler(handler: QuestionHandler | undefined): void;
   setToolCallHandler(handler: ToolCallHandler | undefined): void;
-  prompt(input: string | PromptInput): Promise<void>;
+  reloadSession(): Promise<unknown>;
+  prompt(input: string | PromptInput, options?: { systemMessage?: string }): Promise<void>;
+  appendSystemMessage(content: string): Promise<void>;
   cancel(): Promise<void>;
+  removeAgent(agentId: string): Promise<void>;
   close(): Promise<void>;
   registerTool(tool: RegisterToolInput): Promise<void>;
+  unregisterTool(name: string): Promise<void>;
   setActiveTools(names: readonly string[]): Promise<void>;
 }
 
 export interface HarnessSessionFactory {
   createSession(options: CreateSessionOptions): Promise<HarnessSession>;
   resumeSession(input: ResumeSessionInput): Promise<HarnessSession>;
+  withInteractiveAgent<T>(agentId: string, fn: () => T): T;
 }
 
 export type HarnessFactory = (options: KimiHarnessOptions) => HarnessSessionFactory;
 
 /** Session operations the routes layer drives through the harness. */
 export interface FacadeHarness {
-  createSession(config: FacadeCreateConfig): Promise<void>;
-  resumeSession(sessionId: string): Promise<void>;
-  prompt(sessionId: string, content: string): Promise<void>;
+	createSession(config: FacadeCreateConfig): Promise<void>;
+	updateSessionConfig(sessionId: string, config: FacadeSessionConfig): Promise<void>;
+	materializeSessionResources(sessionId: string, resources: readonly FacadeResource[]): Promise<void>;
+	snapshotSessionMemory(sessionId: string): Promise<readonly FacadeMemorySnapshotResource[]>;
+	acknowledgeSessionMemory(sessionId: string, resources: readonly FacadeMemorySyncResource[]): Promise<void>;
+	resumeSession(sessionId: string): Promise<void>;
+  prompt(sessionId: string, content: string, systemMessage?: string): Promise<void>;
   interrupt(sessionId: string): Promise<void>;
+  interruptAgent(sessionId: string, agentId: string): Promise<void>;
   cancelSession(sessionId: string): Promise<void>;
+  removeAgent(sessionId: string, agentId: string): Promise<void>;
   /**
    * Readiness probe: rejects when the runtime is not available — harness
    * construction or the home (journal) directory check.
@@ -121,14 +124,27 @@ export interface LiveHarnessFactoryOptions {
 interface TrackedToolCall {
   readonly name: string;
   readonly mcp?: { readonly serverName: string; readonly toolName: string };
+  readonly custom?: true;
 }
 
 interface LiveSessionState {
   readonly session: HarnessSession;
-  readonly permissionPolicy: PermissionPolicy | undefined;
-  readonly contextBlocks: readonly TextPromptPart[];
+  readonly workDir: string;
+	contextBlocks: TextPromptPart[];
+	resourceContextBlocks: TextPromptPart[];
+	resources: readonly FacadeResource[];
+	memoryResources: readonly FacadeResource[];
+  toolPolicies: ReadonlyMap<string, PermissionPolicyType>;
+  customToolNames: ReadonlySet<string>;
+  mcpServers: readonly FacadeMcpServer[];
+	tools: readonly FacadeToolEntry[];
+	vaultEnvironmentNames: Set<string>;
   firstPromptSent: boolean;
   readonly toolCalls: Map<string, TrackedToolCall>;
+  readonly childToolCalls: Map<string, TrackedToolCall>;
+  readonly childThinkingTurnIDs: Map<string, number>;
+  readonly modelRequestStartIDs: Map<string, string>;
+  readonly childAgentIds: Set<string>;
   tornDown: boolean;
   readonly teardown: Promise<undefined>;
   readonly settleTeardown: () => void;
@@ -157,18 +173,25 @@ export class LiveHarnessFactory implements FacadeHarness {
       if (this.sessions.has(config.sessionId)) {
         throw new FacadeError('session_state_conflict');
       }
+		await materializeSessionResources(config.resources ?? [], config.workDir);
+		await materializeSessionSkills(config.skills ?? [], config.workDir);
+		configureGitHubTokenEnvironment(config.resources ?? []);
       if (config.mcpServers !== undefined && config.mcpServers.length > 0) {
         await writeSessionMcpConfig({
           workDir: config.workDir,
-          servers: config.mcpServers,
+          servers: withMcpToolFilters(config.mcpServers, config.tools),
           credentialsDir: this.credentialsDir,
         });
       }
       const session = await this.runtime().createSession(this.createOptions(config));
       const state = this.wireSession(config.sessionId, session, {
-        permissionPolicy: config.permissionPolicy,
-        contextBlocks: buildContextBlocks(config),
+        workDir: config.workDir,
+        mcpServers: config.mcpServers ?? [],
+        tools: config.tools ?? [],
+		contextBlocks: buildStaticContextBlocks(config),
+		resources: config.resources ?? [],
       });
+		this.replaceVaultEnvironmentVariables(state, config.vaultEnvironmentVariables ?? {});
       if (config.tools !== undefined) {
         await this.applyTools(state, config.tools);
       }
@@ -183,11 +206,17 @@ export class LiveHarnessFactory implements FacadeHarness {
       return;
     }
     try {
+		const workDir = process.env['OCA_FACADE_WORK_DIR'] ?? '/workspace';
+		await hydrateSessionMcpCredentials(workDir, this.credentialsDir);
       const session = await this.runtime().resumeSession({ id: sessionId });
-      this.wireSession(sessionId, session, {
-        permissionPolicy: undefined,
-        contextBlocks: [],
+		const state = this.wireSession(sessionId, session, {
+		workDir,
+        mcpServers: [],
+        tools: [],
+		contextBlocks: [],
+		resources: [],
       });
+		state.vaultEnvironmentNames = vaultEnvironmentNamesFromProcess();
     } catch (error) {
       // A session the runtime journal does not hold keeps the 404 contract
       // code; anything else is sanitized into a neutral resume failure.
@@ -196,6 +225,116 @@ export class LiveHarnessFactory implements FacadeHarness {
         : toFacadeError(error, 'session_resume_failed');
     }
   }
+
+  async updateSessionConfig(sessionId: string, config: FacadeSessionConfig): Promise<void> {
+    const state = this.requireSession(sessionId);
+    try {
+      const nextMCPServers = config.mcpServers ?? state.mcpServers;
+      const nextTools = config.tools ?? state.tools;
+      const reloadMCP = config.mcpServers !== undefined || config.mcpCredentials !== undefined;
+		const needsConfigWrite = config.mcpServers !== undefined || config.tools !== undefined || config.mcpCredentials !== undefined;
+      if (reloadMCP) {
+		const snapshot = await snapshotSessionMcpConfig(state.workDir, nextMCPServers);
+		try {
+			await this.writeSessionMcpConfig(state.workDir, nextMCPServers, nextTools, config.mcpCredentials);
+			// Kimi initializes MCP clients from the session config. Reloading the
+			// same journal-backed Session closes prior connections before it reads
+			// the replacement config, so rotation/removal never leaves an old
+			// bearer credential live in the runtime.
+			await state.session.reloadSession();
+		} catch (error) {
+			await restoreSessionMcpConfig(snapshot);
+			if (isKimiError(error) && error.code === ErrorCodes.TURN_AGENT_BUSY) {
+				throw new FacadeError('session_state_conflict');
+			}
+			throw error;
+		}
+		state.customToolNames = new Set();
+	} else if (needsConfigWrite) {
+		await this.writeSessionMcpConfig(state.workDir, nextMCPServers, nextTools, config.mcpCredentials);
+	}
+		if (config.vaultEnvironmentVariables !== undefined) {
+			this.replaceVaultEnvironmentVariables(state, config.vaultEnvironmentVariables);
+		}
+      state.mcpServers = nextMCPServers;
+      state.tools = nextTools;
+      if (reloadMCP || config.tools !== undefined) await this.applyTools(state, nextTools);
+    } catch (error) {
+      throw toFacadeError(error, 'internal_error');
+    }
+  }
+
+	private async writeSessionMcpConfig(
+		workDir: string,
+		mcpServers: readonly FacadeMcpServer[],
+		tools: readonly FacadeToolEntry[],
+		credentials: Readonly<Record<string, string>> | undefined,
+	): Promise<void> {
+		await writeSessionMcpConfig({
+			workDir,
+			servers: withMcpToolFilters(mcpServers, tools),
+			credentialsDir: this.credentialsDir,
+			...(credentials !== undefined ? { credentials } : {}),
+			replace: true,
+		});
+	}
+
+	private replaceVaultEnvironmentVariables(state: LiveSessionState, values: Readonly<Record<string, string>>): void {
+		const names = new Set(Object.keys(values));
+		for (const name of state.vaultEnvironmentNames) {
+			if (!names.has(name)) delete process.env[name];
+		}
+		for (const [name, value] of Object.entries(values)) process.env[name] = value;
+		state.vaultEnvironmentNames = names;
+	}
+
+	async materializeSessionResources(sessionId: string, resources: readonly FacadeResource[]): Promise<void> {
+    const state = this.requireSession(sessionId);
+    try {
+		if (resources.some((resource) => resource.type !== 'file' && resource.type !== 'github_repository' && resource.type !== 'memory_store')) {
+			throw new FacadeError('invalid_request');
+		}
+		const updatedResources = mergeResourcesByID(state.resources, resources);
+		validateDistinctWorkspacePVCPaths(updatedResources);
+		await materializeSessionResources(resources, state.workDir);
+		state.resources = updatedResources;
+		configureGitHubTokenEnvironment(state.resources);
+		state.memoryResources = state.resources.filter((resource) => resource.type === 'memory_store');
+      if (!state.firstPromptSent) {
+			state.resourceContextBlocks = buildResourceContextBlocks(state.resources);
+			state.resourceContextBlocks.push(...buildMemoryInstructionBlocks(state.resources));
+      }
+    } catch (error) {
+      throw toFacadeError(error, 'internal_error');
+    }
+  }
+
+	async snapshotSessionMemory(sessionId: string): Promise<readonly FacadeMemorySnapshotResource[]> {
+		try {
+			return await snapshotMemoryStoreResources(this.requireSession(sessionId).memoryResources);
+		} catch (error) {
+			throw toFacadeError(error, 'internal_error');
+		}
+	}
+
+	async acknowledgeSessionMemory(sessionId: string, resources: readonly FacadeMemorySyncResource[]): Promise<void> {
+		const state = this.requireSession(sessionId);
+		const writable = state.memoryResources.filter((resource) => resource.access !== 'read_only');
+		if (resources.length !== writable.length) throw new FacadeError('invalid_request');
+		const synchronized = new Map(resources.map((resource) => [resource.resourceId, resource]));
+		if (synchronized.size !== resources.length) throw new FacadeError('invalid_request');
+		for (const resource of writable) {
+			const acknowledged = synchronized.get(resource.id);
+			if (acknowledged === undefined || acknowledged.memoryStoreId !== resource.memoryStoreId) {
+				throw new FacadeError('invalid_request');
+			}
+		}
+		state.memoryResources = state.memoryResources.map((resource) => {
+			const acknowledged = synchronized.get(resource.id);
+			if (acknowledged === undefined || resource.memoryStoreId !== acknowledged.memoryStoreId) return resource;
+			return { ...resource, memoryEntries: acknowledged.entries };
+		});
+	}
 
   /**
    * Readiness probe: the runtime harness must be constructible, and the home
@@ -214,17 +353,39 @@ export class LiveHarnessFactory implements FacadeHarness {
     }
   }
 
-  async prompt(sessionId: string, content: string): Promise<void> {
+  async prompt(sessionId: string, content: string, systemMessage?: string): Promise<void> {
     const state = this.requireSession(sessionId);
+		if (state.memoryResources.some((resource) => resource.access === 'read_only')) {
+			await materializeReadOnlyMemoryStoreResources(state.memoryResources);
+		}
     const parts: TextPromptPart[] = state.firstPromptSent
       ? [textPart(content)]
-      : [...state.contextBlocks, textPart(content)];
+      : [...state.contextBlocks, ...state.resourceContextBlocks, textPart(content)];
     state.firstPromptSent = true;
-    await state.session.prompt(parts);
+    await state.session.prompt(parts, systemMessage === undefined ? undefined : { systemMessage });
   }
 
   async interrupt(sessionId: string): Promise<void> {
     await this.requireSession(sessionId).session.cancel();
+  }
+
+  async interruptAgent(sessionId: string, agentId: string): Promise<void> {
+    const session = this.requireSession(sessionId).session;
+    await this.runtime().withInteractiveAgent(agentId, () => session.cancel());
+  }
+
+  async removeAgent(sessionId: string, agentId: string): Promise<void> {
+    try {
+      await this.requireSession(sessionId).session.removeAgent(agentId);
+    } catch (error) {
+      // Removing an active child is an expected control-plane conflict. Keep
+      // the runtime's detailed state out of the facade contract while making
+      // the ordered command retry behavior explicit to the orchestrator.
+      if (isKimiError(error) && error.code === ErrorCodes.SESSION_STATE_INVALID) {
+        throw new FacadeError('session_state_conflict');
+      }
+      throw error;
+    }
   }
 
   async cancelSession(sessionId: string): Promise<void> {
@@ -248,12 +409,12 @@ export class LiveHarnessFactory implements FacadeHarness {
       workDir: config.workDir,
       ...(config.model !== undefined ? { model: config.model } : {}),
       ...(config.thinking !== undefined ? { thinking: config.thinking } : {}),
-      ...(config.permissionPolicy !== undefined
-        ? { permission: permissionModeForPolicy(config.permissionPolicy) }
-        : {}),
+      ...(config.contextWindow !== undefined ? { contextWindow: config.contextWindow } : {}),
+      permission: QODER_PERMISSION_MODE,
       ...(config.planMode !== undefined ? { planMode: config.planMode } : {}),
       ...(config.metadata !== undefined ? { metadata: config.metadata } : {}),
       ...(config.additionalDirs !== undefined ? { additionalDirs: config.additionalDirs } : {}),
+      ...(config.agentProfiles !== undefined ? { agentProfiles: toRuntimeAgentProfiles(config.agentProfiles) } : {}),
     };
   }
 
@@ -261,8 +422,11 @@ export class LiveHarnessFactory implements FacadeHarness {
     sessionId: string,
     session: HarnessSession,
     options: {
-      permissionPolicy: PermissionPolicy | undefined;
+      workDir: string;
+      mcpServers: readonly FacadeMcpServer[];
+      tools: readonly FacadeToolEntry[];
       contextBlocks: readonly TextPromptPart[];
+		resources: readonly FacadeResource[];
     },
   ): LiveSessionState {
     let settleTeardown!: () => void;
@@ -271,10 +435,25 @@ export class LiveHarnessFactory implements FacadeHarness {
     });
     const state: LiveSessionState = {
       session,
-      permissionPolicy: options.permissionPolicy,
-      contextBlocks: options.contextBlocks,
+      workDir: options.workDir,
+      contextBlocks: [...options.contextBlocks],
+      resourceContextBlocks: [
+        ...buildResourceContextBlocks(options.resources),
+        ...buildMemoryInstructionBlocks(options.resources),
+      ],
+		resources: options.resources,
+		memoryResources: options.resources.filter((resource) => resource.type === 'memory_store'),
+      toolPolicies: new Map(),
+      customToolNames: new Set(),
+      mcpServers: options.mcpServers,
+      tools: options.tools,
+		vaultEnvironmentNames: new Set(),
       firstPromptSent: false,
       toolCalls: new Map(),
+      childToolCalls: new Map(),
+      childThinkingTurnIDs: new Map(),
+      modelRequestStartIDs: new Map(),
+      childAgentIds: new Set(),
       tornDown: false,
       teardown,
       settleTeardown,
@@ -291,11 +470,20 @@ export class LiveHarnessFactory implements FacadeHarness {
 
   private installApprovalHandler(sessionId: string, state: LiveSessionState): void {
     const handler: ApprovalHandler = async (request) => {
-      if (state.permissionPolicy === 'always_deny') {
+      // A custom tool is never executed by the runtime. Its call is bridged
+      // directly to `agent.custom_tool_use`, which the client settles with
+      // `user.custom_tool_result`; do not introduce a separate confirmation.
+      const policy = state.customToolNames.has(request.toolName)
+        ? 'always_allow'
+        : state.toolPolicies.get(request.toolName) ?? 'always_ask';
+      if (policy === 'always_allow') {
+        return { decision: 'approved' };
+      }
+      if (policy === 'always_deny') {
         // No ask round trip: the policy denies every approval-worthy action.
         return { decision: 'rejected', feedback: 'Denied by the session permission policy.' };
       }
-      let registration;
+      let registration: PendingCallRegistration;
       try {
         registration = this.registry.registerPendingCall(sessionId, {
           id: request.toolCallId,
@@ -368,7 +556,7 @@ export class LiveHarnessFactory implements FacadeHarness {
       // tracked name is present. Falling back to the id keeps the event
       // correlated even if that ordering ever breaks.
       const name = state.toolCalls.get(request.toolCallId)?.name ?? request.toolCallId;
-      let registration;
+      let registration: PendingCallRegistration;
       try {
         registration = this.registry.registerPendingCall(sessionId, {
           id: request.toolCallId,
@@ -377,24 +565,50 @@ export class LiveHarnessFactory implements FacadeHarness {
       } catch {
         return { output: 'The session no longer accepts tool results.', isError: true };
       }
-      this.sink.emit(sessionId, {
-        type: 'external_tool_request',
-        tool_call_id: request.toolCallId,
-        name,
-        arguments: request.args,
-      });
-      const resolution = await raceTeardown(state, registration.resolution);
-      if (resolution === undefined || resolution.kind !== 'external_tool') {
-        return { output: 'The session ended before the tool result arrived.', isError: true };
+      if (registration.replayed !== true) {
+        this.sink.emit(sessionId, {
+          type: 'external_tool_request',
+          tool_call_id: request.toolCallId,
+          name,
+          arguments: request.args,
+        });
       }
-      switch (resolution.resolution) {
-        case 'completed':
-          // The registry rejects a completed resolution without output.
-          return { output: resolution.output ?? '', isError: false };
-        case 'failed':
-          return { output: resolution.output ?? 'The external tool call failed.', isError: true };
-        case 'skipped':
-          return { output: resolution.output ?? 'The external tool call was skipped.', isError: false };
+      for (;;) {
+        const delivery = await raceTeardown(
+          state,
+          this.registry.waitForToolResultDelivery(sessionId, request.toolCallId),
+        );
+        if (delivery === undefined) {
+          return { output: 'The session ended before the tool result arrived.', isError: true };
+        }
+        try {
+          this.registry.beginToolResultDelivery(sessionId, request.toolCallId, delivery);
+        } catch {
+          this.registry.failToolResultDelivery(sessionId, request.toolCallId, delivery);
+          continue;
+        }
+        try {
+          if (delivery.result.systemMessage !== undefined) {
+            await state.session.appendSystemMessage(delivery.result.systemMessage);
+          }
+        } catch {
+          // A rejected RPC does not prove that the runtime skipped the write.
+          // Keep the durable `delivering` state and never replay it.
+          this.registry.failUncertainToolResultDelivery(sessionId, request.toolCallId, delivery);
+          return { output: 'The external tool result could not be finalized.', isError: true };
+        }
+        const response = toolCallResponse(delivery.result);
+        try {
+          // `delivered` is durable before the response crosses the process
+          // boundary, so a cleanup error can never cause a replay.
+          this.registry.completeToolResultDelivery(sessionId, request.toolCallId, delivery);
+          return response;
+        } catch {
+          // Completion may fail after the runtime accepted the system message.
+          // That uncertain state is fail-closed, never replayed.
+          this.registry.failUncertainToolResultDelivery(sessionId, request.toolCallId, delivery);
+          return { output: 'The external tool result could not be finalized.', isError: true };
+        }
       }
     };
     state.session.setToolCallHandler(handler);
@@ -403,7 +617,30 @@ export class LiveHarnessFactory implements FacadeHarness {
   // --- event bridge --------------------------------------------------------
 
   private bridgeEvent(sessionId: string, state: LiveSessionState, event: Event): void {
+    if (this.bridgeSubagentLifecycle(sessionId, state, event)) return;
+
+    if (this.bridgeSubagentRuntimeEvent(sessionId, state, event)) return;
+
     switch (event.type) {
+      case 'model.request.started': {
+        const publicID = newFacadePublicEventID();
+        state.modelRequestStartIDs.set(modelRequestKey(event.agentId, event.requestId), publicID);
+        this.sink.emit(sessionId, { type: 'span.model_request_start', public_id: publicID });
+        return;
+      }
+      case 'model.request.ended': {
+        const key = modelRequestKey(event.agentId, event.requestId);
+        const startID = state.modelRequestStartIDs.get(key);
+        state.modelRequestStartIDs.delete(key);
+        if (startID !== undefined) {
+          this.sink.emit(sessionId, {
+            type: 'span.model_request_end',
+            model_request_start_id: startID,
+            is_error: event.isError,
+          });
+        }
+        return;
+      }
       case 'turn.started':
         state.toolCalls.clear();
         this.sink.emit(sessionId, { type: 'session.status_running' });
@@ -420,29 +657,40 @@ export class LiveHarnessFactory implements FacadeHarness {
         return;
       case 'tool.call.started': {
         const mcp = parseQualifiedServerToolName(event.name);
-        this.sink.emit(
-          sessionId,
-          mcp === undefined
-            ? {
-                type: 'agent.tool_use',
-                id: event.toolCallId,
-                name: event.name,
-                arguments: event.args,
-              }
-            : {
-                type: 'agent.mcp_tool_use',
-                id: event.toolCallId,
-                server_name: mcp.serverName,
-                tool_name: mcp.toolName,
-                arguments: event.args,
-              },
-        );
-        state.toolCalls.set(event.toolCallId, { name: event.name, ...(mcp ? { mcp } : {}) });
+        const custom = state.customToolNames.has(event.name);
+        if (!custom) {
+          this.sink.emit(
+            sessionId,
+            mcp === undefined
+              ? {
+                  type: 'agent.tool_use',
+                  id: event.toolCallId,
+                  name: event.name,
+                  arguments: event.args,
+                }
+              : {
+                  type: 'agent.mcp_tool_use',
+                  id: event.toolCallId,
+                  server_name: mcp.serverName,
+                  tool_name: mcp.toolName,
+                  arguments: event.args,
+                },
+          );
+        }
+        state.toolCalls.set(event.toolCallId, {
+          name: event.name,
+          ...(mcp ? { mcp } : {}),
+          ...(custom ? { custom: true } : {}),
+        });
         return;
       }
       case 'tool.result': {
         const tracked = state.toolCalls.get(event.toolCallId);
         state.toolCalls.delete(event.toolCallId);
+        // The client-supplied user.custom_tool_result is already the public
+        // result for a custom tool. Kimi's internal completion must not be
+        // reclassified as the built-in agent.tool_result event.
+        if (tracked?.custom === true) return;
         const base = {
           id: event.toolCallId,
           ...(event.output !== undefined ? { output: event.output } : {}),
@@ -471,28 +719,141 @@ export class LiveHarnessFactory implements FacadeHarness {
     }
   }
 
+  // The Kimi SDK subscription is session-scoped. Child runtime events carry a
+  // private identity only so the orchestrator can route their public projection
+  // to a durable Session Thread. Raw thought text, lifecycle error detail, and
+  // child turn boundaries never enter the parent Session event stream.
+  private bridgeSubagentRuntimeEvent(sessionId: string, state: LiveSessionState, event: Event): boolean {
+    if (!state.childAgentIds.has(event.agentId)) return false;
+    switch (event.type) {
+      case 'model.request.started': {
+        const publicID = newFacadePublicEventID();
+        state.modelRequestStartIDs.set(modelRequestKey(event.agentId, event.requestId), publicID);
+        this.sink.emit(sessionId, {
+          type: 'subagent.model_request_start',
+          runtime_agent_id: event.agentId,
+          public_id: publicID,
+        });
+        return true;
+      }
+      case 'model.request.ended': {
+        const key = modelRequestKey(event.agentId, event.requestId);
+        const startID = state.modelRequestStartIDs.get(key);
+        state.modelRequestStartIDs.delete(key);
+        if (startID !== undefined) {
+          this.sink.emit(sessionId, {
+            type: 'subagent.model_request_end',
+            runtime_agent_id: event.agentId,
+            model_request_start_id: startID,
+            is_error: event.isError,
+          });
+        }
+        return true;
+      }
+      case 'assistant.delta':
+        this.sink.emit(sessionId, {
+          type: 'subagent.message',
+          runtime_agent_id: event.agentId,
+          content: event.delta,
+        });
+        return true;
+      case 'thinking.delta':
+        if (state.childThinkingTurnIDs.get(event.agentId) !== event.turnId) {
+          state.childThinkingTurnIDs.set(event.agentId, event.turnId);
+          this.sink.emit(sessionId, { type: 'subagent.thinking', runtime_agent_id: event.agentId });
+        }
+        return true;
+      case 'tool.call.started': {
+        const mcp = parseQualifiedServerToolName(event.name);
+        this.sink.emit(
+          sessionId,
+          mcp === undefined
+            ? {
+                type: 'subagent.tool_use',
+                runtime_agent_id: event.agentId,
+                id: event.toolCallId,
+                name: event.name,
+                arguments: event.args,
+              }
+            : {
+                type: 'subagent.mcp_tool_use',
+                runtime_agent_id: event.agentId,
+                id: event.toolCallId,
+                server_name: mcp.serverName,
+                tool_name: mcp.toolName,
+                arguments: event.args,
+              },
+        );
+        state.childToolCalls.set(childToolCallKey(event.agentId, event.toolCallId), { name: event.name, ...(mcp ? { mcp } : {}) });
+        return true;
+      }
+      case 'tool.result': {
+        const key = childToolCallKey(event.agentId, event.toolCallId);
+        const tracked = state.childToolCalls.get(key);
+        state.childToolCalls.delete(key);
+        const base = {
+          runtime_agent_id: event.agentId,
+          id: event.toolCallId,
+          ...(event.output !== undefined ? { output: event.output } : {}),
+          ...(event.isError === true ? { is_error: true } : {}),
+        };
+        this.sink.emit(
+          sessionId,
+          tracked?.mcp === undefined
+            ? { type: 'subagent.tool_result', ...base }
+            : { type: 'subagent.mcp_tool_result', ...base },
+        );
+        return true;
+      }
+      default:
+        return true;
+    }
+  }
+
+  private bridgeSubagentLifecycle(sessionId: string, state: LiveSessionState, event: Event): boolean {
+    switch (event.type) {
+      case 'subagent.spawned':
+        state.childAgentIds.add(event.subagentId);
+        this.sink.emit(sessionId, {
+          type: 'subagent.spawned',
+          runtime_agent_id: event.subagentId,
+          profile_name: event.subagentName,
+        });
+        return true;
+      case 'subagent.started':
+        this.sink.emit(sessionId, { type: 'subagent.started', runtime_agent_id: event.subagentId });
+        return true;
+      case 'subagent.completed':
+        this.sink.emit(sessionId, { type: 'subagent.completed', runtime_agent_id: event.subagentId });
+        return true;
+      case 'subagent.failed':
+        this.sink.emit(sessionId, { type: 'subagent.failed', runtime_agent_id: event.subagentId });
+        return true;
+      case 'subagent.suspended':
+        this.sink.emit(sessionId, { type: 'subagent.suspended', runtime_agent_id: event.subagentId });
+        return true;
+      default:
+        return false;
+    }
+  }
+
   // --- create-time config application --------------------------------------
 
   private async applyTools(state: LiveSessionState, tools: readonly FacadeToolEntry[]): Promise<void> {
-    const enabledNames: string[] = [];
-    const externals: ExternalToolDefinition[] = [];
-    for (const entry of tools) {
-      if (isExternalToolDefinition(entry)) {
-        externals.push(entry);
-      } else {
-        enabledNames.push(...(entry.enabledTools ?? []));
-      }
+    const resolved = resolveTools(tools);
+    await state.session.setActiveTools(resolved.enabledNames);
+    for (const name of state.customToolNames) {
+      await state.session.unregisterTool(name);
     }
-    // Replace the enabled set first: registering an external tool also
-    // enables it, so registration must come after setActiveTools.
-    await state.session.setActiveTools(enabledNames);
-    for (const tool of externals) {
+    for (const tool of resolved.customTools) {
       await state.session.registerTool({
         name: tool.name,
         description: tool.description,
-        parameters: tool.parameters,
+        parameters: tool.inputSchema,
       });
     }
+    state.toolPolicies = resolved.policies;
+    state.customToolNames = new Set(resolved.customTools.map((tool) => tool.name));
   }
 
   // --- shared helpers ------------------------------------------------------
@@ -512,7 +873,149 @@ export class LiveHarnessFactory implements FacadeHarness {
 }
 
 function raceTeardown<T>(state: LiveSessionState, resolution: Promise<T>): Promise<T | undefined> {
-  return Promise.race([resolution, state.teardown]);
+	return Promise.race([resolution, state.teardown]);
+}
+
+function vaultEnvironmentNamesFromProcess(): Set<string> {
+	return new Set(
+		(process.env[VAULT_ENVIRONMENT_NAMES_MARKER] ?? '')
+			.split(',')
+			.map((name) => name.trim())
+			.filter((name) => name !== ''),
+	);
+}
+
+function toolCallResponse(result: StagedToolResult): ToolCallResponse {
+  switch (result.resolution) {
+    case 'completed':
+      return { output: result.output ?? '', isError: false };
+    case 'failed':
+      return { output: result.output ?? 'The external tool call failed.', isError: true };
+    case 'skipped':
+      return { output: result.output ?? 'The external tool call was skipped.', isError: false };
+  }
+}
+
+function toRuntimeAgentProfiles(
+  profiles: NonNullable<FacadeCreateConfig['agentProfiles']>,
+): NonNullable<CreateSessionOptions['agentProfiles']> {
+  return {
+    mainProfile: profiles.mainProfile,
+    maxAgents: profiles.maxAgents ?? QODER_MAX_SESSION_THREADS,
+    profiles: profiles.profiles.map((profile) => ({
+      name: profile.name,
+      ...(profile.description !== undefined ? { description: profile.description } : {}),
+      ...(profile.systemPromptTemplate !== undefined
+        ? { systemPromptTemplate: profile.systemPromptTemplate }
+        : {}),
+      ...(profile.tools !== undefined ? { tools: [...profile.tools] } : {}),
+      ...(profile.modelAlias !== undefined ? { modelAlias: profile.modelAlias } : {}),
+      ...(profile.thinkingEffort !== undefined ? { thinkingEffort: profile.thinkingEffort } : {}),
+      ...(profile.contextWindow !== undefined ? { contextWindow: profile.contextWindow } : {}),
+      ...(profile.whenToUse !== undefined ? { whenToUse: profile.whenToUse } : {}),
+      ...(profile.subagents !== undefined
+        ? {
+            subagents: Object.fromEntries(
+              Object.entries(profile.subagents).map(([name, subagent]) => [
+                name,
+                subagent.description !== undefined ? { description: subagent.description } : {},
+              ]),
+            ),
+          }
+        : {}),
+    })),
+  };
+}
+
+const QODER_BUILTIN_TOOLS = [
+  'Bash',
+  'DeliverArtifacts',
+  'Edit',
+  'Glob',
+  'Grep',
+  'ImageGen',
+  'ImageSearch',
+  'Read',
+  'WebFetch',
+  'WebSearch',
+  'Write',
+] as const;
+
+interface ResolvedTools {
+  readonly enabledNames: readonly string[];
+  readonly policies: ReadonlyMap<string, PermissionPolicyType>;
+  readonly customTools: readonly Required<Pick<FacadeToolEntry, 'name' | 'description' | 'inputSchema'>>[];
+}
+
+function resolveTools(tools: readonly FacadeToolEntry[]): ResolvedTools {
+  const enabledBuiltins = new Set<string>();
+  const mcpPatterns = new Set<string>();
+  const policies = new Map<string, PermissionPolicyType>();
+  const customTools: Array<Required<Pick<FacadeToolEntry, 'name' | 'description' | 'inputSchema'>>> = [];
+
+  for (const entry of tools) {
+    switch (entry.type) {
+      case 'agent_toolset_20260401': {
+        const initial = entry.enabledTools === undefined || entry.enabledTools.length === 0
+          ? QODER_BUILTIN_TOOLS
+          : entry.enabledTools;
+        for (const name of initial) enabledBuiltins.add(name);
+        for (const name of entry.disallowedTools ?? []) enabledBuiltins.delete(name);
+        for (const config of entry.configs ?? []) {
+          if (config.enabled === false) enabledBuiltins.delete(config.name);
+          if (config.enabled === true) enabledBuiltins.add(config.name);
+          if (config.permissionPolicy !== undefined) {
+            policies.set(config.name, config.permissionPolicy.type);
+          }
+        }
+        break;
+      }
+      case 'mcp_toolset':
+        if (entry.mcpServerName === undefined) break;
+        mcpPatterns.add(`mcp__${entry.mcpServerName}__*`);
+        for (const config of entry.configs ?? []) {
+          if (config.permissionPolicy !== undefined) {
+            policies.set(`mcp__${entry.mcpServerName}__${config.name}`, config.permissionPolicy.type);
+          }
+        }
+        break;
+      case 'custom':
+        if (entry.name !== undefined && entry.description !== undefined && entry.inputSchema !== undefined) {
+          customTools.push({ name: entry.name, description: entry.description, inputSchema: entry.inputSchema });
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  return {
+    enabledNames: [...enabledBuiltins, ...mcpPatterns],
+    policies,
+    customTools,
+  };
+}
+
+function withMcpToolFilters(
+  servers: readonly FacadeMcpServer[],
+  tools: readonly FacadeToolEntry[] | undefined,
+): readonly FacadeMcpServer[] {
+  const filters = new Map<string, { disabled: string[] }>();
+  for (const tool of tools ?? []) {
+    if (tool.type !== 'mcp_toolset' || tool.mcpServerName === undefined) continue;
+    const current = filters.get(tool.mcpServerName) ?? { disabled: [] };
+    for (const config of tool.configs ?? []) {
+      if (config.enabled === false) current.disabled.push(config.name);
+    }
+    filters.set(tool.mcpServerName, current);
+  }
+  return servers.map((server) => {
+    const filter = filters.get(server.name);
+    if (filter === undefined) return server;
+    return {
+      ...server,
+      ...(filter.disabled.length > 0 ? { disabledTools: filter.disabled } : {}),
+    };
+  });
 }
 
 /**
@@ -567,29 +1070,60 @@ function parseQualifiedServerToolName(
   return { serverName: rest.slice(0, separator), toolName: rest.slice(separator + 2) };
 }
 
+function childToolCallKey(runtimeAgentID: string, toolCallID: string): string {
+  return `${runtimeAgentID}\u0000${toolCallID}`;
+}
+
+function modelRequestKey(runtimeAgentID: string, requestID: string): string {
+  return `${runtimeAgentID}\u0000${requestID}`;
+}
+
+function newFacadePublicEventID(): string {
+  return `evt_${randomUUID().replaceAll('-', '')}`;
+}
+
 /**
- * First-prompt context blocks: system prompt first, then resource / memory /
- * skill blocks (the user content is appended last at prompt time). Resource
- * and skill blocks carry structured references — fetching their content from
- * object storage belongs to a later slice, so the blocks make the attachment
- * visible to the agent without the payload.
+ * First-prompt context blocks contain only the system prompt. Resources and
+ * Memory instructions are added separately; Skills are discovered by
+ * kimi-code from the materialized project root.
  */
-function buildContextBlocks(config: FacadeCreateConfig): TextPromptPart[] {
+function buildStaticContextBlocks(config: FacadeCreateConfig): TextPromptPart[] {
   const blocks: TextPromptPart[] = [];
   if (config.system !== undefined && config.system.trim().length > 0) {
     blocks.push(textPart(config.system));
   }
-  for (const resource of config.resources ?? []) {
-    const label = resource.mountPath ?? resource.path ?? resource.url ?? resource.fileId ?? resource.id;
-    blocks.push(textPart(`[resource: ${label}]\n${JSON.stringify(resource)}\n[/resource]`));
-  }
-  for (const entry of config.memoryStoreEntries ?? []) {
-    if (entry.content.trim().length === 0) continue;
-    blocks.push(textPart(`[memory: ${entry.path}]\n${entry.content}\n[/memory]`));
-  }
-  for (const skill of config.skills ?? []) {
-    const label = skill.name ?? skill.id;
-    blocks.push(textPart(`[skill: ${label}]\n${JSON.stringify(skill)}\n[/skill]`));
-  }
   return blocks;
+}
+
+function mergeResourcesByID(existing: readonly FacadeResource[], incoming: readonly FacadeResource[]): FacadeResource[] {
+	const incomingIDs = new Set<string>();
+	for (const resource of incoming) {
+		if (incomingIDs.has(resource.id)) throw new FacadeError('invalid_request');
+		incomingIDs.add(resource.id);
+	}
+	const merged = new Map(existing.map((resource) => [resource.id, resource]));
+	for (const resource of incoming) merged.set(resource.id, resource);
+	return [...merged.values()];
+}
+
+function buildMemoryInstructionBlocks(resources: readonly FacadeResource[]): TextPromptPart[] {
+	return resources.flatMap((resource) => {
+		if (resource.type !== 'memory_store' || resource.instructions === undefined || resource.instructions.trim().length === 0) {
+			return [];
+		}
+		return [textPart(resource.instructions)];
+	});
+}
+
+function buildResourceContextBlocks(resources: readonly FacadeResource[]): TextPromptPart[] {
+  return resources.filter((resource) => resource.type !== 'memory_store').map((resource) => {
+    const visibleResource = {
+      id: resource.id,
+      type: resource.type,
+      ...(resource.fileId !== undefined ? { fileId: resource.fileId } : {}),
+      ...(resource.mountPath !== undefined ? { mountPath: resource.mountPath } : {}),
+    };
+    const label = visibleResource.mountPath ?? visibleResource.fileId ?? visibleResource.id;
+    return textPart(`[resource: ${label}]\n${JSON.stringify(visibleResource)}\n[/resource]`);
+  });
 }

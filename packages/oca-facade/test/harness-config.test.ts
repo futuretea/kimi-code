@@ -1,14 +1,15 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { createKimiHarness } from '@moonshot-ai/kimi-code-sdk';
+import { ErrorCodes, KimiError, createKimiHarness } from '@moonshot-ai/kimi-code-sdk';
 
 import { FacadeError } from '../src/errors';
 import {
   LiveHarnessFactory,
-  permissionModeForPolicy,
+  QODER_PERMISSION_MODE,
   type FacadeCreateConfig,
   type FacadeEvent,
   type HarnessEventSink,
@@ -75,10 +76,8 @@ afterEach(async () => {
 });
 
 describe('permission policy mapping', () => {
-  it('maps every facade policy to a runtime permission mode', () => {
-    expect(permissionModeForPolicy('always_allow')).toBe('yolo');
-    expect(permissionModeForPolicy('always_ask')).toBe('manual');
-    expect(permissionModeForPolicy('always_deny')).toBe('manual');
+  it('keeps the runtime in manual mode for per-tool policy dispatch', () => {
+    expect(QODER_PERMISSION_MODE).toBe('manual');
   });
 });
 
@@ -97,7 +96,7 @@ describe('live harness factory: create options', () => {
       workDir,
       model: 'model-x',
       thinking: 'high',
-      permissionPolicy: 'always_ask',
+      contextWindow: 262144,
       planMode: true,
       metadata: { tenant: 't-1' },
       additionalDirs: ['/extra'],
@@ -109,6 +108,7 @@ describe('live harness factory: create options', () => {
       workDir,
       model: 'model-x',
       thinking: 'high',
+      contextWindow: 262144,
       permission: 'manual',
       planMode: true,
       metadata: { tenant: 't-1' },
@@ -119,17 +119,13 @@ describe('live harness factory: create options', () => {
   it('omits unset optional fields from create options', async () => {
     const { fake, harness, workDir } = await setup();
     await harness.createSession({ sessionId: 'ses_1', workDir });
-    expect(fake.created[0]).toEqual({ id: 'ses_1', workDir });
+    expect(fake.created[0]).toEqual({ id: 'ses_1', workDir, permission: 'manual' });
   });
 
-  it.each([
-    ['always_allow', 'yolo'],
-    ['always_ask', 'manual'],
-    ['always_deny', 'manual'],
-  ] as const)('maps permission_policy %s to %s at create', async (policy, mode) => {
+  it('uses manual runtime mode when no per-tool policy is configured', async () => {
     const { fake, harness, workDir } = await setup();
-    await harness.createSession({ sessionId: 'ses_1', workDir, permissionPolicy: policy });
-    expect(fake.created[0]?.permission).toBe(mode);
+    await harness.createSession({ sessionId: 'ses_1', workDir });
+    expect(fake.created[0]?.permission).toBe('manual');
   });
 
   it('rejects creating two sessions with the same id', async () => {
@@ -155,6 +151,24 @@ describe('live harness factory: resume', () => {
     expect(fake.resumed).toHaveLength(1);
   });
 
+  it('uses the trusted Vault ownership marker to clear a revoked value after resume', async () => {
+    const { harness } = await setup();
+    const priorMarker = process.env['OCA_FACADE_VAULT_ENV_NAMES'];
+    const priorServiceKey = process.env['SERVICE_KEY'];
+    try {
+      process.env['OCA_FACADE_VAULT_ENV_NAMES'] = 'SERVICE_KEY';
+      process.env['SERVICE_KEY'] = 'stale-value';
+      await harness.resumeSession('ses_9');
+      await harness.updateSessionConfig('ses_9', { vaultEnvironmentVariables: {} });
+      expect(process.env['SERVICE_KEY']).toBeUndefined();
+    } finally {
+      if (priorMarker === undefined) delete process.env['OCA_FACADE_VAULT_ENV_NAMES'];
+      else process.env['OCA_FACADE_VAULT_ENV_NAMES'] = priorMarker;
+      if (priorServiceKey === undefined) delete process.env['SERVICE_KEY'];
+      else process.env['SERVICE_KEY'] = priorServiceKey;
+    }
+  });
+
   it('sanitizes runtime resume failures into session_resume_failed', async () => {
     const registry = new SessionRegistry();
     const sink = makeSink();
@@ -165,6 +179,7 @@ describe('live harness factory: resume', () => {
         createSession: () => Promise.reject(new Error('unused')),
         resumeSession: () =>
           Promise.reject(new Error('raw runtime detail: /home/user/.private/sessions/ses_9')),
+        withInteractiveAgent: (_agentId, fn) => fn(),
       }),
     });
     const failure = await harness.resumeSession('ses_9').catch((error: unknown) => error);
@@ -184,9 +199,10 @@ describe('live harness factory: tools', () => {
         { type: 'agent_toolset_20260401', enabledTools: ['Read', 'Bash'] },
         { type: 'agent_toolset_20260401', enabledTools: ['Grep'] },
         {
+          type: 'custom',
           name: 'query_billing',
           description: 'Query the billing system',
-          parameters: { type: 'object', properties: { month: { type: 'string' } } },
+          inputSchema: { type: 'object', properties: { month: { type: 'string' } } },
         },
       ],
     });
@@ -216,9 +232,71 @@ describe('live harness factory: tools', () => {
     await harness.createSession({ sessionId: 'ses_1', workDir, tools: [] });
     expect(fake.sessions.get('ses_1')?.activeToolsCalls).toEqual([[]]);
   });
+
+  it('replaces tools, custom registrations, and per-tool policies', async () => {
+    const { fake, harness, workDir } = await setup();
+    await harness.createSession({
+      sessionId: 'ses_1',
+      workDir,
+      tools: [{
+        type: 'custom',
+        name: 'old_lookup',
+        description: 'Old lookup',
+        inputSchema: { type: 'object' },
+      }],
+    });
+
+    await harness.updateSessionConfig('ses_1', {
+      tools: [
+        {
+          type: 'agent_toolset_20260401',
+          enabledTools: ['Read'],
+          configs: [{ name: 'Read', permissionPolicy: { type: 'always_allow' } }],
+        },
+        {
+          type: 'custom',
+          name: 'new_lookup',
+          description: 'New lookup',
+          inputSchema: { type: 'object', properties: { q: { type: 'string' } } },
+        },
+      ],
+    });
+
+    const session = fake.sessions.get('ses_1');
+    expect(session?.activeToolsCalls).toEqual([[], ['Read']]);
+    expect(session?.unregisteredTools).toEqual(['old_lookup']);
+    expect(session?.registeredTools).toEqual([
+      { name: 'old_lookup', description: 'Old lookup', parameters: { type: 'object' } },
+      { name: 'new_lookup', description: 'New lookup', parameters: { type: 'object', properties: { q: { type: 'string' } } } },
+    ]);
+  });
 });
 
 describe('live harness factory: session config for external servers', () => {
+	it('replaces and removes Vault-owned process environment variables without touching ordinary variables', async () => {
+		const { harness, workDir } = await setup();
+		const priorSessionFlag = process.env['SESSION_FLAG'];
+		const priorServiceKey = process.env['SERVICE_KEY'];
+		try {
+			process.env['SESSION_FLAG'] = 'ordinary';
+			await harness.createSession({
+				sessionId: 'ses_1',
+				workDir,
+				vaultEnvironmentVariables: { SERVICE_KEY: 'vault-token' },
+			});
+			expect(process.env['SERVICE_KEY']).toBe('vault-token');
+
+			await harness.updateSessionConfig('ses_1', { vaultEnvironmentVariables: {} });
+			expect(process.env['SERVICE_KEY']).toBeUndefined();
+			expect(process.env['SESSION_FLAG']).toBe('ordinary');
+		} finally {
+			if (priorSessionFlag === undefined) delete process.env['SESSION_FLAG'];
+			else process.env['SESSION_FLAG'] = priorSessionFlag;
+			if (priorServiceKey === undefined) delete process.env['SERVICE_KEY'];
+			else process.env['SERVICE_KEY'] = priorServiceKey;
+		}
+	});
+
   it('writes the session server config in the runtime config-loader shape', async () => {
     const { harness, workDir } = await setup();
     await harness.createSession({
@@ -260,11 +338,42 @@ describe('live harness factory: session config for external servers', () => {
     });
   });
 
+  it('replaces managed servers and applies MCP enablement filters on update', async () => {
+    const { fake, harness, workDir } = await setup();
+    await harness.createSession({
+      sessionId: 'ses_1',
+      workDir,
+      mcpServers: [{ type: 'url', name: 'legacy', url: 'https://legacy.example.com/mcp' }],
+    });
+    await harness.updateSessionConfig('ses_1', {
+      mcpServers: [{ type: 'url', name: 'docs', url: 'https://docs.example.com/mcp' }],
+      tools: [{
+        type: 'mcp_toolset',
+        mcpServerName: 'docs',
+        configs: [
+          { name: 'search', enabled: true },
+          { name: 'delete', enabled: false },
+        ],
+      }],
+    });
+    const raw = await readFile(join(workDir, '.kimi-code', 'mcp.json'), 'utf-8');
+    expect(JSON.parse(raw)).toEqual({
+      mcpServers: {
+        docs: {
+          transport: 'http',
+          url: 'https://docs.example.com/mcp',
+          disabledTools: ['delete'],
+        },
+      },
+    });
+    expect(fake.sessions.get('ses_1')?.reloadSessionCalls).toBe(1);
+  });
+
   it('references mounted credentials by environment variable, never on disk', async () => {
     const credentialsDir = await mkdtemp(join(tmpdir(), 'oca-facade-creds-'));
     tempDirs.push(credentialsDir);
     const url = 'https://billing.example.com/mcp';
-    const fileName = Buffer.from(url).toString('base64url');
+    const fileName = `mcp-${createHash('sha256').update(url).digest('hex')}`;
     await writeFile(join(credentialsDir, fileName), 'test-token-123');
 
     const { harness, workDir } = await setup({ credentialsDir });
@@ -287,6 +396,102 @@ describe('live harness factory: session config for external servers', () => {
     delete process.env[envVar];
   });
 
+  it('clears a replaced MCP credential from the facade environment', async () => {
+    const { fake, harness, workDir } = await setup();
+    const url = 'https://billing.example.com/mcp';
+    await harness.createSession({ sessionId: 'ses_1', workDir });
+    await harness.updateSessionConfig('ses_1', {
+      mcpServers: [{ type: 'http', name: 'billing', url }],
+      mcpCredentials: { [url]: 'test-live-token' },
+    });
+
+    const first = JSON.parse(await readFile(join(workDir, '.kimi-code', 'mcp.json'), 'utf-8')) as {
+      mcpServers: Record<string, { bearerTokenEnvVar?: string }>;
+    };
+    const envVar = first.mcpServers['billing']?.bearerTokenEnvVar;
+    expect(envVar).toMatch(/^OCA_MCP_BEARER_[0-9A-F]{16}$/);
+    expect(process.env[envVar ?? '']).toBe('test-live-token');
+
+    await harness.updateSessionConfig('ses_1', { mcpServers: [], mcpCredentials: {} });
+    expect(process.env[envVar ?? '']).toBeUndefined();
+    const replaced = JSON.parse(await readFile(join(workDir, '.kimi-code', 'mcp.json'), 'utf-8')) as {
+      mcpServers: Record<string, unknown>;
+    };
+    expect(replaced.mcpServers).toEqual({});
+    expect(fake.sessions.get('ses_1')?.reloadSessionCalls).toBe(2);
+  });
+
+  it('restores the prior MCP file and bearer variables when a turn blocks reload', async () => {
+    const { fake, harness, workDir } = await setup();
+    const oldURL = 'https://billing.example.com/mcp';
+    const nextURL = 'https://docs.example.com/mcp';
+    await harness.createSession({ sessionId: 'ses_1', workDir });
+    await harness.updateSessionConfig('ses_1', {
+      mcpServers: [{ type: 'http', name: 'billing', url: oldURL }],
+      mcpCredentials: { [oldURL]: 'old-token' },
+    });
+    const configFile = join(workDir, '.kimi-code', 'mcp.json');
+    const before = await readFile(configFile, 'utf-8');
+    const oldEnvVar = JSON.parse(before).mcpServers.billing.bearerTokenEnvVar as string;
+    const nextEnvVar = `OCA_MCP_BEARER_${createHash('sha256').update(nextURL).digest('hex').slice(0, 16).toUpperCase()}`;
+    fake.sessions.get('ses_1')!.reloadSessionError = new KimiError(ErrorCodes.TURN_AGENT_BUSY, 'turn is active');
+
+    await expect(harness.updateSessionConfig('ses_1', {
+      mcpServers: [{ type: 'http', name: 'docs', url: nextURL }],
+      mcpCredentials: { [nextURL]: 'next-token' },
+    })).rejects.toMatchObject({ code: 'session_state_conflict' });
+
+    expect(await readFile(configFile, 'utf-8')).toBe(before);
+    expect(process.env[oldEnvVar]).toBe('old-token');
+    expect(process.env[nextEnvVar]).toBeUndefined();
+    expect(fake.sessions.get('ses_1')?.reloadSessionCalls).toBe(2);
+    delete process.env[oldEnvVar];
+  });
+
+  it('hydrates the mounted MCP bearer before resuming the journal session', async () => {
+    const credentialsDir = await mkdtemp(join(tmpdir(), 'oca-facade-creds-'));
+    tempDirs.push(credentialsDir);
+    const url = 'https://billing.example.com/mcp';
+    const fileName = `mcp-${createHash('sha256').update(url).digest('hex')}`;
+    await writeFile(join(credentialsDir, fileName), 'resume-token');
+    const { fake, harness, workDir } = await setup({ credentialsDir });
+    await harness.createSession({
+      sessionId: 'ses_1',
+      workDir,
+      mcpServers: [{ type: 'http', name: 'billing', url }],
+    });
+    const config = JSON.parse(await readFile(join(workDir, '.kimi-code', 'mcp.json'), 'utf-8')) as {
+      mcpServers: { billing: { bearerTokenEnvVar: string } };
+    };
+    const envVar = config.mcpServers.billing.bearerTokenEnvVar;
+    delete process.env[envVar];
+    const previousWorkDir = process.env['OCA_FACADE_WORK_DIR'];
+    process.env['OCA_FACADE_WORK_DIR'] = workDir;
+    let tokenAtRuntimeResume: string | undefined;
+    const resumed = new LiveHarnessFactory({
+      registry: new SessionRegistry(),
+      sink: makeSink(),
+      credentialsDir,
+      createHarness: () => ({
+        createSession: (options) => fake.createSession(options),
+        resumeSession: async (input) => {
+          tokenAtRuntimeResume = process.env[envVar];
+          return fake.resumeSession(input);
+        },
+        withInteractiveAgent: (agentId, fn) => fake.withInteractiveAgent(agentId, fn),
+      }),
+    });
+    try {
+      await resumed.resumeSession('ses_1');
+      expect(tokenAtRuntimeResume).toBe('resume-token');
+      expect(await readFile(join(workDir, '.kimi-code', 'mcp.json'), 'utf-8')).not.toContain('resume-token');
+    } finally {
+      if (previousWorkDir === undefined) delete process.env['OCA_FACADE_WORK_DIR'];
+      else process.env['OCA_FACADE_WORK_DIR'] = previousWorkDir;
+      delete process.env[envVar];
+    }
+  });
+
   it('writes no config file when no servers are configured', async () => {
     const { harness, workDir } = await setup();
     await harness.createSession({ sessionId: 'ses_1', workDir });
@@ -295,21 +500,26 @@ describe('live harness factory: session config for external servers', () => {
 });
 
 describe('live harness factory: first-prompt context blocks', () => {
-  it('injects system, resource, memory, and skill blocks ahead of the first prompt', async () => {
+	it('injects system and resource blocks while kimi-code discovers materialized Skills', async () => {
     const { fake, harness, workDir } = await setup();
     await harness.createSession({
       sessionId: 'ses_1',
       workDir,
       system: 'You are a documentation assistant.',
       resources: [
-        { id: 'res_1', type: 'file', path: '/workspace/spec.md', mountPath: '/workspace/spec.md' },
+        { id: 'res_1', type: 'reference', mountPath: '/workspace/spec.md' },
       ],
-      memoryStoreEntries: [
-        { path: 'preferences/style', content: 'Use terse prose.' },
-        { path: 'preferences/empty', content: '   ' },
-      ],
-      skills: [{ id: 'skill_1', name: 'reviewer', version: 3 }],
+      skills: [{
+        id: 'skill_1',
+        name: 'reviewer',
+        version: 3,
+        files: [{
+          path: 'SKILL.md',
+          contentBase64: Buffer.from('---\nname: reviewer\ndescription: Review docs\n---\n').toString('base64'),
+        }],
+      }],
     });
+    await expect(readFile(join(workDir, '.agents/skills/reviewer/SKILL.md'), 'utf8')).resolves.toContain('name: reviewer');
     await harness.prompt('ses_1', 'Summarize the spec.');
     const session = fake.sessions.get('ses_1');
     expect(session?.prompts).toHaveLength(1);
@@ -317,10 +527,8 @@ describe('live harness factory: first-prompt context blocks', () => {
       { type: 'text', text: 'You are a documentation assistant.' },
       {
         type: 'text',
-        text: '[resource: /workspace/spec.md]\n{"id":"res_1","type":"file","path":"/workspace/spec.md","mountPath":"/workspace/spec.md"}\n[/resource]',
+        text: '[resource: /workspace/spec.md]\n{"id":"res_1","type":"reference","mountPath":"/workspace/spec.md"}\n[/resource]',
       },
-      { type: 'text', text: '[memory: preferences/style]\nUse terse prose.\n[/memory]' },
-      { type: 'text', text: '[skill: reviewer]\n{"id":"skill_1","name":"reviewer","version":3}\n[/skill]' },
       { type: 'text', text: 'Summarize the spec.' },
     ]);
   });
@@ -331,7 +539,6 @@ describe('live harness factory: first-prompt context blocks', () => {
       sessionId: 'ses_1',
       workDir,
       system: 'You are a documentation assistant.',
-      memoryStoreEntries: [{ path: 'a', content: 'b' }],
     });
     await harness.prompt('ses_1', 'first');
     await harness.prompt('ses_1', 'second');
@@ -345,6 +552,37 @@ describe('live harness factory: first-prompt context blocks', () => {
     await harness.prompt('ses_1', 'hello');
     expect(fake.sessions.get('ses_1')?.prompts[0]).toEqual([{ type: 'text', text: 'hello' }]);
   });
+
+	it('restores Memory instructions once and keeps the Memory resource idempotent', async () => {
+		const { fake, harness, workDir } = await setup();
+		const awareness = join(workDir, 'awareness');
+		const priorAwareness = process.env['OCA_AWARENESS_ROOT'];
+		process.env['OCA_AWARENESS_ROOT'] = awareness;
+		try {
+			await harness.resumeSession('ses_1');
+			const resources = [{
+				id: 'res_memory_1',
+				type: 'memory_store',
+				memoryStoreId: 'memstore_1',
+				instructions: 'Use the project notes.',
+				memoryEntries: [],
+			}] as const;
+			await harness.materializeSessionResources('ses_1', resources);
+			await harness.materializeSessionResources('ses_1', resources);
+
+			await expect(harness.snapshotSessionMemory('ses_1')).resolves.toEqual([{
+				resourceId: 'res_memory_1', memoryStoreId: 'memstore_1', entries: [],
+			}]);
+			await harness.prompt('ses_1', 'Continue.');
+			expect(fake.sessions.get('ses_1')?.prompts[0]).toEqual([
+				{ type: 'text', text: 'Use the project notes.' },
+				{ type: 'text', text: 'Continue.' },
+			]);
+		} finally {
+			if (priorAwareness === undefined) delete process.env['OCA_AWARENESS_ROOT'];
+			else process.env['OCA_AWARENESS_ROOT'] = priorAwareness;
+		}
+	});
 
   it('rejects prompts for unknown sessions', async () => {
     const { harness } = await setup();

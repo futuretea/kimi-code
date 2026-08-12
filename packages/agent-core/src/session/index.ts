@@ -38,9 +38,15 @@ import {
   DEFAULT_INIT_PROMPT,
   loadAgentsMd,
   prepareSystemPromptContext,
+  resolveSessionAgentProfiles,
   type ResolvedAgentProfile,
+  type SessionAgentProfileConfig,
 } from '../profile';
-import type { ProviderManager } from './provider-manager';
+import {
+  ContextWindowModelProvider,
+  type ModelProvider,
+  type ProviderManager,
+} from './provider-manager';
 import {
   registerBuiltinSkills,
   SessionSkillRegistry,
@@ -87,6 +93,11 @@ export interface SessionOptions {
    * finish before the run exits. Set via the SDK `createSession` option.
    */
   readonly drainAgentTasksOnStop?: boolean;
+  /**
+   * Immutable, serialized profile registry for this Session. When provided it
+   * supersedes process-wide default profiles and is persisted in state.json.
+   */
+  readonly agentProfiles?: SessionAgentProfileConfig;
 }
 
 export interface SessionSkillConfig {
@@ -133,6 +144,8 @@ export interface SessionMeta {
    *  have to be trusted for the (one-way-hashed) workDir. */
   workDir?: string;
   agents: Record<string, AgentMeta>;
+  /** Immutable profile registry captured at Session creation, if non-default. */
+  agentProfiles?: SessionAgentProfileConfig;
   custom: Record<string, any>;
 }
 
@@ -179,7 +192,12 @@ export class Session {
   private persistenceKaos: Kaos;
   private additionalDirs: readonly string[];
   private readonly pluginCommands: readonly PluginCommandDef[];
+  private agentProfiles: Readonly<Record<string, ResolvedAgentProfile>> = DEFAULT_AGENT_PROFILES;
+  private mainProfileName = 'agent';
+  private maxAgents: number | undefined;
   private agentIdCounter = 0;
+  private readonly creatingAgentIDs = new Set<string>();
+  private readonly agentOperationClaims = new Map<string, 'run' | 'remove'>();
   private readonly skillsReady: Promise<void>;
   metadata: SessionMeta = {
     createdAt: new Date().toISOString(),
@@ -219,6 +237,7 @@ export class Session {
     this.toolKaos = options.kaos;
     this.persistenceKaos = options.persistenceKaos ?? options.kaos;
     this.additionalDirs = normalizeAdditionalDirs(options.additionalDirs ?? []);
+    this.setAgentProfiles(options.agentProfiles);
     this.pluginCommands = options.pluginCommands ?? [];
     this.skills = new SessionSkillRegistry({
       sessionId: options.id,
@@ -310,7 +329,7 @@ export class Session {
 
   async createMain() {
     const { agent } = await this.createAgent({ type: 'main' }, {
-      profile: DEFAULT_AGENT_PROFILES['agent'],
+      profile: this.requireMainProfile(),
     });
     if (this.options.drainAgentTasksOnStop) {
       agent.printDrainAgentTasksOnStop = true;
@@ -334,7 +353,7 @@ export class Session {
     // default profile so the resumed session is usable. Native sessions always
     // replay a non-empty system prompt and never enter this branch.
     const main = this.getReadyAgent('main');
-    const profile = DEFAULT_AGENT_PROFILES['agent'];
+    const profile = this.requireMainProfile();
     if (main !== undefined && profile !== undefined && main.config.systemPrompt === '') {
       await this.bootstrapAgentProfile(main, profile);
     }
@@ -594,26 +613,34 @@ export class Session {
   ): Promise<{ readonly id: string; readonly agent: Agent }> {
     await this.skillsReady;
     const type = config.type ?? 'main';
+    if (type === 'sub' && this.hasReachedAgentCapacity()) {
+      throw new Error(`Session agent capacity of ${this.maxAgents} has been reached`);
+    }
     const id = type === 'main' ? 'main' : this.nextGeneratedAgentId();
-    const homedir = config.homedir ?? join(this.options.homedir, 'agents', id);
-    const parentAgentId = options.parentAgentId ?? null;
-    const agent = this.instantiateAgent(id, homedir, type, config, parentAgentId);
-    if (options.profile) {
-      await this.bootstrapAgentProfile(agent, options.profile);
-    }
+    if (type === 'sub') this.creatingAgentIDs.add(id);
+    try {
+      const homedir = config.homedir ?? join(this.options.homedir, 'agents', id);
+      const parentAgentId = options.parentAgentId ?? null;
+      const agent = this.instantiateAgent(id, homedir, type, config, parentAgentId);
+      if (options.profile) {
+        await this.bootstrapAgentProfile(agent, options.profile);
+      }
 
-    this.agents.set(id, agent);
-    if (options.persistMetadata !== false) {
-      this.metadata.agents[id] = {
-        homedir,
-        type,
-        parentAgentId,
-        swarmItem: options.swarmItem,
-      };
-      void this.writeMetadata();
-    }
+      this.agents.set(id, agent);
+      if (options.persistMetadata !== false) {
+        this.metadata.agents[id] = {
+          homedir,
+          type,
+          parentAgentId,
+          swarmItem: options.swarmItem,
+        };
+        void this.writeMetadata();
+      }
 
-    return { id, agent };
+      return { id, agent };
+    } finally {
+      if (type === 'sub') this.creatingAgentIDs.delete(id);
+    }
   }
 
   async ensureAgentResumed(id: string): Promise<Agent> {
@@ -623,6 +650,82 @@ export class Session {
       throw new KimiError(ErrorCodes.AGENT_NOT_FOUND, `Agent "${id}" was not found`);
     }
     return (await this.resumeAgent(id)).agent;
+  }
+
+  /**
+   * Removes one persisted idle child so it no longer consumes a Session agent
+   * slot after the owning control plane archives its Thread. The operation is
+   * idempotent for a child that was already removed by an earlier delivery.
+   */
+  async removeAgent(id: string): Promise<void> {
+    if (id === 'main') {
+      throw new KimiError(ErrorCodes.REQUEST_INVALID, 'The main agent cannot be removed');
+    }
+    const metadata = this.metadata.agents[id];
+    if (metadata === undefined) return;
+    if (metadata.type !== 'sub') {
+      throw new KimiError(ErrorCodes.REQUEST_INVALID, `Agent "${id}" is not a child agent`);
+    }
+    if (!this.claimAgentRemoval(id)) {
+      throw new KimiError(ErrorCodes.SESSION_STATE_INVALID, `Agent "${id}" is being removed`);
+    }
+    try {
+      if (Object.values(this.metadata.agents).some((candidate) => candidate.parentAgentId === id)) {
+        throw new KimiError(ErrorCodes.SESSION_STATE_INVALID, `Agent "${id}" still has child agents`);
+      }
+
+      const agent = await this.ensureAgentResumed(id);
+      if (agent.turn.hasActiveTurn) {
+        throw new KimiError(ErrorCodes.SESSION_STATE_INVALID, `Agent "${id}" still has an active turn`);
+      }
+      const parent =
+        metadata.parentAgentId === null || metadata.parentAgentId === undefined
+          ? undefined
+          : await this.ensureAgentResumed(metadata.parentAgentId);
+      if (parent?.subagentHost?.isActive(id)) {
+        throw new KimiError(ErrorCodes.SESSION_STATE_INVALID, `Agent "${id}" is still active`);
+      }
+
+      const { [id]: _removed, ...agents } = this.metadata.agents;
+      this.metadata = {
+        ...this.metadata,
+        updatedAt: new Date().toISOString(),
+        agents,
+      };
+      try {
+        await this.writeMetadata();
+      } catch (error) {
+        // Restore only this child onto the current metadata, rather than an
+        // old Session-wide snapshot. Another child may have been created
+        // while the serialized write was pending; replacing the whole object
+        // would discard that child from the next persisted state. Queue a
+        // compensating write after all earlier snapshots so a retry or crash
+        // cannot leave either child absent from the journal.
+        this.metadata = {
+          ...this.metadata,
+          agents: { ...this.metadata.agents, [id]: metadata },
+        };
+        await this.writeMetadata();
+        throw error;
+      }
+      this.agents.delete(id);
+    } finally {
+      this.releaseAgentOperation(id, 'remove');
+    }
+  }
+
+  isAgentRemovalPending(id: string): boolean {
+    return this.agentOperationClaims.get(id) === 'remove';
+  }
+
+  claimAgentRun(id: string): boolean {
+    if (this.agentOperationClaims.has(id)) return false;
+    this.agentOperationClaims.set(id, 'run');
+    return true;
+  }
+
+  releaseAgentRun(id: string): void {
+    this.releaseAgentOperation(id, 'run');
   }
 
   /**
@@ -789,6 +892,7 @@ export class Session {
   async readMetadata() {
     const text = await this.persistenceKaos.readText(this.metadataPath);
     this.metadata = JSON.parse(text);
+    this.setAgentProfiles(this.metadata.agentProfiles);
     return this.metadata;
   }
 
@@ -892,6 +996,13 @@ export class Session {
     const parentAgent = parentAgentId !== null ? this.getReadyAgent(parentAgentId) : undefined;
     const cwd = parentAgent?.config.cwd ?? this.toolKaos.getcwd();
     let agent!: Agent;
+    const baseModelProvider = config.modelProvider ?? this.options.providerManager;
+    const modelProvider =
+      baseModelProvider === undefined
+        ? undefined
+        : new ContextWindowModelProvider(baseModelProvider, () =>
+            this.agentProfileContextWindow(type, parentAgent, agent.config.profileName),
+          );
     agent = new Agent({
       ...config,
       type,
@@ -904,7 +1015,7 @@ export class Session {
       mediaOriginalsDir: sessionMediaOriginalsDir(this.options.homedir),
       skills: this.skills,
       rpc: proxyWithExtraPayload(this.rpc, { agentId: id }),
-      modelProvider: this.options.providerManager,
+      modelProvider,
       hookEngine: config.hookEngine ?? this.hookEngine,
       subagentHost: config.subagentHost ?? new SessionSubagentHost(this, id),
       mcp: this.mcp,
@@ -924,6 +1035,20 @@ export class Session {
         ),
     });
     return agent;
+  }
+
+  private agentProfileContextWindow(
+    type: AgentType,
+    parentAgent: Agent | undefined,
+    profileName: string | undefined,
+  ): number | undefined {
+    if (profileName === undefined) return undefined;
+    if (type !== 'sub') return this.agentProfiles[profileName]?.contextWindow;
+    const parentProfileName = parentAgent?.config.profileName;
+    return (
+      this.agentProfiles[parentProfileName ?? this.mainProfileName]?.subagents?.[profileName] ??
+      this.agentProfiles[this.mainProfileName]?.subagents?.[profileName]
+    )?.contextWindow;
   }
 
   private permissionOptions(
@@ -1035,17 +1160,88 @@ export class Session {
     if (meta.type === 'sub') {
       const parentProfileName = parentAgent?.config.profileName;
       return (
-        DEFAULT_AGENT_PROFILES[parentProfileName ?? 'agent']?.subagents?.[profileName] ??
-        DEFAULT_AGENT_PROFILES['agent']?.subagents?.[profileName]
+        this.agentProfiles[parentProfileName ?? this.mainProfileName]?.subagents?.[profileName] ??
+        this.agentProfiles[this.mainProfileName]?.subagents?.[profileName]
       );
     }
-    return DEFAULT_AGENT_PROFILES[profileName];
+    return this.agentProfiles[profileName];
+  }
+
+  getSubagentProfiles(
+    agentId: string,
+    profileName?: string,
+  ): ResolvedAgentProfile['subagents'] | undefined {
+    const resolvedProfileName =
+      profileName ??
+      this.getReadyAgent(agentId)?.config.profileName ??
+      (agentId === 'main' ? this.mainProfileName : undefined);
+    return resolvedProfileName === undefined
+      ? undefined
+      : this.agentProfiles[resolvedProfileName]?.subagents;
+  }
+
+  resolveSubagentProfile(parentProfileName: string | undefined, profileName: string): ResolvedAgentProfile {
+    const profile =
+      this.agentProfiles[parentProfileName ?? this.mainProfileName]?.subagents?.[profileName] ??
+      this.agentProfiles[this.mainProfileName]?.subagents?.[profileName];
+    if (profile === undefined) {
+      throw new Error(`Subagent profile "${profileName}" was not found`);
+    }
+    return profile;
+  }
+
+  private setAgentProfiles(config: SessionAgentProfileConfig | undefined): void {
+    if (config === undefined) {
+      this.agentProfiles = DEFAULT_AGENT_PROFILES;
+      this.mainProfileName = 'agent';
+      this.maxAgents = undefined;
+      return;
+    }
+    const resolved = resolveSessionAgentProfiles(config);
+    this.agentProfiles = resolved.profiles;
+    this.mainProfileName = resolved.config.mainProfile;
+    this.maxAgents = resolved.config.maxAgents;
+    this.metadata = {
+      ...this.metadata,
+      agentProfiles: resolved.config,
+    };
+  }
+
+  private hasReachedAgentCapacity(): boolean {
+    if (this.maxAgents === undefined) return false;
+    const agentIDs = new Set([
+      ...this.agents.keys(),
+      ...Object.keys(this.metadata.agents),
+      ...this.creatingAgentIDs,
+    ]);
+    return agentIDs.size >= this.maxAgents;
+  }
+
+  private claimAgentRemoval(id: string): boolean {
+    if (this.agentOperationClaims.has(id)) return false;
+    this.agentOperationClaims.set(id, 'remove');
+    return true;
+  }
+
+  private releaseAgentOperation(id: string, operation: 'run' | 'remove'): void {
+    if (this.agentOperationClaims.get(id) === operation) {
+      this.agentOperationClaims.delete(id);
+    }
+  }
+
+  private requireMainProfile(): ResolvedAgentProfile {
+    const profile = this.agentProfiles[this.mainProfileName];
+    if (profile === undefined) {
+      throw new Error(`Session main agent profile "${this.mainProfileName}" was not found`);
+    }
+    return profile;
   }
 
   private nextGeneratedAgentId(): string {
     while (true) {
       const id = `agent-${this.agentIdCounter++}`;
       if (this.agents.has(id)) continue;
+      if (this.creatingAgentIDs.has(id)) continue;
       if (this.metadata.agents[id] !== undefined) continue;
       return id;
     }

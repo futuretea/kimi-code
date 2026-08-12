@@ -199,9 +199,10 @@ export class EventPump implements HarnessEventSink {
     state.lastFlushAt = Date.now();
     for (const event of events) {
       state.seq += 1;
-      state.turn?.write(event);
+      const delivered = { ...event, frame_id: String(state.seq) };
+      state.turn?.write(delivered);
       for (const subscriber of state.subscribers) {
-        subscriber.publish(state.seq, event);
+        subscriber.publish(state.seq, delivered);
       }
     }
   }

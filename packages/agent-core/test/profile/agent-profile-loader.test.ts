@@ -9,6 +9,7 @@ import {
   loadAgentProfilesFromDir,
   loadAgentProfilesFromSources,
   resolveAgentProfiles,
+  resolveSessionAgentProfiles,
   type SystemPromptContext,
 } from '../../src/profile';
 import { SessionSkillRegistry, type SkillDefinition } from '../../src/skill';
@@ -151,6 +152,58 @@ tools:
         'profile/default/agent.yaml': 'name: agent\nsystemPromptPath: ./missing.md\n',
       }),
     ).toThrow(/Embedded agent profile source missing: profile\/default\/missing\.md/);
+  });
+});
+
+describe('session agent profile registries', () => {
+  it('resolves an immutable coordinator and its declared child profiles', () => {
+    const registry = resolveSessionAgentProfiles({
+      mainProfile: 'coordinator',
+      profiles: [
+        {
+          name: 'coordinator',
+          systemPromptTemplate: 'Coordinate the declared workers.',
+          tools: ['Agent'],
+          subagents: {
+            reviewer: { description: 'Review implementation changes.' },
+          },
+        },
+        {
+          name: 'reviewer',
+          systemPromptTemplate: 'Review only.',
+          tools: ['Read'],
+          modelAlias: 'reviewer-model',
+          thinkingEffort: 'low',
+          contextWindow: 64000,
+        },
+      ],
+    });
+
+    expect(registry.mainProfile.name).toBe('coordinator');
+    expect(registry.mainProfile.subagents?.['reviewer']?.tools).toEqual(['Read']);
+    expect(registry.mainProfile.subagents?.['reviewer']).toMatchObject({
+      modelAlias: 'reviewer-model',
+      thinkingEffort: 'low',
+      contextWindow: 64000,
+    });
+    expect(registry.config).toEqual({
+      mainProfile: 'coordinator',
+      profiles: expect.any(Array),
+    });
+  });
+
+  it('rejects path-backed templates because a persisted Session needs prompt text', () => {
+    expect(() =>
+      resolveSessionAgentProfiles({
+        mainProfile: 'coordinator',
+        profiles: [
+          {
+            name: 'coordinator',
+            systemPromptPath: './mutable-on-disk.md',
+          },
+        ],
+      }),
+    ).toThrow(/systemPromptTemplate/);
   });
 });
 

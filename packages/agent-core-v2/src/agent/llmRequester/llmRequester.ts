@@ -6,6 +6,24 @@ import type { TokenUsage } from '#/app/llmProtocol/usage';
 import type { LLMRequestTrace } from '#/app/llmProtocol/requestTrace';
 import type { LogContext } from '#/_base/log/log';
 
+export interface ModelRequestStartedEvent {
+  readonly type: 'model.request.started';
+  readonly requestId: string;
+}
+
+export interface ModelRequestEndedEvent {
+  readonly type: 'model.request.ended';
+  readonly requestId: string;
+  readonly isError: boolean;
+}
+
+declare module '#/app/event/eventBus' {
+  interface DomainEventMap {
+    'model.request.started': ModelRequestStartedEvent;
+    'model.request.ended': ModelRequestEndedEvent;
+  }
+}
+
 export type LLMRequestLogFields = Readonly<LogContext>;
 
 export type LLMRequestSource =

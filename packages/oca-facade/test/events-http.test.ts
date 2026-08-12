@@ -7,6 +7,7 @@ import {
   collectNdjson,
   expectErrorEnvelope,
   getJson,
+  nextNdjsonFrame,
   nextSseFrame,
   openEventStream,
   postJson,
@@ -82,6 +83,36 @@ describe('events stream route', () => {
     // The NDJSON terminal frame is not an SSE event.
     const frames = await collectNdjson(prompt.reader);
     expect(frames.at(-1)).toEqual({ type: 'prompt_done', stop_reason: 'completed' });
+    sse.reader.close();
+  });
+
+  it('uses one frame identity for the SSE and inline prompt channels', async () => {
+    handle = await bootTestServer();
+    fake().setScript('ses_1', script('shared identity'));
+    await createSession();
+
+    const sse = await openEventStream(base(), 'ses_1');
+    const prompt = await postStream(base(), '/sessions/ses_1/prompt', { content: 'go' });
+
+    const sseFrames = [
+      await nextSseFrame(sse.reader),
+      await nextSseFrame(sse.reader),
+      await nextSseFrame(sse.reader),
+    ];
+    const inlineFrames = [
+      await nextNdjsonFrame(prompt.reader),
+      await nextNdjsonFrame(prompt.reader),
+      await nextNdjsonFrame(prompt.reader),
+    ];
+
+    const ssePayloads = sseFrames.map((frame) => asFrame(JSON.parse(frame.data)));
+    expect(sseFrames.map((frame) => frame.id)).toEqual(['1', '2', '3']);
+    expect(ssePayloads.map((frame) => frame['frame_id'])).toEqual(['1', '2', '3']);
+    expect(inlineFrames.map((frame) => asFrame(frame)['frame_id'])).toEqual(['1', '2', '3']);
+    expect(inlineFrames).toEqual(ssePayloads);
+
+    const terminal = await nextNdjsonFrame(prompt.reader);
+    expect(terminal).toEqual({ type: 'prompt_done', stop_reason: 'completed' });
     sse.reader.close();
   });
 

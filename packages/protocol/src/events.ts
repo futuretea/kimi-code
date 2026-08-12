@@ -491,6 +491,19 @@ export interface AgentStatusUpdatedEvent {
   readonly phase?: AgentPhase;
 }
 
+/** One actual provider request emitted by the agent runtime. */
+export interface ModelRequestStartedEvent {
+  readonly type: 'model.request.started';
+  readonly requestId: string;
+}
+
+/** Terminal outcome for one actual provider request. */
+export interface ModelRequestEndedEvent {
+  readonly type: 'model.request.ended';
+  readonly requestId: string;
+  readonly isError: boolean;
+}
+
 export interface SessionMetaUpdatedEvent {
   readonly type: 'session.meta.updated';
   readonly title?: string;
@@ -888,6 +901,8 @@ export type AgentEvent =
   | ErrorEvent
   | WarningEvent
   | AgentStatusUpdatedEvent
+  | ModelRequestStartedEvent
+  | ModelRequestEndedEvent
   | SessionMetaUpdatedEvent
   | SessionCreatedEvent
   | WorkspaceCreatedEvent
@@ -1373,6 +1388,17 @@ export const agentStatusUpdatedEventSchema = z.object({
   phase: agentPhaseSchema.optional(),
 }) satisfies z.ZodType<AgentStatusUpdatedEvent>;
 
+export const modelRequestStartedEventSchema = z.object({
+  type: z.literal('model.request.started'),
+  requestId: z.string().min(1),
+}) satisfies z.ZodType<ModelRequestStartedEvent>;
+
+export const modelRequestEndedEventSchema = z.object({
+  type: z.literal('model.request.ended'),
+  requestId: z.string().min(1),
+  isError: z.boolean(),
+}) satisfies z.ZodType<ModelRequestEndedEvent>;
+
 export const sessionMetaUpdatedEventSchema = z.object({
   type: z.literal('session.meta.updated'),
   title: z.string().optional(),
@@ -1734,6 +1760,8 @@ export const agentEventSchema = z.discriminatedUnion('type', [
   errorEventSchema,
   warningEventSchema,
   agentStatusUpdatedEventSchema,
+  modelRequestStartedEventSchema,
+  modelRequestEndedEventSchema,
   sessionMetaUpdatedEventSchema,
   sessionCreatedEventSchema,
   workspaceCreatedEventSchema,

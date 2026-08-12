@@ -12,6 +12,7 @@ import { escapeXmlAttr } from '#/_base/utils/xml-escape';
 import type { AgentTaskInfo } from '#/agent/task/task';
 import { IAgentBlobService } from '#/agent/blob/agentBlobService';
 import { AgentBlobServiceImpl } from '#/agent/blob/agentBlobServiceImpl';
+import { AgentActivityView } from '#/agent/activityView/activityViewService';
 import { IHostEnvironment } from '#/os/interface/hostEnvironment';
 import { IAgentContextInjectorService } from '#/agent/contextInjector/contextInjector';
 import type { ContextMessage } from '#/agent/contextMemory/types';
@@ -1031,6 +1032,10 @@ export class AgentTestContext {
             reg.defineDescriptor(
               IAgentFullCompactionService,
               new SyncDescriptor(AgentFullCompactionService),
+            );
+            reg.defineDescriptor(
+              IAgentActivityView,
+              new SyncDescriptor(AgentActivityView),
             );
             reg.defineDescriptor(
               IAgentPermissionRulesService,

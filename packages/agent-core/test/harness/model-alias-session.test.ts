@@ -116,6 +116,24 @@ default_effort = "${defaultEffort}"
     );
   });
 
+  it('applies a create-time context window only to that session', async () => {
+    const rpc = await createTestRpc();
+    const constrained = await rpc.createSession({
+      workDir,
+      model: 'kimi-code/kimi-for-coding',
+      contextWindow: 262144,
+    });
+    const constrainedConfig = await rpc.getConfig({ sessionId: constrained.id, agentId: 'main' });
+    expect(constrainedConfig.modelCapabilities?.max_context_tokens).toBe(262144);
+
+    const defaulted = await rpc.createSession({
+      workDir,
+      model: 'kimi-code/kimi-for-coding',
+    });
+    const defaultedConfig = await rpc.getConfig({ sessionId: defaulted.id, agentId: 'main' });
+    expect(defaultedConfig.modelCapabilities?.max_context_tokens).toBe(1_000_000);
+  });
+
   it('resolves the initial effort with provider context for an Anthropic-typed provider', async () => {
     // The model name is unknown to the Anthropic profile matrix and the alias
     // declares no protocol/capabilities itself; the provider's

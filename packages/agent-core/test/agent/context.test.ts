@@ -60,6 +60,61 @@ describe('Agent context', () => {
     expect(ctx.agent.context.messages.some((message) => 'origin' in message)).toBe(false);
   });
 
+  it('appends a prompt system message after its user message before model generation', async () => {
+    const ctx = testAgent();
+    ctx.configure();
+    ctx.mockNextResponse({ type: 'text', text: 'acknowledged' });
+
+    await ctx.rpc.prompt({
+      input: [{ type: 'text', text: 'summarize the release' }],
+      systemMessage: 'answer in one paragraph',
+    });
+    await ctx.untilTurnEnd();
+
+    const llmInput = JSON.stringify(ctx.lastLlmInput().input);
+    expect(llmInput.indexOf('summarize the release')).toBeLessThan(
+      llmInput.indexOf('answer in one paragraph'),
+    );
+    expect(ctx.agent.context.history.slice(0, 2).map(({ origin }) => origin)).toEqual([
+      { kind: 'user' },
+      { kind: 'injection', variant: 'system_message' },
+    ]);
+  });
+
+  it('defers a tool-result system message until the tool exchange closes', async () => {
+    const ctx = testAgent();
+    ctx.configure();
+    ctx.appendContextPartiallyResolvedParallelToolExchange();
+
+    await ctx.rpc.appendSystemMessage({ content: 'use the result as evidence' });
+    expect(ctx.agent.context.history.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+      'tool',
+    ]);
+
+    ctx.dispatch({
+      type: 'context.append_loop_event',
+      event: {
+        type: 'tool.result',
+        parentUuid: 'call_open_two',
+        toolCallId: 'call_open_two',
+        result: { output: 'two result' },
+      },
+    });
+
+    expect(ctx.agent.context.history.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+      'tool',
+      'tool',
+      'user',
+    ]);
+    expect(ctx.agent.context.history.at(-1)?.content).toEqual([
+      { type: 'text', text: '<system-reminder>\nuse the result as evidence\n</system-reminder>' },
+    ]);
+  });
+
   it('preserves tool call extras (Gemini thought_signature) through to projection', () => {
     // Regression: Gemini 3 requires the thought_signature returned on a
     // functionCall to be echoed back when the call is re-sent in the next turn.

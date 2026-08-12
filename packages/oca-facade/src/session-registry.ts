@@ -9,8 +9,20 @@ export type SessionStatus = 'active' | 'closed' | 'failed';
 
 export type PendingCallKind = 'approval' | 'question' | 'external_tool';
 
-/** `unknown` marks calls left unconfirmed by a crash; they are never replayed. */
-export type PendingCallState = 'pending' | 'unknown';
+/** `unknown` is public; `settled` is a journal-private terminal tombstone. */
+export type PendingCallState = 'pending' | 'unknown' | 'settled';
+
+export type ToolResolution = 'completed' | 'failed' | 'skipped';
+
+/** Durable progress of an external-tool result through runtime delivery. */
+export type ToolResultDeliveryState = 'staged' | 'delivering' | 'delivered';
+
+/** A validated tool result staged durably before runtime delivery. */
+export interface StagedToolResult {
+  readonly resolution: ToolResolution;
+  readonly output?: string;
+  readonly systemMessage?: string;
+}
 
 export type StopReason = 'completed' | 'cancelled' | 'failed' | 'blocked';
 
@@ -18,6 +30,10 @@ export interface PendingCall {
   id: string;
   kind: PendingCallKind;
   state: PendingCallState;
+  /** Journal-private external-tool delivery state; omitted from API projections. */
+  stagedToolResult?: StagedToolResult;
+  /** Journal-private handoff progress; omitted from API projections. */
+  toolResultDeliveryState?: ToolResultDeliveryState;
 }
 
 export interface PromptDoneFrame {
@@ -40,6 +56,7 @@ export interface AcceptedResult {
 
 export interface StartPromptInput {
   content: string;
+  systemMessage?: string;
   idempotencyKey?: string;
 }
 
@@ -60,23 +77,24 @@ export interface QuestionAnswerInput {
   answers: Record<string, string | true>;
 }
 
-export type ToolResolution = 'completed' | 'failed' | 'skipped';
-
 export interface ToolResultInput {
   toolCallId: string;
   resolution: ToolResolution;
   output?: string;
+  systemMessage?: string;
 }
 
 export type CallResolution =
   | { kind: 'approval'; decision: ApprovalDecision; feedback?: string }
   | { kind: 'question'; answers: Record<string, string | true> }
-  | { kind: 'external_tool'; resolution: ToolResolution; output?: string };
+  | ({ kind: 'external_tool' } & StagedToolResult);
 
 export interface PendingCallRegistration {
   call: PendingCall;
-  /** Resolves once the matching response is accepted by the registry. */
+  /** Approval and question handlers await their matching response here. */
   resolution: Promise<CallResolution>;
+  /** A resumed handler consumes a staged result without a second request event. */
+  replayed?: boolean;
 }
 
 /** Journal-recovered state of a session (recovery hook result). */
@@ -90,26 +108,47 @@ export type JournalRecovery = (sessionId: string) => Promise<RecoveredSession>;
  * Facade-owned durable record of pending calls, keyed by session id. The
  * journal is the recovery authority: registration persists first and is
  * fail-closed (a call the journal cannot hold is never tracked, so no
- * request is emitted for it), settlement removes the record, and recovery
- * rebuilds the pending table from whatever the journal still holds.
+ * request is emitted for it). A tool result is staged before it is handed to
+ * the runtime; only a successful handoff removes the record. Recovery rebuilds
+ * the pending table from whatever the journal still holds.
  */
 export interface PendingCallJournal {
   register(sessionId: string, call: PendingCall): void;
+  stageToolResult(sessionId: string, callId: string, result: StagedToolResult): void;
+  setToolResultDeliveryState(
+    sessionId: string,
+    callId: string,
+    state: ToolResultDeliveryState,
+  ): void;
+  settleUnknownToolCall(sessionId: string, callId: string): void;
   settle(sessionId: string, callId: string): void;
   read(sessionId: string): PendingCall[];
 }
 
 interface TurnState {
   content: string;
+  systemMessage?: string;
   idempotencyKey?: string;
 }
 
 type IdempotencyRecord =
-  | { state: 'in_flight'; content: string }
-  | { state: 'done'; content: string; frame: PromptDoneFrame };
+  | { state: 'in_flight'; content: string; systemMessage?: string }
+  | { state: 'done'; content: string; systemMessage?: string; frame: PromptDoneFrame };
 
 interface PendingCallEntry extends PendingCall {
   settle?: (resolution: CallResolution) => void;
+  handlerRegistered?: boolean;
+  delivery?: ToolResultDelivery;
+  deliveryWaiter?: (delivery: ToolResultDelivery) => void;
+  requiresRetry?: boolean;
+}
+
+interface ToolResultDelivery {
+  readonly result: StagedToolResult;
+  readonly completion: Promise<void>;
+  readonly settle: () => void;
+  readonly fail: (error: FacadeError) => void;
+  claimed: boolean;
 }
 
 interface SessionEntry {
@@ -119,6 +158,12 @@ interface SessionEntry {
   /** Scoped by session: idempotency key -> first prompt outcome. */
   idempotency: Map<string, IdempotencyRecord>;
   pendingCalls: Map<string, PendingCallEntry>;
+  settledToolCallIDs: Set<string>;
+}
+
+interface RecoveredPendingCalls {
+  pendingCalls: PendingCall[];
+  settledToolCallIDs: Set<string>;
 }
 
 /**
@@ -153,6 +198,7 @@ export class SessionRegistry {
       status: 'active',
       idempotency: new Map(),
       pendingCalls: new Map(),
+      settledToolCallIDs: new Set(),
     };
     this.sessions.set(sessionId, entry);
     return { sessionId, status: entry.status };
@@ -171,11 +217,12 @@ export class SessionRegistry {
     }
     // failed: only the journal can bring the session back.
     const recovered = await this.runRecoveryHook(sessionId, 'session_resume_failed');
-    const pendingCalls = this.recoveredPendingCalls(sessionId, recovered);
+    const recoveredCalls = this.recoveredPendingCalls(sessionId, recovered);
     entry.pendingCalls.clear();
-    for (const call of pendingCalls) {
-      entry.pendingCalls.set(call.id, { ...call });
+    for (const call of recoveredCalls.pendingCalls) {
+      entry.pendingCalls.set(call.id, this.pendingCallEntry(call));
     }
+    entry.settledToolCallIDs = recoveredCalls.settledToolCallIDs;
     entry.status = 'active';
     return this.resumeResult(entry);
   }
@@ -191,12 +238,13 @@ export class SessionRegistry {
    */
   private async recoverMissingEntry(sessionId: string): Promise<ResumeResult> {
     const recovered = await this.runRecoveryHook(sessionId, 'session_not_found');
-    const pendingCalls = this.recoveredPendingCalls(sessionId, recovered);
+    const recoveredCalls = this.recoveredPendingCalls(sessionId, recovered);
     const entry: SessionEntry = {
       id: sessionId,
       status: 'active',
       idempotency: new Map(),
-      pendingCalls: new Map(pendingCalls.map((call) => [call.id, { ...call }])),
+      pendingCalls: new Map(recoveredCalls.pendingCalls.map((call) => [call.id, this.pendingCallEntry(call)])),
+      settledToolCallIDs: recoveredCalls.settledToolCallIDs,
     };
     this.sessions.set(sessionId, entry);
     return this.resumeResult(entry);
@@ -225,18 +273,17 @@ export class SessionRegistry {
   /**
    * Rebuilds the pending table for a recovered session. With a journal
    * configured the journal is the authority: approvals and questions are
-   * auto-skipped (their turn died with the process, so they are dropped) and
-   * external tool calls are reported `unknown` until the user settles them.
-   * The journal holds only unsettled calls, so an empty journal carries no
-   * information about whether the session exists. Without a journal the
-   * hook's own list is used as-is.
+   * auto-skipped (their turn died with the process, so they are dropped).
+   * An unconfirmed external call is reported `unknown`; only a result that
+   * never started runtime delivery remains pending for an explicit replay.
+   * Without a journal the hook's own list is used as-is.
    */
   private recoveredPendingCalls(
     sessionId: string,
     recovered: RecoveredSession,
-  ): PendingCall[] {
+  ): RecoveredPendingCalls {
     if (!this.pendingJournal) {
-      return recovered.pendingCalls;
+      return { pendingCalls: recovered.pendingCalls, settledToolCallIDs: new Set() };
     }
     let journaled: PendingCall[];
     try {
@@ -245,9 +292,31 @@ export class SessionRegistry {
       // A corrupt journal is a deterministic recovery failure, never skipped.
       throw new FacadeError('session_resume_failed');
     }
-    return journaled
-      .filter((call) => call.kind === 'external_tool')
-      .map((call) => ({ id: call.id, kind: call.kind, state: 'unknown' as const }));
+    const settledToolCallIDs = new Set<string>();
+    const pendingCalls = journaled.flatMap<PendingCall>((call): PendingCall[] => {
+      if (call.kind !== 'external_tool') return [];
+      if (call.state === 'settled') {
+        settledToolCallIDs.add(call.id);
+        return [];
+      }
+      if (call.stagedToolResult === undefined) {
+        return [{ id: call.id, kind: call.kind, state: 'unknown' as const }];
+      }
+      if (call.toolResultDeliveryState === 'staged') {
+        return [{
+          id: call.id,
+          kind: call.kind,
+          state: 'pending' as const,
+          stagedToolResult: call.stagedToolResult,
+          toolResultDeliveryState: 'staged' as const,
+        }];
+      }
+      // `delivering` crossed the runtime side-effect boundary, and `delivered`
+      // may have persisted before the reverse-RPC response reached Kimi. Both
+      // states remain visible for explicit settlement but are never replayed.
+      return [{ id: call.id, kind: call.kind, state: 'unknown' as const }];
+    });
+    return { pendingCalls, settledToolCallIDs };
   }
 
   startPrompt(sessionId: string, input: StartPromptInput): StartPromptResult {
@@ -264,7 +333,7 @@ export class SessionRegistry {
     if (key) {
       const record = entry.idempotency.get(key);
       if (record?.state === 'done') {
-        if (record.content !== input.content) {
+        if (record.content !== input.content || record.systemMessage !== input.systemMessage) {
           throw new FacadeError('session_state_conflict');
         }
         return { status: 'replayed', frame: record.frame };
@@ -272,9 +341,9 @@ export class SessionRegistry {
       // A lingering `in_flight` record without a current turn is impossible:
       // turn state and in-flight records are always cleared together.
     }
-    entry.currentTurn = { content: input.content, idempotencyKey: key };
+    entry.currentTurn = { content: input.content, systemMessage: input.systemMessage, idempotencyKey: key };
     if (key) {
-      entry.idempotency.set(key, { state: 'in_flight', content: input.content });
+      entry.idempotency.set(key, { state: 'in_flight', content: input.content, systemMessage: input.systemMessage });
     }
     return { status: 'started' };
   }
@@ -290,6 +359,7 @@ export class SessionRegistry {
       entry.idempotency.set(turn.idempotencyKey, {
         state: 'done',
         content: turn.content,
+        systemMessage: turn.systemMessage,
         frame,
       });
     }
@@ -312,6 +382,7 @@ export class SessionRegistry {
         entry.idempotency.set(entry.currentTurn.idempotencyKey, {
           state: 'done',
           content: entry.currentTurn.content,
+          systemMessage: entry.currentTurn.systemMessage,
           frame: { type: 'prompt_done', stop_reason: 'cancelled' },
         });
       }
@@ -345,7 +416,28 @@ export class SessionRegistry {
     if (entry.status !== 'active') {
       throw new FacadeError('session_state_conflict');
     }
-    if (entry.pendingCalls.has(call.id)) {
+    if (call.kind === 'external_tool' && entry.settledToolCallIDs.has(call.id)) {
+      throw new FacadeError('request_not_pending');
+    }
+    const existing = entry.pendingCalls.get(call.id);
+    if (existing !== undefined) {
+      // A resumed runtime may replay exactly one already-staged external tool
+      // call. It consumes the journaled result without emitting another
+      // external_tool_request.
+      if (
+        call.kind === 'external_tool' &&
+        existing.kind === 'external_tool' &&
+        existing.stagedToolResult !== undefined &&
+        existing.toolResultDeliveryState === 'staged' &&
+        existing.handlerRegistered !== true
+      ) {
+        existing.handlerRegistered = true;
+        return {
+          call: this.publicPendingCall(existing),
+          resolution: Promise.resolve({ kind: 'external_tool', ...existing.stagedToolResult }),
+          replayed: true,
+        };
+      }
       throw new FacadeError('internal_error');
     }
     // Fail-closed: the call is journaled before it is tracked, so a call the
@@ -361,9 +453,14 @@ export class SessionRegistry {
     const resolution = new Promise<CallResolution>((resolve) => {
       settle = resolve;
     });
-    const stored: PendingCallEntry = { ...call, state: 'pending', settle };
+    const stored: PendingCallEntry = {
+      ...call,
+      state: 'pending',
+      settle,
+      ...(call.kind === 'external_tool' ? { handlerRegistered: true } : {}),
+    };
     entry.pendingCalls.set(call.id, stored);
-    return { call: { id: stored.id, kind: stored.kind, state: stored.state }, resolution };
+    return { call: this.publicPendingCall(stored), resolution };
   }
 
   resolveApproval(sessionId: string, input: ApprovalInput): AcceptedResult {
@@ -380,7 +477,7 @@ export class SessionRegistry {
     return { accepted: true };
   }
 
-  resolveToolResult(sessionId: string, input: ToolResultInput): AcceptedResult {
+  async resolveToolResult(sessionId: string, input: ToolResultInput): Promise<AcceptedResult> {
     const { entry, call } = this.lookupPendingCall(
       sessionId,
       input.toolCallId,
@@ -391,14 +488,137 @@ export class SessionRegistry {
       // Invalid resolutions leave the call pending so a corrected retry is accepted.
       throw new FacadeError('invalid_request');
     }
-    this.settlePendingCall(entry, call);
-    call.settle?.({ kind: 'external_tool', resolution: input.resolution, output: input.output });
+    // A recovered unknown call belongs to a dead turn. It can only be
+    // explicitly skipped; no live runtime handler remains to receive it.
+    if (call.state === 'unknown') {
+      this.settleUnknownToolCall(entry, call);
+      return { accepted: true };
+    }
+
+    const result: StagedToolResult = {
+      resolution: input.resolution,
+      ...(input.output !== undefined ? { output: input.output } : {}),
+      ...(input.systemMessage !== undefined ? { systemMessage: input.systemMessage } : {}),
+    };
+    if (call.stagedToolResult !== undefined) {
+      if (!sameToolResult(call.stagedToolResult, result)) {
+        throw new FacadeError('session_state_conflict');
+      }
+      // A matching delivery is already being handed to the one waiting core
+      // call. Do not turn a concurrent duplicate POST into a second accepted
+      // response while the original handoff remains in flight.
+      if (call.delivery !== undefined) {
+        throw new FacadeError('request_not_pending');
+      }
+    } else {
+      // Persist before waking the runtime handler. A process loss from here
+      // onward leaves a replayable result instead of an unknown call.
+      if (this.pendingJournal) {
+        try {
+          this.pendingJournal.stageToolResult(entry.id, call.id, result);
+        } catch {
+          throw new FacadeError('internal_error');
+        }
+      }
+      call.stagedToolResult = result;
+      call.toolResultDeliveryState = 'staged';
+    }
+
+    call.requiresRetry = false;
+    const delivery = this.ensureToolResultDelivery(call);
+    this.offerToolResultDelivery(call, delivery);
+    await delivery.completion;
     return { accepted: true };
+  }
+
+  /** Waits for the next staged result for a live external-tool handler. */
+  waitForToolResultDelivery(sessionId: string, toolCallId: string): Promise<ToolResultDelivery> {
+    const { call } = this.lookupPendingCall(sessionId, toolCallId, 'external_tool');
+    if (call.state !== 'pending') {
+      throw new FacadeError('request_not_pending');
+    }
+    if (call.delivery !== undefined) {
+      if (call.delivery.claimed) {
+        throw new FacadeError('internal_error');
+      }
+      call.delivery.claimed = true;
+      return Promise.resolve(call.delivery);
+    }
+    if (call.stagedToolResult !== undefined) {
+      if (call.requiresRetry === true) {
+        return new Promise<ToolResultDelivery>((resolve) => {
+          call.deliveryWaiter = (delivery) => {
+            delivery.claimed = true;
+            resolve(delivery);
+          };
+        });
+      }
+      const delivery = this.ensureToolResultDelivery(call);
+      delivery.claimed = true;
+      return Promise.resolve(delivery);
+    }
+    return new Promise<ToolResultDelivery>((resolve) => {
+      call.deliveryWaiter = (delivery) => {
+        delivery.claimed = true;
+        resolve(delivery);
+      };
+    });
+  }
+
+  /** Completes the durable handoff after the runtime accepts the system message. */
+  completeToolResultDelivery(sessionId: string, toolCallId: string, delivery: ToolResultDelivery): void {
+    const { entry, call } = this.lookupPendingCall(sessionId, toolCallId, 'external_tool');
+    if (call.delivery !== delivery || call.toolResultDeliveryState !== 'delivering') {
+      throw new FacadeError('internal_error');
+    }
+    this.setToolResultDeliveryState(entry, call, 'delivered');
+    this.settlePendingCall(entry, call);
+    delivery.settle();
+  }
+
+  /** Persists the point after which replay would duplicate a runtime side effect. */
+  beginToolResultDelivery(sessionId: string, toolCallId: string, delivery: ToolResultDelivery): void {
+    const { entry, call } = this.lookupPendingCall(sessionId, toolCallId, 'external_tool');
+    if (call.delivery !== delivery || call.toolResultDeliveryState !== 'staged') {
+      throw new FacadeError('internal_error');
+    }
+    this.setToolResultDeliveryState(entry, call, 'delivering');
+  }
+
+  /** Keeps the staged result durable and waits for an explicit retry. */
+  failToolResultDelivery(sessionId: string, toolCallId: string, delivery: ToolResultDelivery): void {
+    const { entry, call } = this.lookupPendingCall(sessionId, toolCallId, 'external_tool');
+    if (
+      call.delivery !== delivery ||
+      (call.toolResultDeliveryState !== 'delivering' && call.toolResultDeliveryState !== 'staged')
+    ) {
+      throw new FacadeError('internal_error');
+    }
+    if (call.toolResultDeliveryState === 'delivering') {
+      this.setToolResultDeliveryState(entry, call, 'staged');
+    }
+    call.delivery = undefined;
+    call.requiresRetry = true;
+    delivery.fail(new FacadeError('internal_error'));
+  }
+
+  /** Stops a result that may have crossed the runtime side-effect boundary. */
+  failUncertainToolResultDelivery(
+    sessionId: string,
+    toolCallId: string,
+    delivery: ToolResultDelivery,
+  ): void {
+    const { call } = this.lookupPendingCall(sessionId, toolCallId, 'external_tool');
+    if (call.delivery !== delivery) {
+      throw new FacadeError('internal_error');
+    }
+    this.markFailed(sessionId);
+    delivery.fail(new FacadeError('internal_error'));
   }
 
   listPendingCalls(sessionId: string): PendingCall[] {
     const entry = this.requireEntry(sessionId);
-    return [...entry.pendingCalls.values()].map(({ id, kind, state }) => ({ id, kind, state }));
+    return [...entry.pendingCalls.values()].map((call) => this.publicPendingCall(call));
   }
 
   assertEventStreamAllowed(sessionId: string): void {
@@ -422,6 +642,49 @@ export class SessionRegistry {
       status: entry.status,
       pendingCalls: this.listPendingCalls(entry.id),
     };
+  }
+
+  private pendingCallEntry(call: PendingCall): PendingCallEntry {
+    return {
+      id: call.id,
+      kind: call.kind,
+      state: call.state,
+      ...(call.stagedToolResult !== undefined ? { stagedToolResult: call.stagedToolResult } : {}),
+      ...(call.toolResultDeliveryState !== undefined
+        ? { toolResultDeliveryState: call.toolResultDeliveryState }
+        : {}),
+    };
+  }
+
+  private publicPendingCall(call: PendingCall): PendingCall {
+    return { id: call.id, kind: call.kind, state: call.state };
+  }
+
+  private ensureToolResultDelivery(call: PendingCallEntry): ToolResultDelivery {
+    if (call.delivery !== undefined) return call.delivery;
+    const result = call.stagedToolResult;
+    if (result === undefined || call.toolResultDeliveryState !== 'staged') {
+      throw new FacadeError('internal_error');
+    }
+    let settle!: () => void;
+    let fail!: (error: FacadeError) => void;
+    const completion = new Promise<void>((resolve, reject) => {
+      settle = resolve;
+      fail = reject;
+    });
+    // A recovered staged result may be retried before a route awaits the
+    // completion promise. Observe that rejection until a caller joins it.
+    void completion.catch(() => undefined);
+    const delivery: ToolResultDelivery = { result, completion, settle, fail, claimed: false };
+    call.delivery = delivery;
+    return delivery;
+  }
+
+  private offerToolResultDelivery(call: PendingCallEntry, delivery: ToolResultDelivery): void {
+    const waiter = call.deliveryWaiter;
+    if (waiter === undefined) return;
+    call.deliveryWaiter = undefined;
+    waiter(delivery);
   }
 
   /**
@@ -456,10 +719,9 @@ export class SessionRegistry {
   }
 
   /**
-   * Terminal settlement: the call leaves the pending table and its journal
-   * record is removed. A journal delete failure is tolerated — the lingering
-   * record is recovered as `unknown` / auto-skipped later, which is the same
-   * crash window the journal already covers.
+   * Terminal settlement: once the journal has recorded `delivered`, the call
+   * leaves the pending table and its record is removed. A delete failure leaves
+   * a durable delivered tombstone, which recovery deliberately never replays.
    */
   private settlePendingCall(entry: SessionEntry, call: PendingCallEntry): void {
     entry.pendingCalls.delete(call.id);
@@ -467,8 +729,43 @@ export class SessionRegistry {
       try {
         this.pendingJournal.settle(entry.id, call.id);
       } catch {
-        // Tolerated: recovery closes the window.
+        // Tolerated: the durable delivered tombstone prevents replay.
       }
     }
   }
+
+  private settleUnknownToolCall(entry: SessionEntry, call: PendingCallEntry): void {
+    if (this.pendingJournal) {
+      try {
+        this.pendingJournal.settleUnknownToolCall(entry.id, call.id);
+      } catch {
+        throw new FacadeError('internal_error');
+      }
+    }
+    entry.pendingCalls.delete(call.id);
+    entry.settledToolCallIDs.add(call.id);
+  }
+
+  private setToolResultDeliveryState(
+    entry: SessionEntry,
+    call: PendingCallEntry,
+    state: ToolResultDeliveryState,
+  ): void {
+    if (this.pendingJournal) {
+      try {
+        this.pendingJournal.setToolResultDeliveryState(entry.id, call.id, state);
+      } catch {
+        throw new FacadeError('internal_error');
+      }
+    }
+    call.toolResultDeliveryState = state;
+  }
+}
+
+function sameToolResult(left: StagedToolResult, right: StagedToolResult): boolean {
+  return (
+    left.resolution === right.resolution &&
+    left.output === right.output &&
+    left.systemMessage === right.systemMessage
+  );
 }

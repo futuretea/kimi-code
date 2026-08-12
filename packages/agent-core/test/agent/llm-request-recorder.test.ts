@@ -127,6 +127,59 @@ describe('llm request trace records', () => {
     expect(request.messageCount).toBe(1);
   });
 
+  it('emits paired model request lifecycle events for success and failure', async () => {
+    const success = testAgent();
+    success.configure();
+    success.mockNextResponse({ type: 'text', text: 'ok' });
+
+    await success.agent.generate(
+      success.agent.config.provider,
+      'prompt',
+      [],
+      [{ role: 'user', content: [{ type: 'text', text: 'hi' }], toolCalls: [] }],
+      undefined,
+      { signal: new AbortController().signal },
+    );
+
+    const successEvents = success.allEvents.filter(
+      (event) => event.type === '[rpc]' && event.event.startsWith('model.request.'),
+    );
+    expect(successEvents).toHaveLength(2);
+    const successStart = successEvents[0]!.args as { requestId: string };
+    expect(successEvents[1]!.args).toEqual({
+      requestId: successStart.requestId,
+      isError: false,
+    });
+
+    const failure = testAgent({
+      generate: async () => {
+        throw new Error('provider failed');
+      },
+    });
+    failure.configure();
+
+    await expect(
+      failure.agent.generate(
+        failure.agent.config.provider,
+        'prompt',
+        [],
+        [{ role: 'user', content: [{ type: 'text', text: 'hi' }], toolCalls: [] }],
+        undefined,
+        { signal: new AbortController().signal },
+      ),
+    ).rejects.toThrow('provider failed');
+
+    const failureEvents = failure.allEvents.filter(
+      (event) => event.type === '[rpc]' && event.event.startsWith('model.request.'),
+    );
+    expect(failureEvents).toHaveLength(2);
+    const failureStart = failureEvents[0]!.args as { requestId: string };
+    expect(failureEvents[1]!.args).toEqual({
+      requestId: failureStart.requestId,
+      isError: true,
+    });
+  });
+
   it('records the effective kimi thinking effort and keep passthrough', async () => {
     vi.stubEnv('KIMI_MODEL_THINKING_EFFORT', 'max');
     try {
@@ -183,6 +236,11 @@ describe('llm request trace records', () => {
     expect(persistence.records).toHaveLength(recordCountBefore);
     expect(recordsOf(persistence, 'llm.request')).toHaveLength(0);
     expect(recordsOf(persistence, 'llm.tools_snapshot')).toHaveLength(0);
+    expect(
+      ctx.allEvents.filter(
+        (event) => event.type === '[rpc]' && event.event.startsWith('model.request.'),
+      ),
+    ).toHaveLength(0);
   });
 });
 

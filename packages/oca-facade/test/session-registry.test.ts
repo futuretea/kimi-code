@@ -203,6 +203,25 @@ describe('prompt idempotency', () => {
     );
   });
 
+  it('rejects the same key with different system message as session_state_conflict', () => {
+    const registry = new SessionRegistry();
+    registry.createSession('ses_1');
+    registry.startPrompt('ses_1', {
+      content: 'first',
+      systemMessage: 'be concise',
+      idempotencyKey: 'key-1',
+    });
+    registry.finishPrompt('ses_1', 'completed');
+    expectFacadeError(
+      () => registry.startPrompt('ses_1', {
+        content: 'first',
+        systemMessage: 'explain in detail',
+        idempotencyKey: 'key-1',
+      }),
+      'session_state_conflict',
+    );
+  });
+
   it('scopes idempotency keys per session', () => {
     const registry = new SessionRegistry();
     registry.createSession('ses_1');
@@ -342,48 +361,71 @@ describe('pending call correlation', () => {
     );
   });
 
-  it('accepts external tool results and requires output for completed resolution', async () => {
+  it('stages external tool results until the runtime handler confirms delivery', async () => {
     const registry = new SessionRegistry();
     registry.createSession('ses_1');
-    const registration = registry.registerPendingCall('ses_1', {
+    registry.registerPendingCall('ses_1', {
       id: 'call_1',
       kind: 'external_tool',
     });
-    expectFacadeError(
+    await expectAsyncFacadeError(
       () =>
         registry.resolveToolResult('ses_1', { toolCallId: 'call_1', resolution: 'completed' }),
       'invalid_request',
     );
     // failed validation keeps the call pending: a retry is still accepted.
-    expect(
-      registry.resolveToolResult('ses_1', {
-        toolCallId: 'call_1',
-        resolution: 'completed',
-        output: '{"rows":3}',
-      }),
-    ).toEqual({ accepted: true });
-    await expect(registration.resolution).resolves.toEqual({
-      kind: 'external_tool',
+    const waiting = registry.waitForToolResultDelivery('ses_1', 'call_1');
+    const accepted = registry.resolveToolResult('ses_1', {
+      toolCallId: 'call_1',
       resolution: 'completed',
       output: '{"rows":3}',
     });
+    const delivery = await waiting;
+    expect(delivery.result).toEqual({ resolution: 'completed', output: '{"rows":3}' });
+    registry.beginToolResultDelivery('ses_1', 'call_1', delivery);
+    registry.completeToolResultDelivery('ses_1', 'call_1', delivery);
+    await expect(accepted).resolves.toEqual({ accepted: true });
   });
 
-  it('accepts a skipped tool result without output', async () => {
+  it('accepts a skipped tool result without output after runtime delivery', async () => {
     const registry = new SessionRegistry();
     registry.createSession('ses_1');
-    const registration = registry.registerPendingCall('ses_1', {
+    registry.registerPendingCall('ses_1', {
       id: 'call_1',
       kind: 'external_tool',
     });
-    expect(
-      registry.resolveToolResult('ses_1', { toolCallId: 'call_1', resolution: 'skipped' }),
-    ).toEqual({ accepted: true });
-    await expect(registration.resolution).resolves.toEqual({
-      kind: 'external_tool',
-      resolution: 'skipped',
-      output: undefined,
+    const waiting = registry.waitForToolResultDelivery('ses_1', 'call_1');
+    const accepted = registry.resolveToolResult('ses_1', { toolCallId: 'call_1', resolution: 'skipped' });
+    const delivery = await waiting;
+    expect(delivery.result).toEqual({ resolution: 'skipped' });
+    registry.beginToolResultDelivery('ses_1', 'call_1', delivery);
+    registry.completeToolResultDelivery('ses_1', 'call_1', delivery);
+    await expect(accepted).resolves.toEqual({ accepted: true });
+  });
+
+  it('rejects a concurrent duplicate while the first handoff is in flight', async () => {
+    const registry = new SessionRegistry();
+    registry.createSession('ses_1');
+    registry.registerPendingCall('ses_1', { id: 'call_1', kind: 'external_tool' });
+    const waiting = registry.waitForToolResultDelivery('ses_1', 'call_1');
+    const first = registry.resolveToolResult('ses_1', {
+      toolCallId: 'call_1',
+      resolution: 'completed',
+      output: '{"rows":3}',
     });
+    const delivery = await waiting;
+    await expectAsyncFacadeError(
+      () =>
+        registry.resolveToolResult('ses_1', {
+          toolCallId: 'call_1',
+          resolution: 'completed',
+          output: '{"rows":3}',
+        }),
+      'request_not_pending',
+    );
+    registry.beginToolResultDelivery('ses_1', 'call_1', delivery);
+    registry.completeToolResultDelivery('ses_1', 'call_1', delivery);
+    await expect(first).resolves.toEqual({ accepted: true });
   });
 
   it('does not correlate calls across sessions', () => {
@@ -416,7 +458,7 @@ describe('pending call correlation', () => {
     );
   });
 
-  it('rejects resolutions on an unknown session with session_not_found', () => {
+  it('rejects resolutions on an unknown session with session_not_found', async () => {
     const registry = new SessionRegistry();
     expectFacadeError(
       () => registry.resolveApproval('nope', { toolCallId: 'call_1', decision: 'approved' }),
@@ -426,7 +468,7 @@ describe('pending call correlation', () => {
       () => registry.answerQuestion('nope', { questionId: 'q_1', answers: {} }),
       'session_not_found',
     );
-    expectFacadeError(
+    await expectAsyncFacadeError(
       () => registry.resolveToolResult('nope', { toolCallId: 'call_1', resolution: 'skipped' }),
       'session_not_found',
     );
@@ -446,7 +488,7 @@ describe('pending call correlation', () => {
     await registry.resumeSession('ses_1');
 
     // Late result for a call that was unconfirmed at crash time: never matched.
-    expectFacadeError(
+    await expectAsyncFacadeError(
       () =>
         registry.resolveToolResult('ses_1', {
           toolCallId: 'call_late',
@@ -456,13 +498,16 @@ describe('pending call correlation', () => {
       'request_not_pending',
     );
     // Explicit retry of a still-pending call with the same id is accepted.
-    expect(
-      registry.resolveToolResult('ses_1', {
-        toolCallId: 'call_open',
-        resolution: 'completed',
-        output: '{}',
-      }),
-    ).toEqual({ accepted: true });
+    const waiting = registry.waitForToolResultDelivery('ses_1', 'call_open');
+    const accepted = registry.resolveToolResult('ses_1', {
+      toolCallId: 'call_open',
+      resolution: 'completed',
+      output: '{}',
+    });
+    const delivery = await waiting;
+    registry.beginToolResultDelivery('ses_1', 'call_open', delivery);
+    registry.completeToolResultDelivery('ses_1', 'call_open', delivery);
+    await expect(accepted).resolves.toEqual({ accepted: true });
   });
 
   it('flips pending calls to unknown when the session fails', () => {

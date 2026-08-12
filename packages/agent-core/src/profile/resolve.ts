@@ -13,6 +13,9 @@ interface MergedAgentProfile {
   readonly systemPromptTemplate: string;
   readonly promptVars: Record<string, string>;
   readonly tools: string[];
+  readonly modelAlias?: string | undefined;
+  readonly thinkingEffort?: string | undefined;
+  readonly contextWindow?: number | undefined;
   readonly whenToUse?: string | undefined;
   readonly subagents?: Record<string, RawSubagentProfile> | undefined;
 }
@@ -98,6 +101,9 @@ function resolveMergedProfile(
       ...profile.promptVars,
     },
     tools: profile.tools !== undefined ? [...profile.tools] : [...(parent?.tools ?? [])],
+    modelAlias: profile.modelAlias ?? parent?.modelAlias,
+    thinkingEffort: profile.thinkingEffort ?? parent?.thinkingEffort,
+    contextWindow: profile.contextWindow ?? parent?.contextWindow,
     whenToUse: profile.whenToUse ?? parent?.whenToUse,
     subagents: cloneSubagents(profile.subagents),
   };
@@ -112,6 +118,9 @@ function toResolvedProfile(merged: MergedAgentProfile): ResolvedAgentProfile {
     description: merged.description,
     systemPrompt: createSystemPromptRenderer(merged),
     tools: [...merged.tools],
+    modelAlias: merged.modelAlias,
+    thinkingEffort: merged.thinkingEffort,
+    contextWindow: merged.contextWindow,
     whenToUse: merged.whenToUse,
   };
 }

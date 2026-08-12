@@ -68,7 +68,6 @@ describe('facade full loop', () => {
     const created = await postJson(baseUrl, '/sessions', {
       session_id: 'ses_1',
       work_dir: handle.homeDir,
-      permission_policy: 'always_ask',
     });
     expect(created.status).toBe(201);
     expect(created.body).toEqual({ session_id: 'ses_1', status: 'active' });

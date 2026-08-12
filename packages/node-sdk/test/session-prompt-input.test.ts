@@ -82,6 +82,39 @@ describe('Session.prompt input normalization', () => {
     });
   });
 
+  it('passes an optional system message through the prompt RPC', async () => {
+    const prompt = vi.fn(async () => {});
+    const session = new Session({
+      id: 'ses_system_message',
+      workDir: '/tmp/work',
+      rpc: { prompt } as unknown as SDKRpcClientBase,
+    });
+
+    await session.prompt('summarize the release', { systemMessage: 'answer in one paragraph' });
+
+    expect(prompt).toHaveBeenCalledWith({
+      sessionId: 'ses_system_message',
+      input: [{ type: 'text', text: 'summarize the release' }],
+      systemMessage: 'answer in one paragraph',
+    });
+  });
+
+  it('appends a system message through the dedicated RPC', async () => {
+    const appendSystemMessage = vi.fn(async () => {});
+    const session = new Session({
+      id: 'ses_tool_system_message',
+      workDir: '/tmp/work',
+      rpc: { appendSystemMessage } as unknown as SDKRpcClientBase,
+    });
+
+    await session.appendSystemMessage('use the result as evidence');
+
+    expect(appendSystemMessage).toHaveBeenCalledWith({
+      sessionId: 'ses_tool_system_message',
+      content: 'use the result as evidence',
+    });
+  });
+
   it('starts btw and returns the forked agent id', async () => {
     const startBtw = vi.fn(async () => 'agent-btw');
     const session = new Session({

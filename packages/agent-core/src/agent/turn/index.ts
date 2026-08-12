@@ -59,6 +59,7 @@ interface ActiveTurn {
 interface BufferedSteer {
   readonly input: readonly ContentPart[];
   readonly origin: PromptOrigin;
+  readonly systemMessage?: string;
 }
 
 export interface TurnEndResult {
@@ -147,7 +148,11 @@ export class TurnFlow {
   }
 
   // Returns the new turnId, or null if the turn was marked as resuming.
-  prompt(input: readonly ContentPart[], origin: PromptOrigin = USER_PROMPT_ORIGIN): number | null {
+  prompt(
+    input: readonly ContentPart[],
+    origin: PromptOrigin = USER_PROMPT_ORIGIN,
+    systemMessage?: string,
+  ): number | null {
     // The last funnel before a prompt lands in the session history: images
     // in formats providers reject (AVIF, HEIC, …) become text notices here,
     // so no caller — the SDK/RPC prompt path included — can poison the
@@ -158,7 +163,7 @@ export class TurnFlow {
       input: gated,
       origin,
     });
-    return this.launch(gated, origin);
+    return this.launch(gated, origin, systemMessage);
   }
 
   // Returns the new turnId, or null if the input was buffered as a steer
@@ -186,7 +191,7 @@ export class TurnFlow {
     return this.prompt([], { kind: 'retry', trigger });
   }
 
-  private launch(input: readonly ContentPart[], origin: PromptOrigin): number | null {
+  private launch(input: readonly ContentPart[], origin: PromptOrigin, systemMessage?: string): number | null {
     if (this.activeTurn) {
       this.agent.emitEvent({
         type: 'error',
@@ -207,7 +212,7 @@ export class TurnFlow {
     // rather than getting stuck "running". (Auto compaction runs inside an active
     // turn, so the `activeTurn` check above already covers it.)
     if (this.agent.fullCompaction.isCompacting) {
-      this.steerBuffer.push({ input, origin });
+      this.steerBuffer.push({ input, origin, systemMessage });
       return null;
     }
 
@@ -216,7 +221,7 @@ export class TurnFlow {
     // start/end pair per continuation turn rather than one mega-turn.
     const turnId = this.allocateTurnId();
     const controller = new AbortController();
-    const promise = this.turnWorker(turnId, input, origin, controller.signal);
+    const promise = this.turnWorker(turnId, input, origin, controller.signal, systemMessage);
     const firstRequest = createControlledPromise<void>();
     this.activeTurn = {
       turnId,
@@ -338,6 +343,12 @@ export class TurnFlow {
     if (steers.length === 0) return false;
     for (const steer of steers) {
       this.agent.context.appendUserMessage(steer.input, steer.origin);
+      if (steer.systemMessage !== undefined) {
+        this.agent.context.appendSystemReminder(steer.systemMessage, {
+          kind: 'injection',
+          variant: 'system_message',
+        });
+      }
     }
     steers.length = 0;
     return true;
@@ -359,7 +370,7 @@ export class TurnFlow {
       return;
     }
     const next = this.steerBuffer.shift()!;
-    this.launch(next.input, next.origin);
+    this.launch(next.input, next.origin, next.systemMessage);
   }
 
   finishResume(): void {
@@ -380,6 +391,7 @@ export class TurnFlow {
     input: readonly ContentPart[],
     origin: PromptOrigin,
     signal: AbortSignal,
+    systemMessage?: string,
   ): Promise<TurnEndResult> {
     const ownsActiveTurn = (): boolean =>
       this.activeTurn !== null &&
@@ -388,9 +400,9 @@ export class TurnFlow {
     try {
       const initialGoalStatus = this.agent.goal.getGoal().goal?.status;
       if (initialGoalStatus === 'active') {
-        return await this.driveGoal(firstTurnId, input, origin, signal);
+        return await this.driveGoal(firstTurnId, input, origin, signal, systemMessage);
       }
-      const end = await this.runOneTurn(firstTurnId, input, origin, signal, true);
+      const end = await this.runOneTurn(firstTurnId, input, origin, signal, true, systemMessage);
       // A goal can become active during an ordinary turn: the model creates one
       // with CreateGoal, or resumes a paused/blocked goal via UpdateGoal. Either
       // way, hand the now-active goal to the driver so it is actually pursued,
@@ -440,15 +452,17 @@ export class TurnFlow {
     input: readonly ContentPart[],
     origin: PromptOrigin,
     signal: AbortSignal,
+    systemMessage?: string,
   ): Promise<TurnEndResult> {
     let turnId = firstTurnId;
     let turnInput = input;
     let turnOrigin = origin;
+    let turnSystemMessage = systemMessage;
     while (true) {
       const goalBeforeTurn = this.agent.goal.getGoal().goal;
       if (goalBeforeTurn?.status === 'active' && goalBeforeTurn.budget.overBudget) {
         await this.agent.goal.markBlocked({ reason: 'A configured budget was reached' });
-        const ended = await this.endGoalTurnWithoutModel(turnId, turnInput, turnOrigin);
+        const ended = await this.endGoalTurnWithoutModel(turnId, turnInput, turnOrigin, turnSystemMessage);
         return { event: ended };
       }
 
@@ -457,7 +471,7 @@ export class TurnFlow {
       // Wall-clock is tracked live by the store (anchored while `active`), so the
       // timer is correct even when the model completes mid-turn.
       await this.agent.goal.incrementTurn();
-      const end = await this.runOneTurn(turnId, turnInput, turnOrigin, signal, false);
+      const end = await this.runOneTurn(turnId, turnInput, turnOrigin, signal, false, turnSystemMessage);
 
       if (end.event.reason === 'cancelled') {
         await this.agent.goal.pauseOnInterrupt({ reason: 'Paused after interruption' });
@@ -490,6 +504,7 @@ export class TurnFlow {
       turnId = this.allocateTurnId();
       turnInput = [{ type: 'text', text: GOAL_CONTINUATION_PROMPT }];
       turnOrigin = GOAL_CONTINUATION_ORIGIN;
+      turnSystemMessage = undefined;
     }
   }
 
@@ -497,11 +512,18 @@ export class TurnFlow {
     turnId: number,
     input: readonly ContentPart[],
     origin: PromptOrigin,
+    systemMessage?: string,
   ): Promise<TurnEndedEvent> {
     this.agent.usage.beginTurn();
     const startedAt = Date.now();
     this.agent.emitEvent({ type: 'turn.started', turnId, origin });
     this.agent.context.appendUserMessage(input, origin);
+    if (systemMessage !== undefined) {
+      this.agent.context.appendSystemReminder(systemMessage, {
+        kind: 'injection',
+        variant: 'system_message',
+      });
+    }
     const ended: TurnEndedEvent = {
       type: 'turn.ended',
       turnId,
@@ -525,6 +547,7 @@ export class TurnFlow {
     origin: PromptOrigin,
     signal: AbortSignal,
     standalone: boolean,
+    systemMessage?: string,
   ): Promise<TurnEndResult> {
     this.currentStep = 0;
     this.stepToolCallKeys.clear();
@@ -537,6 +560,12 @@ export class TurnFlow {
     this.agent.usage.beginTurn();
     this.agent.emitEvent({ type: 'turn.started', turnId, origin });
     this.agent.context.appendUserMessage(input, origin);
+    if (systemMessage !== undefined) {
+      this.agent.context.appendSystemReminder(systemMessage, {
+        kind: 'injection',
+        variant: 'system_message',
+      });
+    }
 
     const startedAt = Date.now();
     let ended: TurnEndedEvent;

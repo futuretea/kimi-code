@@ -15,6 +15,7 @@ import {
   type ApprovalResponse,
   type CoreAPI,
   type SDKAPI,
+  type SessionAgentProfileConfig,
 } from '../../src';
 import {
   __resetRootLoggerForTest,
@@ -366,6 +367,139 @@ max_context_size = 100000
     const mainAgent = session?.getReadyAgent('main');
 
     expect(mainAgent?.config.modelAlias).toBe('default-mock');
+  });
+
+  it('carries a caller profile registry into the Session and its Agent tool', async () => {
+    tmp = await mkdtemp(join(tmpdir(), 'kimi-core-runtime-'));
+    const homeDir = join(tmp, 'home');
+    const workDir = join(tmp, 'work');
+    await mkdir(homeDir, { recursive: true });
+    await mkdir(workDir, { recursive: true });
+    await writeFile(join(homeDir, 'config.toml'), baseModelConfig());
+
+    const [coreRpc, sdkRpc] = createRPC<CoreAPI, SDKAPI>();
+    const core = new KimiCore(coreRpc, { homeDir });
+    const rpc = await sdkRpc({
+      emitEvent: vi.fn(),
+      requestApproval: vi.fn(async (): Promise<ApprovalResponse> => ({ decision: 'rejected' })),
+      requestQuestion: vi.fn(async () => null),
+      toolCall: vi.fn(async () => ({ output: '' })),
+    });
+    const agentProfiles: SessionAgentProfileConfig = {
+      mainProfile: 'coordinator',
+      profiles: [
+        {
+          name: 'coordinator',
+          systemPromptTemplate: 'Coordinate the declared worker.',
+          tools: ['Agent'],
+          contextWindow: 80000,
+          subagents: {
+            reviewer: { description: 'Review the implementation.' },
+          },
+        },
+        {
+          name: 'reviewer',
+          systemPromptTemplate: 'Review only.',
+          tools: ['Agent'],
+          contextWindow: 60000,
+          subagents: {
+            worker: { description: 'Inspect one focused concern.' },
+          },
+        },
+        {
+          name: 'worker',
+          systemPromptTemplate: 'Inspect only.',
+          tools: ['Read'],
+        },
+      ],
+    };
+
+    const created = await rpc.createSession({
+      id: 'ses_runtime_session_profiles',
+      workDir,
+      agentProfiles,
+    });
+    const session = core.sessions.get(created.id);
+    if (session === undefined) throw new Error('created Session is missing');
+    const mainAgent = session.getReadyAgent('main');
+    const agentTool = mainAgent?.tools.data().find((tool) => tool.name === 'Agent');
+    const reviewer = await session.createAgent(
+      { type: 'sub' },
+      {
+        parentAgentId: 'main',
+      },
+    );
+    reviewer.agent.config.update({ modelAlias: 'default-mock' });
+    reviewer.agent.useProfile(session.resolveSubagentProfile('coordinator', 'reviewer'));
+    const reviewerAgentTool = reviewer.agent.tools.data().find((tool) => tool.name === 'Agent');
+
+    expect(session.metadata.agentProfiles).toEqual(agentProfiles);
+    expect(mainAgent?.config.profileName).toBe('coordinator');
+    expect(agentTool?.description).toContain('reviewer: Review the implementation.');
+    expect(reviewerAgentTool?.description).toContain('worker: Inspect one focused concern.');
+
+    await core.updateSessionMetadata({
+      sessionId: created.id,
+      metadata: {
+        agentProfiles: { mainProfile: 'attacker', profiles: [] },
+      } as never,
+    });
+    expect(session.metadata.agentProfiles).toEqual(agentProfiles);
+
+    await rpc.closeSession({ sessionId: created.id });
+    await rpc.resumeSession({ sessionId: created.id });
+    const resumedSession = core.sessions.get(created.id);
+    if (resumedSession === undefined) throw new Error('resumed Session is missing');
+    const resumedMain = resumedSession.getReadyAgent('main');
+    const resumedReviewer = await resumedSession.ensureAgentResumed(reviewer.id);
+    const resumedReviewerAgentTool = resumedReviewer.tools.data().find((tool) => tool.name === 'Agent');
+
+    expect(resumedMain?.config.profileName).toBe('coordinator');
+    expect(resumedMain?.config.modelCapabilities.max_context_tokens).toBe(80000);
+    expect(resumedMain?.tools.data().find((tool) => tool.name === 'Agent')?.description).toContain(
+      'reviewer: Review the implementation.',
+    );
+    expect(resumedReviewer.config.profileName).toBe('reviewer');
+    expect(resumedReviewer.config.modelCapabilities.max_context_tokens).toBe(60000);
+    expect(resumedReviewerAgentTool?.description).toContain('worker: Inspect one focused concern.');
+  });
+
+  it('rejects an invalid profile registry before allocating a Session ID', async () => {
+    tmp = await mkdtemp(join(tmpdir(), 'kimi-core-runtime-'));
+    const homeDir = join(tmp, 'home');
+    const workDir = join(tmp, 'work');
+    await mkdir(homeDir, { recursive: true });
+    await mkdir(workDir, { recursive: true });
+    await writeFile(join(homeDir, 'config.toml'), baseModelConfig());
+
+    const [coreRpc, sdkRpc] = createRPC<CoreAPI, SDKAPI>();
+    const core = new KimiCore(coreRpc, { homeDir });
+    const rpc = await sdkRpc({
+      emitEvent: vi.fn(),
+      requestApproval: vi.fn(async (): Promise<ApprovalResponse> => ({ decision: 'rejected' })),
+      requestQuestion: vi.fn(async () => null),
+      toolCall: vi.fn(async () => ({ output: '' })),
+    });
+    const id = 'ses_runtime_invalid_session_profiles';
+
+    await expect(
+      rpc.createSession({
+        id,
+        workDir,
+        agentProfiles: { mainProfile: 'missing', profiles: [] },
+      }),
+    ).rejects.toThrow('Session main agent profile "missing" was not found');
+
+    await expect(
+      rpc.createSession({
+        id,
+        workDir,
+        agentProfiles: {
+          mainProfile: 'coordinator',
+          profiles: [{ name: 'coordinator', systemPromptTemplate: 'Coordinate.' }],
+        },
+      }),
+    ).resolves.toMatchObject({ id });
   });
 
   it('loads project local additional dirs into the session and main agent', async () => {
