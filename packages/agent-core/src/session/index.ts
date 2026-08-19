@@ -43,9 +43,8 @@ import {
   type SessionAgentProfileConfig,
 } from '../profile';
 import {
-  ContextWindowModelProvider,
-  type ModelProvider,
-  type ProviderManager,
+	ContextWindowModelProvider,
+	type ProviderManager,
 } from './provider-manager';
 import {
   registerBuiltinSkills,

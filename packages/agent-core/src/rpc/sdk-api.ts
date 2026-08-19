@@ -15,6 +15,7 @@ export interface ApprovalResponse {
 }
 
 export interface ApprovalRequest {
+  readonly agentId?: string | undefined;
   readonly turnId?: number | undefined;
   readonly toolCallId: string;
   readonly toolName: string;

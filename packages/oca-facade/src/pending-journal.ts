@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import { resolveKimiHome } from '@moonshot-ai/kimi-code-sdk';
 
+import { pendingCallKey } from './session-registry';
+
 import type {
   PendingCall,
   PendingCallJournal,
@@ -33,6 +35,7 @@ export interface PendingCallWrite {
   readonly id: string;
   readonly kind: PendingCallKind;
   readonly state?: PendingCallState;
+	readonly runtimeAgentId?: string;
 }
 
 /**
@@ -40,18 +43,20 @@ export interface PendingCallWrite {
  * when the journal cannot be written (the fail-closed signal).
  */
 export function writePendingCall(sessionDir: string, call: PendingCallWrite): void {
-  const calls = readPendingCalls(sessionDir).filter((stored) => stored.id !== call.id);
-  calls.push({ id: call.id, kind: call.kind, state: call.state ?? 'pending' });
+  const calls = readPendingCalls(sessionDir).filter(
+		(stored) => pendingCallKey(stored.id, stored.runtimeAgentId) !== pendingCallKey(call.id, call.runtimeAgentId),
+	);
+  calls.push({ id: call.id, kind: call.kind, state: call.state ?? 'pending', ...(call.runtimeAgentId !== undefined ? { runtimeAgentId: call.runtimeAgentId } : {}) });
   writeJournal(sessionDir, calls);
 }
 
 /** Removes one settled call; a missing journal is already empty. */
-export function removePendingCall(sessionDir: string, callId: string): void {
+export function removePendingCall(sessionDir: string, callId: string, runtimeAgentId?: string): void {
   const calls = readPendingCalls(sessionDir);
   if (calls.length === 0) return;
   writeJournal(
     sessionDir,
-    calls.filter((call) => call.id !== callId),
+		calls.filter((call) => pendingCallKey(call.id, call.runtimeAgentId) !== pendingCallKey(callId, runtimeAgentId)),
   );
 }
 
@@ -143,8 +148,8 @@ export function createFilePendingCallJournal(homeDir?: string): PendingCallJourn
     settleUnknownToolCall: (sessionId, callId) => {
       settleUnknownPendingToolCall(dirFor(sessionId), callId);
     },
-    settle: (sessionId, callId) => {
-      removePendingCall(dirFor(sessionId), callId);
+    settle: (sessionId, callId, runtimeAgentId) => {
+      removePendingCall(dirFor(sessionId), callId, runtimeAgentId);
     },
     read: (sessionId) => readPendingCalls(dirFor(sessionId)),
   };
@@ -178,6 +183,7 @@ function parseJournal(raw: string): PendingCall[] {
       id: call.id,
       kind: call.kind,
       state: call.state === 'unknown' || call.state === 'settled' ? call.state : 'pending',
+			...(typeof call.runtimeAgentId === 'string' ? { runtimeAgentId: call.runtimeAgentId } : {}),
       ...(stagedToolResult !== undefined ? { stagedToolResult } : {}),
       ...(stagedToolResult !== undefined
         ? { toolResultDeliveryState: toolResultDeliveryState ?? 'staged' }

@@ -319,6 +319,30 @@ describe('pending call correlation', () => {
     });
   });
 
+	it('disambiguates colliding child approval IDs by runtime Agent identity', async () => {
+		const registry = new SessionRegistry();
+		registry.createSession('ses_1');
+		const first = registry.registerPendingCall('ses_1', {
+			id: 'shared_call', kind: 'approval', runtimeAgentId: 'runtime_child_1',
+		});
+		const second = registry.registerPendingCall('ses_1', {
+			id: 'shared_call', kind: 'approval', runtimeAgentId: 'runtime_child_2',
+		});
+
+		expect(registry.listPendingCalls('ses_1')).toEqual([
+			{ id: 'shared_call', kind: 'approval', state: 'pending' },
+			{ id: 'shared_call', kind: 'approval', state: 'pending' },
+		]);
+		registry.resolveApproval('ses_1', {
+			toolCallId: 'shared_call', runtimeAgentId: 'runtime_child_2', decision: 'rejected',
+		});
+		registry.resolveApproval('ses_1', {
+			toolCallId: 'shared_call', runtimeAgentId: 'runtime_child_1', decision: 'approved',
+		});
+		await expect(first.resolution).resolves.toEqual({ kind: 'approval', decision: 'approved', feedback: undefined });
+		await expect(second.resolution).resolves.toEqual({ kind: 'approval', decision: 'rejected', feedback: undefined });
+	});
+
   it('rejects unknown, duplicate, and kind-mismatched approval ids', () => {
     const registry = new SessionRegistry();
     registry.createSession('ses_1');

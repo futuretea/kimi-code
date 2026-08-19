@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ErrorCodes, KimiError, createKimiHarness } from '@moonshot-ai/kimi-code-sdk';
 
 import { FacadeError } from '../src/errors';
+import { writeProfilePolicyState } from '../src/profile-policy-state';
 import {
   LiveHarnessFactory,
   QODER_PERMISSION_MODE,
@@ -18,6 +19,7 @@ import {
 import { SessionRegistry, type StopReason } from '../src/session-registry';
 
 import { createFakeHarness, type FakeHarness } from './fake-harness';
+import { writeSkillArchive } from './skill-archive-fixture';
 
 interface RecordedSink extends HarnessEventSink {
   events: Array<{ sessionId: string; event: FacadeEvent }>;
@@ -52,6 +54,7 @@ const tempDirs: string[] = [];
 async function setup(options?: { credentialsDir?: string }): Promise<Setup> {
   const workDir = await mkdtemp(join(tmpdir(), 'oca-facade-harness-'));
   tempDirs.push(workDir);
+  await writeProfilePolicyState(workDir, { mainProfile: 'main', policies: new Map([['main', new Map()]]) });
   const registry = new SessionRegistry();
   const sink = makeSink();
   const { fake, createHarness } = createFakeHarness();
@@ -62,6 +65,7 @@ async function setup(options?: { credentialsDir?: string }): Promise<Setup> {
     ...(options?.credentialsDir !== undefined
       ? { credentialsDir: options.credentialsDir }
       : {}),
+    resumeWorkDir: workDir,
   });
   return { registry, sink, fake, harness, workDir };
 }
@@ -151,6 +155,22 @@ describe('live harness factory: resume', () => {
     expect(fake.resumed).toHaveLength(1);
   });
 
+  it('fails closed when the persisted profile policy state is missing', async () => {
+    const workDir = await mkdtemp(join(tmpdir(), 'oca-facade-missing-policy-'));
+    tempDirs.push(workDir);
+    const registry = new SessionRegistry();
+    const { fake, createHarness } = createFakeHarness();
+    const harness = new LiveHarnessFactory({
+      registry,
+      sink: makeSink(),
+      createHarness,
+      resumeWorkDir: workDir,
+    });
+
+    await expect(harness.resumeSession('ses_9')).rejects.toMatchObject({ code: 'session_resume_failed' });
+    expect(fake.resumed).toEqual([{ id: 'ses_9' }]);
+  });
+
   it('uses the trusted Vault ownership marker to clear a revoked value after resume', async () => {
     const { harness } = await setup();
     const priorMarker = process.env['OCA_FACADE_VAULT_ENV_NAMES'];
@@ -166,6 +186,32 @@ describe('live harness factory: resume', () => {
       else process.env['OCA_FACADE_VAULT_ENV_NAMES'] = priorMarker;
       if (priorServiceKey === undefined) delete process.env['SERVICE_KEY'];
       else process.env['SERVICE_KEY'] = priorServiceKey;
+    }
+  });
+
+  it('uses the trusted Session ownership marker to replace and clear public values after resume', async () => {
+    const { harness } = await setup();
+    const names = ['OCA_FACADE_SESSION_ENV_NAMES', 'SESSION_PUBLIC_OLD', 'SESSION_PUBLIC_NEW'] as const;
+    const previous = new Map(names.map((name) => [name, process.env[name]]));
+    try {
+      process.env['OCA_FACADE_SESSION_ENV_NAMES'] = 'SESSION_PUBLIC_OLD';
+      process.env['SESSION_PUBLIC_OLD'] = 'stale value';
+
+      await harness.resumeSession('ses_9');
+      await harness.updateSessionConfig('ses_9', {
+        sessionEnvironmentVariables: { SESSION_PUBLIC_NEW: 'current value' },
+      });
+      expect(process.env['SESSION_PUBLIC_OLD']).toBeUndefined();
+      expect(process.env['SESSION_PUBLIC_NEW']).toBe('current value');
+
+      await harness.updateSessionConfig('ses_9', { sessionEnvironmentVariables: {} });
+      expect(process.env['SESSION_PUBLIC_NEW']).toBeUndefined();
+    } finally {
+      for (const name of names) {
+        const value = previous.get(name);
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
     }
   });
 
@@ -273,6 +319,44 @@ describe('live harness factory: tools', () => {
 });
 
 describe('live harness factory: session config for external servers', () => {
+	it('replaces Session-owned variables exactly and restores their value after Vault removal', async () => {
+		const { harness, workDir } = await setup();
+		const names = ['SESSION_PUBLIC_TEST_VALUE', 'SESSION_PUBLIC_TEST_REMOVE', 'SERVICE_KEY'] as const;
+		const previous = new Map(names.map((name) => [name, process.env[name]]));
+		try {
+			await harness.createSession({
+				sessionId: 'ses_1',
+				workDir,
+				sessionEnvironmentVariables: {
+					SESSION_PUBLIC_TEST_VALUE: 'before',
+					SESSION_PUBLIC_TEST_REMOVE: 'remove',
+					SERVICE_KEY: 'public-value',
+				},
+				vaultEnvironmentVariables: { SERVICE_KEY: 'vault-value' },
+			});
+			expect(process.env['SERVICE_KEY']).toBe('vault-value');
+
+			await harness.updateSessionConfig('ses_1', {
+				sessionEnvironmentVariables: {
+					SESSION_PUBLIC_TEST_VALUE: 'after\nwith newline',
+					SERVICE_KEY: 'public-value',
+				},
+			});
+			expect(process.env['SESSION_PUBLIC_TEST_VALUE']).toBe('after\nwith newline');
+			expect(process.env['SESSION_PUBLIC_TEST_REMOVE']).toBeUndefined();
+			expect(process.env['SERVICE_KEY']).toBe('vault-value');
+
+			await harness.updateSessionConfig('ses_1', { vaultEnvironmentVariables: {} });
+			expect(process.env['SERVICE_KEY']).toBe('public-value');
+		} finally {
+			for (const name of names) {
+				const value = previous.get(name);
+				if (value === undefined) delete process.env[name];
+				else process.env[name] = value;
+			}
+		}
+	});
+
 	it('replaces and removes Vault-owned process environment variables without touching ordinary variables', async () => {
 		const { harness, workDir } = await setup();
 		const priorSessionFlag = process.env['SESSION_FLAG'];
@@ -465,8 +549,6 @@ describe('live harness factory: session config for external servers', () => {
     };
     const envVar = config.mcpServers.billing.bearerTokenEnvVar;
     delete process.env[envVar];
-    const previousWorkDir = process.env['OCA_FACADE_WORK_DIR'];
-    process.env['OCA_FACADE_WORK_DIR'] = workDir;
     let tokenAtRuntimeResume: string | undefined;
     const resumed = new LiveHarnessFactory({
       registry: new SessionRegistry(),
@@ -480,14 +562,13 @@ describe('live harness factory: session config for external servers', () => {
         },
         withInteractiveAgent: (agentId, fn) => fake.withInteractiveAgent(agentId, fn),
       }),
+      resumeWorkDir: workDir,
     });
     try {
       await resumed.resumeSession('ses_1');
       expect(tokenAtRuntimeResume).toBe('resume-token');
       expect(await readFile(join(workDir, '.kimi-code', 'mcp.json'), 'utf-8')).not.toContain('resume-token');
     } finally {
-      if (previousWorkDir === undefined) delete process.env['OCA_FACADE_WORK_DIR'];
-      else process.env['OCA_FACADE_WORK_DIR'] = previousWorkDir;
       delete process.env[envVar];
     }
   });
@@ -502,6 +583,7 @@ describe('live harness factory: session config for external servers', () => {
 describe('live harness factory: first-prompt context blocks', () => {
 	it('injects system and resource blocks while kimi-code discovers materialized Skills', async () => {
     const { fake, harness, workDir } = await setup();
+    const archive = await writeSkillArchive(workDir, { name: 'reviewer', version: '3' });
     await harness.createSession({
       sessionId: 'ses_1',
       workDir,
@@ -510,14 +592,14 @@ describe('live harness factory: first-prompt context blocks', () => {
         { id: 'res_1', type: 'reference', mountPath: '/workspace/spec.md' },
       ],
       skills: [{
-        id: 'skill_1',
-        name: 'reviewer',
-        version: 3,
-        files: [{
-          path: 'SKILL.md',
-          contentBase64: Buffer.from('---\nname: reviewer\ndescription: Review docs\n---\n').toString('base64'),
-        }],
+        id: archive.descriptor.id,
+        name: archive.descriptor.name,
+        version: archive.descriptor.version,
+        origin: archive.descriptor.origin,
+        contentSize: archive.descriptor.content_size,
+        contentSHA256: archive.descriptor.content_sha256,
       }],
+      skillArchives: [{ path: archive.path }],
     });
     await expect(readFile(join(workDir, '.agents/skills/reviewer/SKILL.md'), 'utf8')).resolves.toContain('name: reviewer');
     await harness.prompt('ses_1', 'Summarize the spec.');
@@ -579,6 +661,45 @@ describe('live harness factory: first-prompt context blocks', () => {
 				{ type: 'text', text: 'Continue.' },
 			]);
 		} finally {
+			if (priorAwareness === undefined) delete process.env['OCA_AWARENESS_ROOT'];
+			else process.env['OCA_AWARENESS_ROOT'] = priorAwareness;
+		}
+	});
+
+	it('keeps acknowledged Memory hashes after a later File resource attach', async () => {
+		const { harness, workDir } = await setup();
+		const awareness = join(workDir, 'awareness');
+		const priorAwareness = process.env['OCA_AWARENESS_ROOT'];
+		const downloadURL = 'https://storage.example.test/file_1';
+		const realFetch = globalThis.fetch;
+		process.env['OCA_AWARENESS_ROOT'] = awareness;
+		globalThis.fetch = ((input: Parameters<typeof fetch>[0]) => {
+			const requestURL = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+			if (requestURL === downloadURL) return Promise.resolve(new Response('file'));
+			return realFetch(input);
+		}) as typeof fetch;
+		try {
+			await harness.createSession({
+				sessionId: 'ses_1', workDir, resources: [{
+					id: 'res_memory_1', type: 'memory_store', memoryStoreId: 'memstore_1',
+					memoryEntries: [{ id: 'mem_1', path: 'notes.md', content: 'before', contentSha256: 'before-hash' }],
+				}],
+			});
+			await writeFile(join(awareness, 'notes.md'), 'after', 'utf8');
+			await harness.acknowledgeSessionMemory('ses_1', [{
+				resourceId: 'res_memory_1', memoryStoreId: 'memstore_1',
+				entries: [{ id: 'mem_1', path: 'notes.md', content: 'after', contentSha256: 'after-hash' }],
+			}]);
+			await harness.materializeSessionResources('ses_1', [{
+				id: 'res_file_1', type: 'file', fileId: 'file_1', mountPath: 'inputs/file.txt', pvcPath: 'inputs/file.txt',
+				downloadUrl: downloadURL, size: 4,
+			}]);
+			await expect(harness.snapshotSessionMemory('ses_1')).resolves.toEqual([{
+				resourceId: 'res_memory_1', memoryStoreId: 'memstore_1',
+				entries: [{ id: 'mem_1', path: 'notes.md', contentSha256: 'after-hash', deleted: false, content: 'after' }],
+			}]);
+		} finally {
+			globalThis.fetch = realFetch;
 			if (priorAwareness === undefined) delete process.env['OCA_AWARENESS_ROOT'];
 			else process.env['OCA_AWARENESS_ROOT'] = priorAwareness;
 		}

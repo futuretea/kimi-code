@@ -11,6 +11,7 @@ import { defineRoute } from './define-route';
 
 const approvalBodySchema = z.object({
   tool_call_id: z.string().min(1),
+	runtime_agent_id: z.string().min(1).optional(),
   decision: z.enum(['approved', 'rejected']),
   feedback: z.string().optional(),
 });
@@ -23,6 +24,7 @@ export function registerApprovalRoutes(app: FastifyInstance, ctx: RouteContext):
     async (req, reply) => {
       ctx.registry.resolveApproval(req.params.id, {
         toolCallId: req.body.tool_call_id,
+			...(req.body.runtime_agent_id !== undefined ? { runtimeAgentId: req.body.runtime_agent_id } : {}),
         decision: req.body.decision,
         ...(req.body.feedback !== undefined ? { feedback: req.body.feedback } : {}),
       });

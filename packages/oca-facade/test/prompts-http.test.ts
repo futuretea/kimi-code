@@ -36,8 +36,12 @@ describe('prompt route', () => {
     return handle.homeDir;
   }
 
-  async function createSession(sessionId = 'ses_1'): Promise<void> {
-    const res = await postJson(base(), '/sessions', { session_id: sessionId, work_dir: workDir() });
+  async function createSession(sessionId = 'ses_1', tools?: unknown[]): Promise<void> {
+    const res = await postJson(base(), '/sessions', {
+			session_id: sessionId,
+			work_dir: workDir(),
+			...(tools !== undefined ? { tools } : {}),
+		});
     expect(res.status).toBe(201);
   }
 
@@ -78,7 +82,17 @@ describe('prompt route', () => {
       },
       { kind: 'event', event: runtimeEvent({ type: 'turn.ended', reason: 'completed' }) },
     ]);
-    await createSession();
+		await createSession('ses_1', [
+			{
+				type: 'agent_toolset_20260401',
+				configs: [{ name: 'Read', permission_policy: { type: 'always_allow' } }],
+			},
+			{
+				type: 'mcp_toolset',
+				mcp_server_name: 'docs',
+				configs: [{ name: 'search', permission_policy: { type: 'always_allow' } }],
+			},
+		]);
     const stream = await postStream(base(), '/sessions/ses_1/prompt', { content: 'hi' });
     expect(stream.response.status).toBe(200);
     expect(stream.response.headers.get('content-type')).toContain('application/x-ndjson');

@@ -30,6 +30,8 @@ export interface PendingCall {
   id: string;
   kind: PendingCallKind;
   state: PendingCallState;
+  /** Private child runtime identity used only to disambiguate callback IDs. */
+  runtimeAgentId?: string;
   /** Journal-private external-tool delivery state; omitted from API projections. */
   stagedToolResult?: StagedToolResult;
   /** Journal-private handoff progress; omitted from API projections. */
@@ -68,6 +70,7 @@ export type ApprovalDecision = 'approved' | 'rejected';
 
 export interface ApprovalInput {
   toolCallId: string;
+  runtimeAgentId?: string;
   decision: ApprovalDecision;
   feedback?: string;
 }
@@ -121,7 +124,7 @@ export interface PendingCallJournal {
     state: ToolResultDeliveryState,
   ): void;
   settleUnknownToolCall(sessionId: string, callId: string): void;
-  settle(sessionId: string, callId: string): void;
+  settle(sessionId: string, callId: string, runtimeAgentId?: string): void;
   read(sessionId: string): PendingCall[];
 }
 
@@ -219,9 +222,9 @@ export class SessionRegistry {
     const recovered = await this.runRecoveryHook(sessionId, 'session_resume_failed');
     const recoveredCalls = this.recoveredPendingCalls(sessionId, recovered);
     entry.pendingCalls.clear();
-    for (const call of recoveredCalls.pendingCalls) {
-      entry.pendingCalls.set(call.id, this.pendingCallEntry(call));
-    }
+	for (const call of recoveredCalls.pendingCalls) {
+		entry.pendingCalls.set(pendingCallKey(call.id, call.runtimeAgentId), this.pendingCallEntry(call));
+	}
     entry.settledToolCallIDs = recoveredCalls.settledToolCallIDs;
     entry.status = 'active';
     return this.resumeResult(entry);
@@ -243,7 +246,7 @@ export class SessionRegistry {
       id: sessionId,
       status: 'active',
       idempotency: new Map(),
-      pendingCalls: new Map(recoveredCalls.pendingCalls.map((call) => [call.id, this.pendingCallEntry(call)])),
+		pendingCalls: new Map(recoveredCalls.pendingCalls.map((call) => [pendingCallKey(call.id, call.runtimeAgentId), this.pendingCallEntry(call)])),
       settledToolCallIDs: recoveredCalls.settledToolCallIDs,
     };
     this.sessions.set(sessionId, entry);
@@ -410,7 +413,7 @@ export class SessionRegistry {
 
   registerPendingCall(
     sessionId: string,
-    call: { id: string; kind: PendingCallKind },
+    call: { id: string; kind: PendingCallKind; runtimeAgentId?: string },
   ): PendingCallRegistration {
     const entry = this.requireEntry(sessionId);
     if (entry.status !== 'active') {
@@ -419,7 +422,8 @@ export class SessionRegistry {
     if (call.kind === 'external_tool' && entry.settledToolCallIDs.has(call.id)) {
       throw new FacadeError('request_not_pending');
     }
-    const existing = entry.pendingCalls.get(call.id);
+    const callKey = pendingCallKey(call.id, call.runtimeAgentId);
+    const existing = entry.pendingCalls.get(callKey);
     if (existing !== undefined) {
       // A resumed runtime may replay exactly one already-staged external tool
       // call. It consumes the journaled result without emitting another
@@ -444,7 +448,12 @@ export class SessionRegistry {
     // journal cannot hold is never tracked and no request is emitted for it.
     if (this.pendingJournal) {
       try {
-        this.pendingJournal.register(sessionId, { id: call.id, kind: call.kind, state: 'pending' });
+			this.pendingJournal.register(sessionId, {
+				id: call.id,
+				kind: call.kind,
+				state: 'pending',
+				...(call.runtimeAgentId !== undefined ? { runtimeAgentId: call.runtimeAgentId } : {}),
+			});
       } catch {
         throw new FacadeError('internal_error');
       }
@@ -459,12 +468,12 @@ export class SessionRegistry {
       settle,
       ...(call.kind === 'external_tool' ? { handlerRegistered: true } : {}),
     };
-    entry.pendingCalls.set(call.id, stored);
+    entry.pendingCalls.set(callKey, stored);
     return { call: this.publicPendingCall(stored), resolution };
   }
 
   resolveApproval(sessionId: string, input: ApprovalInput): AcceptedResult {
-    const { entry, call } = this.lookupPendingCall(sessionId, input.toolCallId, 'approval');
+    const { entry, call } = this.lookupPendingCall(sessionId, input.toolCallId, 'approval', undefined, input.runtimeAgentId);
     this.settlePendingCall(entry, call);
     call.settle?.({ kind: 'approval', decision: input.decision, feedback: input.feedback });
     return { accepted: true };
@@ -649,6 +658,7 @@ export class SessionRegistry {
       id: call.id,
       kind: call.kind,
       state: call.state,
+			...(call.runtimeAgentId !== undefined ? { runtimeAgentId: call.runtimeAgentId } : {}),
       ...(call.stagedToolResult !== undefined ? { stagedToolResult: call.stagedToolResult } : {}),
       ...(call.toolResultDeliveryState !== undefined
         ? { toolResultDeliveryState: call.toolResultDeliveryState }
@@ -700,12 +710,13 @@ export class SessionRegistry {
     id: string,
     kind: PendingCallKind,
     resolution?: ToolResolution,
+    runtimeAgentId?: string,
   ): { entry: SessionEntry; call: PendingCallEntry } {
     const entry = this.requireEntry(sessionId);
     if (entry.status !== 'active') {
       throw new FacadeError('session_state_conflict');
     }
-    const call = entry.pendingCalls.get(id);
+    const call = entry.pendingCalls.get(pendingCallKey(id, runtimeAgentId));
     if (!call || call.kind !== kind) {
       throw new FacadeError('request_not_pending');
     }
@@ -724,10 +735,10 @@ export class SessionRegistry {
    * a durable delivered tombstone, which recovery deliberately never replays.
    */
   private settlePendingCall(entry: SessionEntry, call: PendingCallEntry): void {
-    entry.pendingCalls.delete(call.id);
+    entry.pendingCalls.delete(pendingCallKey(call.id, call.runtimeAgentId));
     if (this.pendingJournal) {
       try {
-        this.pendingJournal.settle(entry.id, call.id);
+			this.pendingJournal.settle(entry.id, call.id, call.runtimeAgentId);
       } catch {
         // Tolerated: the durable delivered tombstone prevents replay.
       }
@@ -742,7 +753,7 @@ export class SessionRegistry {
         throw new FacadeError('internal_error');
       }
     }
-    entry.pendingCalls.delete(call.id);
+    entry.pendingCalls.delete(pendingCallKey(call.id, call.runtimeAgentId));
     entry.settledToolCallIDs.add(call.id);
   }
 
@@ -760,6 +771,10 @@ export class SessionRegistry {
     }
     call.toolResultDeliveryState = state;
   }
+}
+
+export function pendingCallKey(id: string, runtimeAgentId?: string): string {
+	return runtimeAgentId === undefined ? id : `${runtimeAgentId}\u0000${id}`;
 }
 
 function sameToolResult(left: StagedToolResult, right: StagedToolResult): boolean {

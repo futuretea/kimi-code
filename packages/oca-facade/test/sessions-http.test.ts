@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { ErrorCodes, KimiError } from '@moonshot-ai/kimi-code-sdk';
 
 import type { HarnessFactory, HarnessSessionFactory } from '../src/harness';
+import { readProfilePolicyState } from '../src/profile-policy-state';
 
 import {
   createFakeHarness,
@@ -20,9 +21,11 @@ import {
   nextNdjsonFrame,
   asFrame,
   postJson,
+  postSessionMultipart,
   postStream,
   type TestServerHandle,
 } from './http-helper';
+import { writeSkillArchive } from './skill-archive-fixture';
 
 /** Harness factory whose create call rejects for `failingId` with a raw error. */
 function failingCreateHarness(
@@ -100,12 +103,70 @@ describe('session routes', () => {
       expectErrorEnvelope(badPolicy.body, 'invalid_request');
     });
 
+    it('rejects legacy JSON, an out-of-order archive, and a hash mismatch before allocating a Session', async () => {
+      handle = await bootTestServer();
+      const legacy = await fetch(`${base()}/sessions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ session_id: 'ses_legacy', work_dir: workDir() }),
+      });
+      expect(legacy.status).toBe(400);
+      expectErrorEnvelope(await legacy.json(), 'invalid_request');
+
+      const archive = await writeSkillArchive(workDir(), { name: 'review' });
+      const outOfOrder = new FormData();
+      outOfOrder.append('skill', archive.blob, 'review.zip');
+      outOfOrder.set('config', JSON.stringify({
+        session_id: 'ses_out_of_order',
+        work_dir: workDir(),
+        skills: [archive.descriptor],
+      }));
+      const orderedResponse = await fetch(`${base()}/sessions`, { method: 'POST', body: outOfOrder });
+      expect(orderedResponse.status).toBe(400);
+      expectErrorEnvelope(await orderedResponse.json(), 'invalid_request');
+
+      const mismatch = await postSessionMultipart(base(), {
+        session_id: 'ses_hash_mismatch',
+        work_dir: workDir(),
+        skills: [{ ...archive.descriptor, content_sha256: '0'.repeat(64) }],
+      }, [archive.blob]);
+      expect(mismatch.status).toBe(400);
+      expectErrorEnvelope(mismatch.body, 'invalid_request');
+      expect(fake().created).toHaveLength(0);
+    });
+
+    it('returns 413 for a config field above the streaming request limit', async () => {
+      handle = await bootTestServer();
+      const response = await postSessionMultipart(base(), {
+        session_id: 'ses_large_config',
+        work_dir: workDir(),
+        metadata: { padding: 'x'.repeat(1024 * 1024) },
+      });
+      expect(response.status).toBe(413);
+      expectErrorEnvelope(response.body, 'request_too_large');
+      expect(fake().created).toHaveLength(0);
+    });
+
+		it('uses the strict SI 50 MB bound for a managed Skill archive', async () => {
+			handle = await bootTestServer();
+			const archive = await writeSkillArchive(workDir(), { name: 'review' });
+			const response = await postSessionMultipart(base(), {
+				session_id: 'ses_large_managed_skill',
+				work_dir: workDir(),
+				skills: [{ ...archive.descriptor, content_size: 50_000_001 }],
+			}, [archive.blob]);
+			expect(response.status).toBe(413);
+			expectErrorEnvelope(response.body, 'request_too_large');
+			expect(fake().created).toHaveLength(0);
+		});
+
     it('binds the create configuration and applies it to the runtime session', async () => {
       handle = await bootTestServer();
       const downloadURL = 'https://storage.example.test/file_1';
       const realFetch = globalThis.fetch;
       globalThis.fetch = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-        if (String(input) === downloadURL) {
+        const requestURL = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+        if (requestURL === downloadURL) {
           return Promise.resolve(new Response('attached\n', {
             status: 200,
             headers: { 'content-length': '9' },
@@ -119,7 +180,8 @@ describe('session routes', () => {
       ]);
       let res: Awaited<ReturnType<typeof postJson>>;
       try {
-        res = await postJson(base(), '/sessions', {
+        const archive = await writeSkillArchive(workDir(), { name: 'review', version: '2' });
+        res = await postSessionMultipart(base(), {
           session_id: 'ses_1',
           work_dir: workDir(),
           system: 'You are a coding agent.',
@@ -139,15 +201,9 @@ describe('session routes', () => {
           mcp_servers: [{ type: 'url', name: 'docs', url: 'https://example.invalid/mcp' }],
 			resources: [{ id: 'res_1', type: 'file', file_id: 'file_1', mount_path: 'attached.txt', pvc_path: 'attached.txt', download_url: downloadURL, size: 9 }],
           skills: [{
-            id: 'skill_1',
-            name: 'review',
-            version: 2,
-            files: [{
-              path: 'SKILL.md',
-              content_base64: Buffer.from('---\nname: review\ndescription: Review code\n---\n').toString('base64'),
-            }],
+            ...archive.descriptor,
           }],
-        });
+        }, [archive.blob]);
       } finally {
         globalThis.fetch = realFetch;
       }
@@ -205,6 +261,7 @@ describe('session routes', () => {
               description: 'Review focused changes.',
               system_prompt_template: 'Review the task.',
               tools: ['Read'],
+				permission_policies: { Read: 'always_deny' },
               model_alias: 'reviewer-model',
               thinking_effort: 'low',
               context_window: 64000,
@@ -235,6 +292,11 @@ describe('session routes', () => {
           },
         ],
       });
+      const policyState = await readProfilePolicyState(workDir());
+      expect(policyState.mainProfile).toBe('coordinator');
+      expect([...policyState.policies.get('reviewer') ?? []]).toEqual([
+        ['Read', 'always_deny'],
+      ]);
     });
 
     it('rejects an invalid agent profile graph before allocating the Session ID', async () => {
@@ -301,7 +363,8 @@ describe('session routes', () => {
       const downloadURL = 'https://storage.example.test/file_2';
       const realFetch = globalThis.fetch;
       globalThis.fetch = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-        if (String(input) === downloadURL) {
+        const requestURL = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+        if (requestURL === downloadURL) {
           return Promise.resolve(new Response('dynamic\n', {
             status: 200,
             headers: { 'content-length': '8' },
@@ -449,9 +512,36 @@ describe('session routes', () => {
           resources: [{ entries: [{ content_sha256: 'hash-after', content: 'after' }] }],
         });
 
-			const invalid = await postJson(base(), '/sessions/ses_1/memory-acknowledgement', { resources: [] });
+		const invalid = await postJson(base(), '/sessions/ses_1/memory-acknowledgement', { resources: [] });
 			expect(invalid.status).toBe(400);
 			expectErrorEnvelope(invalid.body, 'invalid_request');
+
+			for (const path of ['\u0085leading.md', 'trailing.md\u0085']) {
+				const invalidPath = await postJson(base(), '/sessions/ses_1/memory-acknowledgement', {
+					resources: [{
+						resource_id: 'res_memory_1', memory_store_id: 'memstore_1',
+						entries: [{ id: 'mem_1', path, content: 'ignored', content_sha256: 'ignored-hash' }],
+					}],
+				});
+				expect(invalidPath.status).toBe(400);
+				expectErrorEnvelope(invalidPath.body, 'invalid_request');
+			}
+			const preserved = await fetch(`${base()}/sessions/ses_1/memory-snapshot`);
+			expect(await preserved.json()).toMatchObject({
+				resources: [{ entries: [{ path: 'notes.md', content_sha256: 'hash-after', content: 'after' }] }],
+			});
+
+			const allowedPath = '\uFEFFallowed.md';
+			const allowed = await postJson(base(), '/sessions/ses_1/memory-acknowledgement', {
+				resources: [{
+					resource_id: 'res_memory_1', memory_store_id: 'memstore_1',
+					entries: [{ id: 'mem_1', path: allowedPath, content: 'accepted', content_sha256: 'accepted-hash' }],
+				}],
+			});
+			expect(allowed.status).toBe(200);
+			const allowedSnapshot = await fetch(`${base()}/sessions/ses_1/memory-snapshot`);
+			const allowedBody = await allowedSnapshot.json() as { resources: Array<{ entries: unknown[] }> };
+			expect(allowedBody.resources[0]?.entries).toContainEqual(expect.objectContaining({ path: allowedPath, deleted: true }));
       } finally {
         if (priorAwareness === undefined) delete process.env['OCA_AWARENESS_ROOT'];
         else process.env['OCA_AWARENESS_ROOT'] = priorAwareness;
@@ -593,6 +683,29 @@ describe('session routes', () => {
       } finally {
         if (priorServiceKey === undefined) delete process.env['SERVICE_KEY'];
         else process.env['SERVICE_KEY'] = priorServiceKey;
+      }
+    });
+
+    it('replaces the public Session environment variables exactly', async () => {
+      handle = await bootTestServer();
+      await createSession();
+      const name = 'SESSION_PUBLIC_HTTP_TEST';
+      const previous = process.env[name];
+      try {
+        const set = await postJson(base(), '/sessions/ses_1/config', {
+          session_environment_variables: { [name]: ' before\nand after; ' },
+        });
+        expect(set.status).toBe(200);
+        expect(process.env[name]).toBe(' before\nand after; ');
+
+        const clear = await postJson(base(), '/sessions/ses_1/config', {
+          session_environment_variables: {},
+        });
+        expect(clear.status).toBe(200);
+        expect(process.env[name]).toBeUndefined();
+      } finally {
+        if (previous === undefined) delete process.env[name];
+        else process.env[name] = previous;
       }
     });
 

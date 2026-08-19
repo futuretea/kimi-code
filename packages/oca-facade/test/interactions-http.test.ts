@@ -112,6 +112,25 @@ describe('interaction routes (approvals / questions / tool-results)', () => {
       expect(frames.at(-1)).toEqual({ type: 'prompt_done', stop_reason: 'completed' });
     });
 
+		it('routes a child approval by its private runtime Agent identity', async () => {
+			handle = await bootTestServer();
+			const { stream, requestFrame } = await startBlockedTurn([
+				{ kind: 'event', event: runtimeEvent({ type: 'subagent.spawned', subagentId: 'runtime_child_1', subagentName: 'roster_1', parentToolCallId: 'parent_1', runInBackground: false }) },
+				{ kind: 'event', event: runtimeEvent({ type: 'tool.call.started', agentId: 'runtime_child_1', turnId: 2, toolCallId: 'child_call_1', name: 'Read', args: { path: 'README.md' } }) },
+				{ kind: 'approval', request: { toolCallId: 'child_call_1', toolName: 'Read', agentId: 'runtime_child_1', action: 'execute', display: { kind: 'generic', summary: 'read a file' } } },
+			], 'approval_request');
+			expect(requestFrame).toMatchObject({
+				type: 'approval_request', tool_call_id: 'child_call_1', runtime_agent_id: 'runtime_child_1', arguments: { path: 'README.md' },
+			});
+
+			const accepted = await postJson(base(), '/sessions/ses_1/approvals', {
+				tool_call_id: 'child_call_1', runtime_agent_id: 'runtime_child_1', decision: 'approved',
+			});
+			expect(accepted).toMatchObject({ status: 202, body: { accepted: true } });
+			expect(fake().sessions.get('ses_1')?.approvalResponses).toEqual([{ decision: 'approved' }]);
+			expect((await collectNdjson(stream.reader)).at(-1)).toEqual({ type: 'prompt_done', stop_reason: 'completed' });
+		});
+
     it('rejects a late response after the turn ended (409 request_not_pending)', async () => {
       handle = await bootTestServer();
       const { stream } = await startBlockedTurn([APPROVAL_STEP], 'approval_request');

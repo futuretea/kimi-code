@@ -110,16 +110,24 @@ export interface FacadeMemorySyncResource {
 	readonly entries: readonly FacadeMemoryEntry[];
 }
 
+export type FacadeSkillOrigin = 'managed' | 'forward';
+
 export interface FacadeSkillRef {
   readonly id: string;
   readonly name: string;
-  readonly version: number;
-  readonly files: readonly FacadeSkillFile[];
+  /** Canonical decimal Skill Version string. */
+  readonly version: string;
+	/** Internal control-plane surface that determines the accepted package bounds. */
+	readonly origin: FacadeSkillOrigin;
+  /** Exact ZIP byte size as persisted by the control plane. */
+  readonly contentSize: number;
+  /** Lower-case SHA-256 of the exact ZIP bytes. */
+  readonly contentSHA256: string;
 }
 
-export interface FacadeSkillFile {
+/** Process-local staged archive paired by index with `FacadeCreateConfig.skills`. */
+export interface FacadeSkillArchive {
   readonly path: string;
-  readonly contentBase64: string;
 }
 
 /**
@@ -133,6 +141,8 @@ export interface FacadeAgentProfile {
   readonly description?: string;
   readonly systemPromptTemplate?: string;
   readonly tools?: readonly string[];
+	/** Per-tool policy selected by this immutable profile. */
+	readonly permissionPolicies?: Readonly<Record<string, PermissionPolicyType>>;
   readonly modelAlias?: string;
   readonly thinkingEffort?: string;
   readonly contextWindow?: number;
@@ -161,8 +171,12 @@ export interface FacadeCreateConfig {
   readonly mcpServers?: readonly FacadeMcpServer[];
   readonly resources?: readonly FacadeResource[];
   readonly skills?: readonly FacadeSkillRef[];
+  /** Never serialized into the runtime journal or public response. */
+  readonly skillArchives?: readonly FacadeSkillArchive[];
   readonly additionalDirs?: readonly string[];
   readonly agentProfiles?: FacadeAgentProfiles;
+	/** Exact public Session-owned process environment snapshot. */
+	readonly sessionEnvironmentVariables?: Readonly<Record<string, string>>;
 	/** Trusted Vault environment snapshot, held only in the facade process. */
 	readonly vaultEnvironmentVariables?: Readonly<Record<string, string>>;
 }
@@ -173,6 +187,8 @@ export interface FacadeSessionConfig {
   readonly mcpServers?: readonly FacadeMcpServer[];
   /** Ephemeral server URL to token map supplied only by the trusted orchestrator. */
   readonly mcpCredentials?: Readonly<Record<string, string>>;
+	/** Exact replacement of public Session-owned process environment variables. */
+	readonly sessionEnvironmentVariables?: Readonly<Record<string, string>>;
 	/** Exact replacement of Vault-owned process environment variables. */
 	readonly vaultEnvironmentVariables?: Readonly<Record<string, string>>;
 }
@@ -193,20 +209,29 @@ export interface FacadeQuestionItem {
   readonly multi_select?: boolean;
 }
 
+export type EvaluatedPermission = 'allow' | 'ask' | 'deny';
+
+/** The only Tool Result content form backed by the current runtime adapter. */
+type FacadeToolResultTextBlock = { readonly type: 'text'; readonly text: string };
+
 type FacadeEventPayload =
   | { readonly type: 'agent.message'; readonly content: string }
   | { readonly type: 'agent.thinking'; readonly content: string }
+  // Minimal user-approved projection of Kimi compaction.completed. The
+  // runtime result is private until Qoder documents type-specific fields.
+  | { readonly type: 'agent.thread_context_compacted' }
   | {
       readonly type: 'agent.tool_use';
       readonly id: string;
       readonly name: string;
       readonly arguments?: unknown;
+      readonly evaluated_permission: EvaluatedPermission;
     }
   | {
       readonly type: 'agent.tool_result';
       readonly id: string;
-      readonly output?: unknown;
-      readonly is_error?: boolean;
+      readonly content: readonly FacadeToolResultTextBlock[];
+      readonly is_error: boolean;
     }
   | {
       readonly type: 'agent.mcp_tool_use';
@@ -214,12 +239,13 @@ type FacadeEventPayload =
       readonly server_name: string;
       readonly tool_name: string;
       readonly arguments?: unknown;
+      readonly evaluated_permission: EvaluatedPermission;
     }
   | {
       readonly type: 'agent.mcp_tool_result';
       readonly id: string;
-      readonly output?: unknown;
-      readonly is_error?: boolean;
+      readonly content: readonly FacadeToolResultTextBlock[];
+      readonly is_error: boolean;
     }
   // No current fork protocol event maps to this type. The public field names
   // are documented, but their per-field JSON types and a runtime producer are
@@ -246,6 +272,10 @@ type FacadeEventPayload =
       readonly type: 'approval_request';
       readonly tool_call_id: string;
       readonly tool_name: string;
+			/** Internal routing identity for a child Agent; never public output. */
+			readonly runtime_agent_id?: string;
+			readonly server_name?: string;
+			readonly arguments?: unknown;
       readonly action: string;
       readonly display: unknown;
     }
@@ -271,19 +301,21 @@ type FacadeEventPayload =
   | { readonly type: 'subagent.started'; readonly runtime_agent_id: string }
   | { readonly type: 'subagent.message'; readonly runtime_agent_id: string; readonly content: string }
   | { readonly type: 'subagent.thinking'; readonly runtime_agent_id: string }
+  | { readonly type: 'subagent.thread_context_compacted'; readonly runtime_agent_id: string }
   | {
       readonly type: 'subagent.tool_use';
       readonly runtime_agent_id: string;
       readonly id: string;
       readonly name: string;
       readonly arguments?: unknown;
+      readonly evaluated_permission: EvaluatedPermission;
     }
   | {
       readonly type: 'subagent.tool_result';
       readonly runtime_agent_id: string;
       readonly id: string;
-      readonly output?: unknown;
-      readonly is_error?: boolean;
+      readonly content: readonly FacadeToolResultTextBlock[];
+      readonly is_error: boolean;
     }
   | {
       readonly type: 'subagent.mcp_tool_use';
@@ -292,13 +324,14 @@ type FacadeEventPayload =
       readonly server_name: string;
       readonly tool_name: string;
       readonly arguments?: unknown;
+      readonly evaluated_permission: EvaluatedPermission;
     }
   | {
       readonly type: 'subagent.mcp_tool_result';
       readonly runtime_agent_id: string;
       readonly id: string;
-      readonly output?: unknown;
-      readonly is_error?: boolean;
+      readonly content: readonly FacadeToolResultTextBlock[];
+      readonly is_error: boolean;
     }
   | {
       readonly type: 'subagent.model_request_start';

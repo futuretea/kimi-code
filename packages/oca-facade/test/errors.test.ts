@@ -12,6 +12,7 @@ import {
 
 const EXPECTED_HTTP_STATUS: Record<FacadeErrorCode, number> = {
   invalid_request: 400,
+  request_too_large: 413,
   session_not_found: 404,
   session_state_conflict: 409,
   prompt_rejected: 409,
@@ -24,12 +25,13 @@ const EXPECTED_HTTP_STATUS: Record<FacadeErrorCode, number> = {
 const FORBIDDEN_TOKENS = /kimi|acp|kap-server|sidecar/i;
 
 describe('facade error model', () => {
-  it('defines exactly the eight neutral error codes of the contract', () => {
+  it('defines exactly the nine neutral error codes of the contract', () => {
     expect([...FACADE_ERROR_CODES].toSorted()).toEqual(
       [
         'internal_error',
         'invalid_request',
         'prompt_rejected',
+        'request_too_large',
         'request_not_pending',
         'session_not_found',
         'session_resume_failed',

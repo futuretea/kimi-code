@@ -787,15 +787,31 @@ importers:
 
   packages/oca-facade:
     dependencies:
+      '@fastify/multipart':
+        specifier: ^10.0.0
+        version: 10.0.0
       '@moonshot-ai/kimi-code-sdk':
         specifier: workspace:^
         version: link:../node-sdk
       fastify:
         specifier: ^5.1.0
         version: 5.8.5
+      yauzl:
+        specifier: ^3.3.0
+        version: 3.3.0
       zod:
         specifier: 'catalog:'
         version: 4.3.6
+    devDependencies:
+      '@types/yauzl':
+        specifier: ^2.10.3
+        version: 2.10.3
+      '@types/yazl':
+        specifier: ^2.4.6
+        version: 2.4.6
+      yazl:
+        specifier: ^3.3.1
+        version: 3.3.1
 
   packages/pi-tui:
     dependencies:

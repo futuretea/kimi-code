@@ -119,17 +119,20 @@ export async function snapshotMemoryStoreResources(resources: readonly FacadeRes
 
 	const baselineByPath = new Map<string, { resource: FacadeResource; entry: NonNullable<FacadeResource['memoryEntries']>[number] }>();
 	const readOnlyPaths = new Set<string>();
+	const visibleEntries = new Map<string, { resource: FacadeResource; entry: NonNullable<FacadeResource['memoryEntries']>[number] }>();
 	for (const resource of resources) {
 		if (resource.type !== 'memory_store') continue;
 		if (resource.memoryStoreId === undefined) throw new Error('memory store resource id is missing');
 		for (const entry of resource.memoryEntries ?? []) {
-			if (resource.access === 'read_only') {
-				readOnlyPaths.add(entry.path);
-				continue;
+			if (visibleEntries.has(entry.path) && resource.access !== 'read_only') {
+				throw new Error('memory store resources share a memory path');
 			}
-			if (baselineByPath.has(entry.path)) throw new Error('memory store resources share a memory path');
-			baselineByPath.set(entry.path, { resource, entry });
+			visibleEntries.set(entry.path, { resource, entry });
 		}
+	}
+	for (const [path, visible] of visibleEntries) {
+		if (visible.resource.access === 'read_only') readOnlyPaths.add(path);
+		else baselineByPath.set(path, visible);
 	}
 
 	const files = await readAwarenessFiles();
@@ -175,7 +178,7 @@ export async function snapshotMemoryStoreResources(resources: readonly FacadeRes
 
 async function materializeMemoryStoreResources(resources: readonly FacadeResource[]): Promise<void> {
 	const root = await ensureMemoryRoot();
-	const occupiedPaths = new Set<string>();
+	const materializedAccess = new Map<string, FacadeResource['access']>();
 	for (const resource of resources) {
 		if (resource.type !== 'memory_store') continue;
 		if (resource.memoryStoreId === undefined || resource.memoryStoreId.length === 0) {
@@ -185,11 +188,12 @@ async function materializeMemoryStoreResources(resources: readonly FacadeResourc
 			throw new Error('memory store resource access is invalid');
 		}
 		for (const entry of resource.memoryEntries ?? []) {
+			validateMemorySnapshotEntry(entry.path, entry.content);
 			const destination = resolveMemoryDestination(root, entry.path);
-			if (occupiedPaths.has(destination)) {
+			if (materializedAccess.has(destination) && resource.access !== 'read_only') {
 				throw new Error('memory store resources share a memory path');
 			}
-			occupiedPaths.add(destination);
+			materializedAccess.set(destination, resource.access);
 			await materializeMemoryEntry(root, destination, entry.content, resource.access === 'read_only');
 		}
 	}
@@ -465,9 +469,7 @@ async function collectAwarenessFiles(root: string, directory: string, files: Map
 }
 
 function resolveMemoryDestination(root: string, path: string): string {
-	if (path.length === 0 || [...path].length > 1024 || path.startsWith('/') || path.includes('..')) {
-		throw new Error('memory path is invalid');
-	}
+	validateMemoryPath(path);
 	const destination = resolve(root, path);
 	if (!isWithin(root, destination) || destination === root) {
 		throw new Error('memory path is outside awareness root');
@@ -475,12 +477,48 @@ function resolveMemoryDestination(root: string, path: string): string {
 	return destination;
 }
 
-function validateMemorySnapshotEntry(path: string, content: string): void {
-	if (path.length === 0 || [...path].length > 1024 || path.startsWith('/') || path.includes('..')) {
+export function validateMemorySnapshotEntry(path: string, content: string): void {
+	validateMemoryPath(path);
+	validateMemoryContent(content);
+}
+
+function validateMemoryPath(path: string): void {
+	if (Buffer.byteLength(path, 'utf8') === 0 || Buffer.byteLength(path, 'utf8') > 1024 || path.startsWith('/') || path.includes('\\') || path.includes('\0')) {
 		throw new Error('memory path is invalid');
 	}
-	if (Buffer.byteLength(content, 'utf8') > 100 * 1024 || content.trim().length === 0) {
+	const segments = path.split('/');
+	if (segments.length > 58 || segments.some((segment) => segment === '' || segment === '.' || segment === '..' || hasGatewayBoundaryWhitespace(segment) || Buffer.byteLength(segment, 'utf8') > 255)) {
+		throw new Error('memory path is invalid');
+	}
+}
+
+// The Gateway validates path segments with Go's strings.TrimSpace, whose
+// Unicode whitespace set differs from ECMAScript String#trim (notably U+0085
+// and U+FEFF). Keep facade-created Memory entries inside the public contract.
+function hasGatewayBoundaryWhitespace(segment: string): boolean {
+	return (
+		isGoUnicodeSpace(segment.codePointAt(0)) ||
+		isGoUnicodeSpace(segment.codePointAt(segment.length - 1))
+	);
+}
+
+function isGoUnicodeSpace(codePoint: number | undefined): boolean {
+	if (codePoint === undefined) return false;
+	return codePoint === 0x09 || codePoint === 0x0a || codePoint === 0x0b || codePoint === 0x0c || codePoint === 0x0d ||
+		codePoint === 0x20 || codePoint === 0x85 || codePoint === 0xa0 || codePoint === 0x1680 ||
+		(codePoint >= 0x2000 && codePoint <= 0x200a) || codePoint === 0x2028 || codePoint === 0x2029 ||
+		codePoint === 0x202f || codePoint === 0x205f || codePoint === 0x3000;
+}
+
+function validateMemoryContent(content: string): void {
+	if (Buffer.byteLength(content, 'utf8') > 100 * 1024) {
 		throw new Error('memory content violates the Memory Store contract');
+	}
+	for (const character of content) {
+		const codePoint = character.codePointAt(0);
+		if (codePoint !== undefined && ((codePoint <= 0x1f && character !== '\t' && character !== '\n' && character !== '\r') || codePoint === 0x7f)) {
+			throw new Error('memory content violates the Memory Store contract');
+		}
 	}
 }
 

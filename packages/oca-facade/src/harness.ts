@@ -21,20 +21,23 @@ import type {
 
 import { FacadeError, toFacadeError } from './errors';
 import type {
+	FacadeAgentProfiles,
   FacadeCreateConfig,
   FacadeMcpServer,
   FacadeResource,
 	FacadeSessionConfig,
 	FacadeMemorySnapshotResource,
-	FacadeMemorySyncResource,
+  FacadeMemorySyncResource,
   FacadeToolEntry,
   HarnessEventSink,
+  EvaluatedPermission,
   PermissionPolicyType,
 } from './facade-types';
 import { hydrateSessionMcpCredentials, restoreSessionMcpConfig, snapshotSessionMcpConfig, writeSessionMcpConfig } from './mcp-config';
-import { configureGitHubTokenEnvironment, materializeReadOnlyMemoryStoreResources, materializeSessionResources, snapshotMemoryStoreResources, validateDistinctWorkspacePVCPaths } from './resource-materializer';
+import { configureGitHubTokenEnvironment, materializeReadOnlyMemoryStoreResources, materializeSessionResources, snapshotMemoryStoreResources, validateDistinctWorkspacePVCPaths, validateMemorySnapshotEntry } from './resource-materializer';
 import type { PendingCallRegistration, SessionRegistry, StagedToolResult } from './session-registry';
-import { materializeSessionSkills } from './skill-materializer';
+import { materializeSessionSkills, removeMaterializedSessionSkills } from './skill-materializer';
+import { readProfilePolicyState, writeProfilePolicyState, type ProfilePolicyState } from './profile-policy-state';
 
 // The facade vocabulary lives in `./facade-types`; re-exported so this module
 // stays the single import surface for the harness layer.
@@ -59,6 +62,7 @@ export * from './facade-types';
 export const QODER_PERMISSION_MODE: PermissionMode = 'manual';
 const QODER_MAX_SESSION_THREADS = 25;
 const VAULT_ENVIRONMENT_NAMES_MARKER = 'OCA_FACADE_VAULT_ENV_NAMES';
+const SESSION_ENVIRONMENT_NAMES_MARKER = 'OCA_FACADE_SESSION_ENV_NAMES';
 
 // ---------------------------------------------------------------------------
 // Harness abstraction (the single extension point; tests inject a fake).
@@ -119,12 +123,15 @@ export interface LiveHarnessFactoryOptions {
   readonly harnessOptions?: KimiHarnessOptions;
   /** Directory holding per-server credential files; defaults to the mounted credentials dir. */
   readonly credentialsDir?: string;
+  /** Workspace used by journal recovery; production defaults to /workspace. */
+  readonly resumeWorkDir?: string;
 }
 
 interface TrackedToolCall {
   readonly name: string;
   readonly mcp?: { readonly serverName: string; readonly toolName: string };
   readonly custom?: true;
+	readonly arguments?: unknown;
 }
 
 interface LiveSessionState {
@@ -133,11 +140,15 @@ interface LiveSessionState {
 	contextBlocks: TextPromptPart[];
 	resourceContextBlocks: TextPromptPart[];
 	resources: readonly FacadeResource[];
-	memoryResources: readonly FacadeResource[];
+  memoryResources: readonly FacadeResource[];
   toolPolicies: ReadonlyMap<string, PermissionPolicyType>;
+	readonly mainProfileName: string;
+	readonly profileToolPolicies: Map<string, ReadonlyMap<string, PermissionPolicyType>>;
+	readonly childProfileNames: Map<string, string>;
   customToolNames: ReadonlySet<string>;
-  mcpServers: readonly FacadeMcpServer[];
+	mcpServers: readonly FacadeMcpServer[];
 	tools: readonly FacadeToolEntry[];
+	sessionEnvironmentVariables: Map<string, string>;
 	vaultEnvironmentNames: Set<string>;
   firstPromptSent: boolean;
   readonly toolCalls: Map<string, TrackedToolCall>;
@@ -157,6 +168,7 @@ export class LiveHarnessFactory implements FacadeHarness {
   private readonly createHarness: HarnessFactory;
   private readonly harnessOptions: KimiHarnessOptions;
   private readonly credentialsDir: string | undefined;
+  private readonly resumeWorkDir: string;
   private readonly sessions = new Map<string, LiveSessionState>();
   private runtimeHarness: HarnessSessionFactory | undefined;
 
@@ -166,15 +178,20 @@ export class LiveHarnessFactory implements FacadeHarness {
     this.createHarness = options.createHarness ?? createKimiHarness;
     this.harnessOptions = options.harnessOptions ?? {};
     this.credentialsDir = options.credentialsDir ?? process.env['OCA_CREDENTIALS_DIR'];
+    this.resumeWorkDir = options.resumeWorkDir ?? process.env['OCA_FACADE_WORK_DIR'] ?? '/workspace';
   }
 
   async createSession(config: FacadeCreateConfig): Promise<void> {
+    let skillsMaterialized = false;
     try {
       if (this.sessions.has(config.sessionId)) {
         throw new FacadeError('session_state_conflict');
       }
+		const profilePolicyState = profilePolicyStateForCreate(config);
+		await writeProfilePolicyState(config.workDir, profilePolicyState);
 		await materializeSessionResources(config.resources ?? [], config.workDir);
-		await materializeSessionSkills(config.skills ?? [], config.workDir);
+		await materializeSessionSkills(config.skills ?? [], config.skillArchives ?? [], config.workDir);
+		skillsMaterialized = (config.skills?.length ?? 0) > 0;
 		configureGitHubTokenEnvironment(config.resources ?? []);
       if (config.mcpServers !== undefined && config.mcpServers.length > 0) {
         await writeSessionMcpConfig({
@@ -188,14 +205,17 @@ export class LiveHarnessFactory implements FacadeHarness {
         workDir: config.workDir,
         mcpServers: config.mcpServers ?? [],
         tools: config.tools ?? [],
+		profilePolicyState,
 		contextBlocks: buildStaticContextBlocks(config),
 		resources: config.resources ?? [],
       });
+		this.replaceSessionEnvironmentVariables(state, config.sessionEnvironmentVariables ?? {});
 		this.replaceVaultEnvironmentVariables(state, config.vaultEnvironmentVariables ?? {});
       if (config.tools !== undefined) {
         await this.applyTools(state, config.tools);
       }
     } catch (error) {
+      if (skillsMaterialized) await removeMaterializedSessionSkills(config.skills ?? [], config.workDir);
       throw toFacadeError(error, 'internal_error');
     }
   }
@@ -206,17 +226,26 @@ export class LiveHarnessFactory implements FacadeHarness {
       return;
     }
     try {
-		const workDir = process.env['OCA_FACADE_WORK_DIR'] ?? '/workspace';
-		await hydrateSessionMcpCredentials(workDir, this.credentialsDir);
+		const workDir = this.resumeWorkDir;
+		let profilePolicyState: ProfilePolicyState;
+		try {
+			profilePolicyState = await readProfilePolicyState(workDir);
+			await hydrateSessionMcpCredentials(workDir, this.credentialsDir);
+		} catch (policyStateError) {
+			await this.runtime().resumeSession({ id: sessionId });
+			throw policyStateError;
+		}
       const session = await this.runtime().resumeSession({ id: sessionId });
 		const state = this.wireSession(sessionId, session, {
 		workDir,
         mcpServers: [],
         tools: [],
+		profilePolicyState,
 		contextBlocks: [],
 		resources: [],
       });
 		state.vaultEnvironmentNames = vaultEnvironmentNamesFromProcess();
+		state.sessionEnvironmentVariables = sessionEnvironmentVariablesFromProcess();
     } catch (error) {
       // A session the runtime journal does not hold keeps the 404 contract
       // code; anything else is sanitized into a neutral resume failure.
@@ -253,12 +282,19 @@ export class LiveHarnessFactory implements FacadeHarness {
 	} else if (needsConfigWrite) {
 		await this.writeSessionMcpConfig(state.workDir, nextMCPServers, nextTools, config.mcpCredentials);
 	}
+		if (config.sessionEnvironmentVariables !== undefined) {
+			this.replaceSessionEnvironmentVariables(state, config.sessionEnvironmentVariables);
+		}
 		if (config.vaultEnvironmentVariables !== undefined) {
 			this.replaceVaultEnvironmentVariables(state, config.vaultEnvironmentVariables);
 		}
       state.mcpServers = nextMCPServers;
       state.tools = nextTools;
-      if (reloadMCP || config.tools !== undefined) await this.applyTools(state, nextTools);
+		if (reloadMCP || config.tools !== undefined) {
+			await this.applyTools(state, nextTools);
+			state.profileToolPolicies.set(state.mainProfileName, state.toolPolicies);
+			await writeProfilePolicyState(state.workDir, profilePolicyStateFromLiveState(state));
+		}
     } catch (error) {
       throw toFacadeError(error, 'internal_error');
     }
@@ -279,10 +315,25 @@ export class LiveHarnessFactory implements FacadeHarness {
 		});
 	}
 
+	private replaceSessionEnvironmentVariables(state: LiveSessionState, values: Readonly<Record<string, string>>): void {
+		const next = new Map(Object.entries(values));
+		for (const name of state.sessionEnvironmentVariables.keys()) {
+			if (!next.has(name) && !state.vaultEnvironmentNames.has(name)) delete process.env[name];
+		}
+		for (const [name, value] of next) {
+			if (!state.vaultEnvironmentNames.has(name)) process.env[name] = value;
+		}
+		state.sessionEnvironmentVariables = next;
+	}
+
 	private replaceVaultEnvironmentVariables(state: LiveSessionState, values: Readonly<Record<string, string>>): void {
 		const names = new Set(Object.keys(values));
 		for (const name of state.vaultEnvironmentNames) {
-			if (!names.has(name)) delete process.env[name];
+			if (!names.has(name)) {
+				const sessionValue = state.sessionEnvironmentVariables.get(name);
+				if (sessionValue === undefined) delete process.env[name];
+				else process.env[name] = sessionValue;
+			}
 		}
 		for (const [name, value] of Object.entries(values)) process.env[name] = value;
 		state.vaultEnvironmentNames = names;
@@ -329,11 +380,20 @@ export class LiveHarnessFactory implements FacadeHarness {
 				throw new FacadeError('invalid_request');
 			}
 		}
-		state.memoryResources = state.memoryResources.map((resource) => {
+		try {
+			for (const resource of resources) {
+				for (const entry of resource.entries) validateMemorySnapshotEntry(entry.path, entry.content);
+			}
+		} catch {
+			throw new FacadeError('invalid_request');
+		}
+		const applyAcknowledgedEntries = (resource: FacadeResource): FacadeResource => {
 			const acknowledged = synchronized.get(resource.id);
 			if (acknowledged === undefined || resource.memoryStoreId !== acknowledged.memoryStoreId) return resource;
 			return { ...resource, memoryEntries: acknowledged.entries };
-		});
+		};
+		state.memoryResources = state.memoryResources.map(applyAcknowledgedEntries);
+		state.resources = state.resources.map(applyAcknowledgedEntries);
 	}
 
   /**
@@ -425,6 +485,7 @@ export class LiveHarnessFactory implements FacadeHarness {
       workDir: string;
       mcpServers: readonly FacadeMcpServer[];
       tools: readonly FacadeToolEntry[];
+		profilePolicyState: ProfilePolicyState;
       contextBlocks: readonly TextPromptPart[];
 		resources: readonly FacadeResource[];
     },
@@ -443,10 +504,14 @@ export class LiveHarnessFactory implements FacadeHarness {
       ],
 		resources: options.resources,
 		memoryResources: options.resources.filter((resource) => resource.type === 'memory_store'),
-      toolPolicies: new Map(),
+		toolPolicies: options.profilePolicyState.policies.get(options.profilePolicyState.mainProfile) ?? new Map(),
+		mainProfileName: options.profilePolicyState.mainProfile,
+		profileToolPolicies: new Map(options.profilePolicyState.policies),
+		childProfileNames: new Map(),
       customToolNames: new Set(),
-      mcpServers: options.mcpServers,
-      tools: options.tools,
+		mcpServers: options.mcpServers,
+		tools: options.tools,
+		sessionEnvironmentVariables: new Map(),
 		vaultEnvironmentNames: new Set(),
       firstPromptSent: false,
       toolCalls: new Map(),
@@ -470,12 +535,15 @@ export class LiveHarnessFactory implements FacadeHarness {
 
   private installApprovalHandler(sessionId: string, state: LiveSessionState): void {
     const handler: ApprovalHandler = async (request) => {
+		const runtimeAgentID = request.agentId !== undefined && state.childAgentIds.has(request.agentId)
+			? request.agentId
+			: undefined;
       // A custom tool is never executed by the runtime. Its call is bridged
       // directly to `agent.custom_tool_use`, which the client settles with
       // `user.custom_tool_result`; do not introduce a separate confirmation.
-      const policy = state.customToolNames.has(request.toolName)
+      const policy = runtimeAgentID === undefined && state.customToolNames.has(request.toolName)
         ? 'always_allow'
-        : state.toolPolicies.get(request.toolName) ?? 'always_ask';
+		: permissionPolicyForRuntimeAgent(state, request.toolName, runtimeAgentID);
       if (policy === 'always_allow') {
         return { decision: 'approved' };
       }
@@ -483,11 +551,16 @@ export class LiveHarnessFactory implements FacadeHarness {
         // No ask round trip: the policy denies every approval-worthy action.
         return { decision: 'rejected', feedback: 'Denied by the session permission policy.' };
       }
+		const tracked = runtimeAgentID === undefined
+			? state.toolCalls.get(request.toolCallId)
+			: state.childToolCalls.get(childToolCallKey(runtimeAgentID, request.toolCallId));
+		const mcp = tracked?.mcp ?? parseQualifiedServerToolName(request.toolName);
       let registration: PendingCallRegistration;
       try {
         registration = this.registry.registerPendingCall(sessionId, {
           id: request.toolCallId,
           kind: 'approval',
+			...(runtimeAgentID !== undefined ? { runtimeAgentId: runtimeAgentID } : {}),
         });
       } catch {
         // Session no longer active, a duplicate id, or the journal refused
@@ -498,7 +571,10 @@ export class LiveHarnessFactory implements FacadeHarness {
       this.sink.emit(sessionId, {
         type: 'approval_request',
         tool_call_id: request.toolCallId,
-        tool_name: request.toolName,
+			...(runtimeAgentID !== undefined ? { runtime_agent_id: runtimeAgentID } : {}),
+			tool_name: mcp?.toolName ?? tracked?.name ?? request.toolName,
+			...(mcp !== undefined ? { server_name: mcp.serverName } : {}),
+			...(tracked?.arguments !== undefined ? { arguments: tracked.arguments } : {}),
         action: request.action,
         display: request.display,
       });
@@ -655,10 +731,14 @@ export class LiveHarnessFactory implements FacadeHarness {
       case 'thinking.delta':
         this.sink.emit(sessionId, { type: 'agent.thinking', content: event.delta });
         return;
+      case 'compaction.completed':
+        this.sink.emit(sessionId, { type: 'agent.thread_context_compacted' });
+        return;
       case 'tool.call.started': {
         const mcp = parseQualifiedServerToolName(event.name);
         const custom = state.customToolNames.has(event.name);
-        if (!custom) {
+			const permission = evaluatedPermission(state, event.name);
+			if (!custom && permission !== 'ask') {
           this.sink.emit(
             sessionId,
             mcp === undefined
@@ -667,6 +747,7 @@ export class LiveHarnessFactory implements FacadeHarness {
                   id: event.toolCallId,
                   name: event.name,
                   arguments: event.args,
+									evaluated_permission: permission,
                 }
               : {
                   type: 'agent.mcp_tool_use',
@@ -674,6 +755,7 @@ export class LiveHarnessFactory implements FacadeHarness {
                   server_name: mcp.serverName,
                   tool_name: mcp.toolName,
                   arguments: event.args,
+									evaluated_permission: permission,
                 },
           );
         }
@@ -681,6 +763,7 @@ export class LiveHarnessFactory implements FacadeHarness {
           name: event.name,
           ...(mcp ? { mcp } : {}),
           ...(custom ? { custom: true } : {}),
+				...(event.args !== undefined ? { arguments: event.args } : {}),
         });
         return;
       }
@@ -693,8 +776,8 @@ export class LiveHarnessFactory implements FacadeHarness {
         if (tracked?.custom === true) return;
         const base = {
           id: event.toolCallId,
-          ...(event.output !== undefined ? { output: event.output } : {}),
-          ...(event.isError === true ? { is_error: true } : {}),
+          content: toolResultContent(event.output),
+          is_error: event.isError === true,
         };
         this.sink.emit(
           sessionId,
@@ -763,28 +846,43 @@ export class LiveHarnessFactory implements FacadeHarness {
           this.sink.emit(sessionId, { type: 'subagent.thinking', runtime_agent_id: event.agentId });
         }
         return true;
+      case 'compaction.completed':
+        this.sink.emit(sessionId, {
+          type: 'subagent.thread_context_compacted',
+          runtime_agent_id: event.agentId,
+        });
+        return true;
       case 'tool.call.started': {
         const mcp = parseQualifiedServerToolName(event.name);
-        this.sink.emit(
-          sessionId,
-          mcp === undefined
-            ? {
-                type: 'subagent.tool_use',
-                runtime_agent_id: event.agentId,
-                id: event.toolCallId,
-                name: event.name,
-                arguments: event.args,
-              }
-            : {
-                type: 'subagent.mcp_tool_use',
-                runtime_agent_id: event.agentId,
-                id: event.toolCallId,
-                server_name: mcp.serverName,
-                tool_name: mcp.toolName,
-                arguments: event.args,
-              },
-        );
-        state.childToolCalls.set(childToolCallKey(event.agentId, event.toolCallId), { name: event.name, ...(mcp ? { mcp } : {}) });
+		const permission = evaluatedPermission(state, event.name, event.agentId);
+		if (permission !== 'ask') {
+			this.sink.emit(
+				sessionId,
+				mcp === undefined
+					? {
+						type: 'subagent.tool_use',
+						runtime_agent_id: event.agentId,
+						id: event.toolCallId,
+						name: event.name,
+						arguments: event.args,
+						evaluated_permission: permission,
+					}
+					: {
+						type: 'subagent.mcp_tool_use',
+						runtime_agent_id: event.agentId,
+						id: event.toolCallId,
+						server_name: mcp.serverName,
+						tool_name: mcp.toolName,
+						arguments: event.args,
+						evaluated_permission: permission,
+					},
+			);
+		}
+		state.childToolCalls.set(childToolCallKey(event.agentId, event.toolCallId), {
+			name: event.name,
+			...(mcp ? { mcp } : {}),
+			...(event.args !== undefined ? { arguments: event.args } : {}),
+		});
         return true;
       }
       case 'tool.result': {
@@ -794,8 +892,8 @@ export class LiveHarnessFactory implements FacadeHarness {
         const base = {
           runtime_agent_id: event.agentId,
           id: event.toolCallId,
-          ...(event.output !== undefined ? { output: event.output } : {}),
-          ...(event.isError === true ? { is_error: true } : {}),
+          content: toolResultContent(event.output),
+          is_error: event.isError === true,
         };
         this.sink.emit(
           sessionId,
@@ -814,6 +912,7 @@ export class LiveHarnessFactory implements FacadeHarness {
     switch (event.type) {
       case 'subagent.spawned':
         state.childAgentIds.add(event.subagentId);
+		state.childProfileNames.set(event.subagentId, event.subagentName);
         this.sink.emit(sessionId, {
           type: 'subagent.spawned',
           runtime_agent_id: event.subagentId,
@@ -885,6 +984,23 @@ function vaultEnvironmentNamesFromProcess(): Set<string> {
 	);
 }
 
+function sessionEnvironmentVariablesFromProcess(): Map<string, string> {
+	const values = new Map<string, string>();
+	for (const name of environmentNamesFromMarker(SESSION_ENVIRONMENT_NAMES_MARKER)) {
+		values.set(name, process.env[name] ?? '');
+	}
+	return values;
+}
+
+function environmentNamesFromMarker(marker: string): Set<string> {
+	return new Set(
+		(process.env[marker] ?? '')
+			.split(',')
+			.map((name) => name.trim())
+			.filter((name) => name !== ''),
+	);
+}
+
 function toolCallResponse(result: StagedToolResult): ToolCallResponse {
   switch (result.resolution) {
     case 'completed':
@@ -945,6 +1061,50 @@ interface ResolvedTools {
   readonly enabledNames: readonly string[];
   readonly policies: ReadonlyMap<string, PermissionPolicyType>;
   readonly customTools: readonly Required<Pick<FacadeToolEntry, 'name' | 'description' | 'inputSchema'>>[];
+}
+
+function evaluatedPermission(state: LiveSessionState, toolName: string, runtimeAgentID?: string): EvaluatedPermission {
+	switch (permissionPolicyForRuntimeAgent(state, toolName, runtimeAgentID)) {
+    case 'always_allow':
+      return 'allow';
+    case 'always_deny':
+      return 'deny';
+    default:
+      return 'ask';
+  }
+}
+
+function permissionPolicyForRuntimeAgent(
+	state: LiveSessionState,
+	toolName: string,
+	runtimeAgentID?: string,
+): PermissionPolicyType {
+	if (runtimeAgentID !== undefined) {
+		const profile = state.childProfileNames.get(runtimeAgentID);
+		return state.profileToolPolicies.get(profile ?? '')?.get(toolName)
+			?? state.toolPolicies.get(toolName)
+			?? 'always_ask';
+	}
+	return state.toolPolicies.get(toolName) ?? 'always_ask';
+}
+
+function profilePolicyStateForCreate(config: FacadeCreateConfig): ProfilePolicyState {
+	const mainProfile = config.agentProfiles?.mainProfile ?? 'main';
+	const policies = profilePoliciesFromAgentProfiles(config.agentProfiles);
+	policies.set(mainProfile, new Map(resolveTools(config.tools ?? []).policies));
+	return { mainProfile, policies };
+}
+
+function profilePoliciesFromAgentProfiles(profiles: FacadeAgentProfiles | undefined): Map<string, ReadonlyMap<string, PermissionPolicyType>> {
+	const policies = new Map<string, ReadonlyMap<string, PermissionPolicyType>>();
+	for (const profile of profiles?.profiles ?? []) {
+		policies.set(profile.name, new Map(Object.entries(profile.permissionPolicies ?? {})));
+	}
+	return policies;
+}
+
+function profilePolicyStateFromLiveState(state: LiveSessionState): ProfilePolicyState {
+	return { mainProfile: state.mainProfileName, policies: new Map(state.profileToolPolicies) };
 }
 
 function resolveTools(tools: readonly FacadeToolEntry[]): ResolvedTools {
@@ -1036,6 +1196,18 @@ function isSessionNotFoundError(error: unknown): boolean {
 
 function textPart(text: string): TextPromptPart {
   return { type: 'text', text };
+}
+
+// Kimi exposes tool output as an opaque runtime value. The public adapter only
+// has evidence for text blocks, so it preserves strings and renders every
+// serializable non-string value as compact JSON inside that one text block.
+function toolResultContent(output: unknown): readonly { readonly type: 'text'; readonly text: string }[] {
+  if (typeof output === 'string') return [{ type: 'text', text: output }];
+  try {
+    return [{ type: 'text', text: JSON.stringify(output) ?? '' }];
+  } catch {
+    return [{ type: 'text', text: '' }];
+  }
 }
 
 /**

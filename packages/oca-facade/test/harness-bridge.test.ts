@@ -75,17 +75,24 @@ afterEach(async () => {
 describe('event bridge: public-aligned events', () => {
   it('maps runtime stream events to facade events in order', async () => {
     const { sink, fake, harness } = await setup();
+		await harness.updateSessionConfig('ses_1', {
+			tools: [{
+				type: 'agent_toolset_20260401',
+				configs: [{ name: 'Bash', permissionPolicy: { type: 'always_allow' } }],
+			}],
+		});
     fake.setScript('ses_1', [
       { kind: 'event', event: runtimeEvent({ type: 'turn.started', turnId: 1, origin: { kind: 'user' } }) },
       { kind: 'event', event: runtimeEvent({ type: 'assistant.delta', turnId: 1, delta: 'Hello' }) },
       { kind: 'event', event: runtimeEvent({ type: 'thinking.delta', turnId: 1, delta: 'hmm' }) },
+      { kind: 'event', event: runtimeEvent({ type: 'compaction.completed', turnId: 1, result: { contextSummary: 'private summary', tokenCount: 99 } }) },
       {
         kind: 'event',
         event: runtimeEvent({ type: 'tool.call.started', turnId: 1, toolCallId: 'call_1', name: 'Bash', args: { command: 'ls' } }),
       },
       {
         kind: 'event',
-        event: runtimeEvent({ type: 'tool.result', turnId: 1, toolCallId: 'call_1', output: 'ok', isError: false }),
+        event: runtimeEvent({ type: 'tool.result', turnId: 1, toolCallId: 'call_1', output: { code: 1 }, isError: false }),
       },
       { kind: 'event', event: runtimeEvent({ type: 'turn.ended', turnId: 1, reason: 'completed' }) },
     ]);
@@ -94,8 +101,9 @@ describe('event bridge: public-aligned events', () => {
       { type: 'session.status_running' },
       { type: 'agent.message', content: 'Hello' },
       { type: 'agent.thinking', content: 'hmm' },
-      { type: 'agent.tool_use', id: 'call_1', name: 'Bash', arguments: { command: 'ls' } },
-      { type: 'agent.tool_result', id: 'call_1', output: 'ok' },
+      { type: 'agent.thread_context_compacted' },
+      { type: 'agent.tool_use', id: 'call_1', name: 'Bash', arguments: { command: 'ls' }, evaluated_permission: 'allow' },
+      { type: 'agent.tool_result', id: 'call_1', content: [{ type: 'text', text: '{"code":1}' }], is_error: false },
       { type: 'session.status_idle' },
     ]);
     expect(sink.turnEnds).toEqual([{ sessionId: 'ses_1', stopReason: 'completed' }]);
@@ -131,6 +139,13 @@ describe('event bridge: public-aligned events', () => {
 
   it('maps qualified server tool calls to the dedicated facade events', async () => {
     const { sink, fake, harness } = await setup();
+		await harness.updateSessionConfig('ses_1', {
+			tools: [{
+				type: 'mcp_toolset',
+				mcpServerName: 'billing',
+				configs: [{ name: 'query_invoices', permissionPolicy: { type: 'always_allow' } }],
+			}],
+		});
     fake.setScript('ses_1', [
       {
         kind: 'event',
@@ -155,13 +170,20 @@ describe('event bridge: public-aligned events', () => {
         server_name: 'billing',
         tool_name: 'query_invoices',
         arguments: { month: '2026-07' },
+			evaluated_permission: 'allow',
       },
-      { type: 'agent.mcp_tool_result', id: 'call_9', output: 'bad auth', is_error: true },
+      { type: 'agent.mcp_tool_result', id: 'call_9', content: [{ type: 'text', text: 'bad auth' }], is_error: true },
     ]);
   });
 
   it('routes child thinking and tool events to its lifecycle identity without leaking reasoning', async () => {
     const { sink, fake, harness } = await setup();
+		await harness.updateSessionConfig('ses_1', {
+			tools: [
+				{ type: 'agent_toolset_20260401', configs: [{ name: 'Read', permissionPolicy: { type: 'always_allow' } }] },
+				{ type: 'mcp_toolset', mcpServerName: 'billing', configs: [{ name: 'get_invoice', permissionPolicy: { type: 'always_allow' } }] },
+			],
+		});
     fake.setScript('ses_1', [
       {
         kind: 'event',
@@ -181,6 +203,12 @@ describe('event bridge: public-aligned events', () => {
       {
         kind: 'event',
         event: runtimeEvent({ type: 'thinking.delta', agentId: 'runtime_child_1', turnId: 2, delta: 'still private' }),
+      },
+      {
+        kind: 'event',
+        event: runtimeEvent({
+          type: 'compaction.completed', agentId: 'runtime_child_1', result: { contextSummary: 'private child summary', tokenCount: 99 },
+        }),
       },
       {
         kind: 'event',
@@ -209,7 +237,7 @@ describe('event bridge: public-aligned events', () => {
           agentId: 'runtime_child_1',
           turnId: 2,
           toolCallId: 'child_call_1',
-          output: 'file body',
+          output: { size: 42 },
         }),
       },
       {
@@ -277,6 +305,7 @@ describe('event bridge: public-aligned events', () => {
       { type: 'subagent.spawned', runtime_agent_id: 'runtime_child_1', profile_name: 'roster_1' },
       { type: 'subagent.started', runtime_agent_id: 'runtime_child_1' },
       { type: 'subagent.thinking', runtime_agent_id: 'runtime_child_1' },
+      { type: 'subagent.thread_context_compacted', runtime_agent_id: 'runtime_child_1' },
       { type: 'subagent.message', runtime_agent_id: 'runtime_child_1', content: 'private child output' },
       {
         type: 'subagent.tool_use',
@@ -284,12 +313,14 @@ describe('event bridge: public-aligned events', () => {
         id: 'child_call_1',
         name: 'Read',
         arguments: { path: 'README.md' },
+        evaluated_permission: 'allow',
       },
       {
         type: 'subagent.tool_result',
         runtime_agent_id: 'runtime_child_1',
         id: 'child_call_1',
-        output: 'file body',
+        content: [{ type: 'text', text: '{"size":42}' }],
+        is_error: false,
       },
       {
         type: 'subagent.mcp_tool_use',
@@ -298,12 +329,13 @@ describe('event bridge: public-aligned events', () => {
         server_name: 'billing',
         tool_name: 'get_invoice',
         arguments: { invoice: 'inv_1' },
+        evaluated_permission: 'allow',
       },
       {
         type: 'subagent.mcp_tool_result',
         runtime_agent_id: 'runtime_child_1',
         id: 'child_call_2',
-        output: 'not found',
+        content: [{ type: 'text', text: 'not found' }],
         is_error: true,
       },
       { type: 'subagent.failed', runtime_agent_id: 'runtime_child_1' },
@@ -317,11 +349,18 @@ describe('event bridge: public-aligned events', () => {
     expect(serialized).not.toContain('private child failure');
     expect(serialized).not.toContain('private child conclusion');
     expect(serialized).not.toContain('private child reasoning');
+		expect(serialized).not.toContain('private child summary');
     expect(serialized).not.toContain('still private');
   });
 
   it('keeps colliding child tool call IDs scoped to their runtime identities', async () => {
     const { sink, fake, harness } = await setup();
+		await harness.updateSessionConfig('ses_1', {
+			tools: [
+				{ type: 'agent_toolset_20260401', configs: [{ name: 'Read', permissionPolicy: { type: 'always_allow' } }] },
+				{ type: 'mcp_toolset', mcpServerName: 'billing', configs: [{ name: 'get_invoice', permissionPolicy: { type: 'always_allow' } }] },
+			],
+		});
     fake.setScript('ses_1', [
       {
         kind: 'event',
@@ -358,12 +397,12 @@ describe('event bridge: public-aligned events', () => {
     expect(sink.events.map(({ event }) => event)).toEqual([
       { type: 'subagent.spawned', runtime_agent_id: 'runtime_child_1', profile_name: 'roster_1' },
       { type: 'subagent.spawned', runtime_agent_id: 'runtime_child_2', profile_name: 'roster_2' },
-      { type: 'subagent.tool_use', runtime_agent_id: 'runtime_child_1', id: 'shared_call', name: 'Read', arguments: {} },
+      { type: 'subagent.tool_use', runtime_agent_id: 'runtime_child_1', id: 'shared_call', name: 'Read', arguments: {}, evaluated_permission: 'allow' },
       {
-        type: 'subagent.mcp_tool_use', runtime_agent_id: 'runtime_child_2', id: 'shared_call', server_name: 'billing', tool_name: 'get_invoice', arguments: {},
+        type: 'subagent.mcp_tool_use', runtime_agent_id: 'runtime_child_2', id: 'shared_call', server_name: 'billing', tool_name: 'get_invoice', arguments: {}, evaluated_permission: 'allow',
       },
-      { type: 'subagent.tool_result', runtime_agent_id: 'runtime_child_1', id: 'shared_call', output: 'file body' },
-      { type: 'subagent.mcp_tool_result', runtime_agent_id: 'runtime_child_2', id: 'shared_call', output: 'invoice body' },
+      { type: 'subagent.tool_result', runtime_agent_id: 'runtime_child_1', id: 'shared_call', content: [{ type: 'text', text: 'file body' }], is_error: false },
+      { type: 'subagent.mcp_tool_result', runtime_agent_id: 'runtime_child_2', id: 'shared_call', content: [{ type: 'text', text: 'invoice body' }], is_error: false },
     ]);
   });
 
@@ -518,12 +557,15 @@ describe('pending call bridge: approval', () => {
       }],
     });
     fake.setScript('ses_1', [
+      { kind: 'event', event: runtimeEvent({ type: 'tool.call.started', turnId: 1, toolCallId: 'call_1', name: 'Bash', args: {} }) },
       { kind: 'approval', request: { toolCallId: 'call_1', toolName: 'Bash', action: 'execute', display: { kind: 'generic', summary: 'run tool' } } },
     ]);
 
     await harness.prompt('ses_1', 'hi');
 
-    expect(sink.events).toEqual([]);
+    expect(sink.events.map(({ event }) => event)).toEqual([
+      { type: 'agent.tool_use', id: 'call_1', name: 'Bash', arguments: {}, evaluated_permission: 'allow' },
+    ]);
     expect(registry.listPendingCalls('ses_1')).toEqual([]);
     expect(fake.sessions.get('ses_1')?.approvalResponses).toEqual([{ decision: 'approved' }]);
   });
@@ -545,6 +587,7 @@ describe('pending call bridge: approval', () => {
       }],
     });
     fake.setScript('ses_1', [
+      { kind: 'event', event: runtimeEvent({ type: 'tool.call.started', turnId: 1, toolCallId: 'call_1', name: 'Bash', args: {} }) },
       { kind: 'approval', request: { toolCallId: 'call_1', toolName: 'Bash', action: 'execute', display: { kind: 'generic', summary: 'run tool' } } },
     ]);
 
@@ -554,6 +597,7 @@ describe('pending call bridge: approval', () => {
         type: 'approval_request',
         tool_call_id: 'call_1',
         tool_name: 'Bash',
+        arguments: {},
         action: 'execute',
         display: { kind: 'generic', summary: 'run tool' },
       },
@@ -562,6 +606,163 @@ describe('pending call bridge: approval', () => {
     await promptDone;
     expect(fake.sessions.get('ses_1')?.approvalResponses).toEqual([{ decision: 'approved' }]);
   });
+
+	it('routes a child approval as one thread-scoped event with its arguments', async () => {
+		const { registry, sink, fake, harness } = await setup();
+		fake.setScript('ses_1', [
+			{
+				kind: 'event',
+				event: runtimeEvent({
+					type: 'subagent.spawned', subagentId: 'runtime_child_1', subagentName: 'roster_1', parentToolCallId: 'parent_1', runInBackground: false,
+				}),
+			},
+			{
+				kind: 'event',
+				event: runtimeEvent({
+					type: 'tool.call.started', agentId: 'runtime_child_1', turnId: 2, toolCallId: 'child_call_1', name: 'Read', args: { path: 'README.md' },
+				}),
+			},
+			{
+				kind: 'approval',
+				request: {
+					toolCallId: 'child_call_1', toolName: 'Read', agentId: 'runtime_child_1', action: 'execute', display: { kind: 'generic', summary: 'read a file' },
+				},
+			},
+		]);
+
+		const promptDone = harness.prompt('ses_1', 'hi');
+		expect(sink.events.map(({ event }) => event)).toEqual([
+			{ type: 'subagent.spawned', runtime_agent_id: 'runtime_child_1', profile_name: 'roster_1' },
+			{
+				type: 'approval_request',
+				tool_call_id: 'child_call_1',
+				runtime_agent_id: 'runtime_child_1',
+				tool_name: 'Read',
+				arguments: { path: 'README.md' },
+				action: 'execute',
+				display: { kind: 'generic', summary: 'read a file' },
+			},
+		]);
+		expect(registry.listPendingCalls('ses_1')).toEqual([{ id: 'child_call_1', kind: 'approval', state: 'pending' }]);
+		registry.resolveApproval('ses_1', { toolCallId: 'child_call_1', runtimeAgentId: 'runtime_child_1', decision: 'approved' });
+		await promptDone;
+		expect(fake.sessions.get('ses_1')?.approvalResponses).toEqual([{ decision: 'approved' }]);
+	});
+
+	it('keeps a child profile permission policy after facade recovery', async () => {
+		const workDir = await mkdtemp(join(tmpdir(), 'oca-facade-child-policy-'));
+		tempDirs.push(workDir);
+		const createRegistry = new SessionRegistry();
+		createRegistry.createSession('ses_1');
+		const initial = createFakeHarness();
+		const creatingHarness = new LiveHarnessFactory({ registry: createRegistry, sink: makeSink(), createHarness: initial.createHarness });
+		await creatingHarness.createSession({
+			sessionId: 'ses_1',
+			workDir,
+			tools: [{
+				type: 'agent_toolset_20260401',
+				configs: [
+					{ name: 'Bash', permissionPolicy: { type: 'always_allow' } },
+					{ name: 'Read', permissionPolicy: { type: 'always_allow' } },
+				],
+			}],
+			agentProfiles: {
+				mainProfile: 'coordinator',
+				profiles: [
+					{ name: 'coordinator', tools: ['Agent'] },
+					{ name: 'roster_1', tools: ['Bash', 'Read'], permissionPolicies: { Bash: 'always_deny' } },
+				],
+			},
+		});
+
+		const resumeRegistry = new SessionRegistry();
+		resumeRegistry.createSession('ses_1');
+		const sink = makeSink();
+		const resumed = createFakeHarness();
+		const resumedHarness = new LiveHarnessFactory({ registry: resumeRegistry, sink, createHarness: resumed.createHarness, resumeWorkDir: workDir });
+		await resumedHarness.resumeSession('ses_1');
+		resumed.fake.setScript('ses_1', [
+			{ kind: 'event', event: runtimeEvent({ type: 'subagent.spawned', subagentId: 'runtime_child_1', subagentName: 'roster_1', parentToolCallId: 'parent_1', runInBackground: false }) },
+			{ kind: 'event', event: runtimeEvent({ type: 'tool.call.started', agentId: 'runtime_child_1', turnId: 2, toolCallId: 'child_call_1', name: 'Bash', args: { command: 'id' } }) },
+			{ kind: 'approval', request: { toolCallId: 'child_call_1', toolName: 'Bash', agentId: 'runtime_child_1', action: 'execute', display: { kind: 'generic', summary: 'run Bash' } } },
+			{ kind: 'event', event: runtimeEvent({ type: 'tool.call.started', agentId: 'runtime_child_1', turnId: 2, toolCallId: 'child_call_2', name: 'Read', args: { path: 'README.md' } }) },
+			{ kind: 'approval', request: { toolCallId: 'child_call_2', toolName: 'Read', agentId: 'runtime_child_1', action: 'execute', display: { kind: 'generic', summary: 'read README' } } },
+		]);
+		await resumedHarness.prompt('ses_1', 'delegate this');
+
+		expect(sink.events.map(({ event }) => event)).toEqual([
+			{ type: 'subagent.spawned', runtime_agent_id: 'runtime_child_1', profile_name: 'roster_1' },
+			{ type: 'subagent.tool_use', runtime_agent_id: 'runtime_child_1', id: 'child_call_1', name: 'Bash', arguments: { command: 'id' }, evaluated_permission: 'deny' },
+			{ type: 'subagent.tool_use', runtime_agent_id: 'runtime_child_1', id: 'child_call_2', name: 'Read', arguments: { path: 'README.md' }, evaluated_permission: 'allow' },
+		]);
+		expect(resumed.fake.sessions.get('ses_1')?.approvalResponses).toEqual([
+			{ decision: 'rejected', feedback: 'Denied by the session permission policy.' },
+			{ decision: 'approved' },
+		]);
+	});
+
+	it('keeps colliding child approval IDs independently confirmable', async () => {
+		const { registry, sink, fake, harness } = await setup();
+		fake.setScript('ses_1', [
+			{ kind: 'event', event: runtimeEvent({ type: 'subagent.spawned', subagentId: 'runtime_child_1', subagentName: 'roster_1', parentToolCallId: 'parent_1', runInBackground: false }) },
+			{ kind: 'event', event: runtimeEvent({ type: 'tool.call.started', agentId: 'runtime_child_1', turnId: 2, toolCallId: 'shared_call', name: 'Read', args: { path: 'one.md' } }) },
+			{ kind: 'event', event: runtimeEvent({ type: 'subagent.spawned', subagentId: 'runtime_child_2', subagentName: 'roster_2', parentToolCallId: 'parent_2', runInBackground: false }) },
+			{ kind: 'event', event: runtimeEvent({ type: 'tool.call.started', agentId: 'runtime_child_2', turnId: 3, toolCallId: 'shared_call', name: 'Read', args: { path: 'two.md' } }) },
+		]);
+		await harness.prompt('ses_1', 'hi');
+
+		const handler = fake.sessions.get('ses_1')?.approvalHandler;
+		const first = handler!({ toolCallId: 'shared_call', toolName: 'Read', agentId: 'runtime_child_1', action: 'execute', display: { kind: 'generic', summary: 'read one' } });
+		const second = handler!({ toolCallId: 'shared_call', toolName: 'Read', agentId: 'runtime_child_2', action: 'execute', display: { kind: 'generic', summary: 'read two' } });
+
+		expect(sink.events.map(({ event }) => event).slice(-2)).toEqual([
+			{ type: 'approval_request', tool_call_id: 'shared_call', runtime_agent_id: 'runtime_child_1', tool_name: 'Read', arguments: { path: 'one.md' }, action: 'execute', display: { kind: 'generic', summary: 'read one' } },
+			{ type: 'approval_request', tool_call_id: 'shared_call', runtime_agent_id: 'runtime_child_2', tool_name: 'Read', arguments: { path: 'two.md' }, action: 'execute', display: { kind: 'generic', summary: 'read two' } },
+		]);
+		registry.resolveApproval('ses_1', { toolCallId: 'shared_call', runtimeAgentId: 'runtime_child_2', decision: 'rejected' });
+		registry.resolveApproval('ses_1', { toolCallId: 'shared_call', runtimeAgentId: 'runtime_child_1', decision: 'approved' });
+		await expect(first).resolves.toEqual({ decision: 'approved' });
+		await expect(second).resolves.toEqual({ decision: 'rejected' });
+	});
+
+	it('projects an MCP confirmation request as one correlated MCP tool event', async () => {
+		const workDir = await mkdtemp(join(tmpdir(), 'oca-facade-bridge-'));
+		tempDirs.push(workDir);
+		const registry = new SessionRegistry();
+		registry.createSession('ses_1');
+		const sink = makeSink();
+		const { fake, createHarness } = createFakeHarness();
+		const harness = new LiveHarnessFactory({ registry, sink, createHarness });
+		await harness.createSession({
+			sessionId: 'ses_1',
+			workDir,
+			tools: [{
+				type: 'mcp_toolset',
+				mcpServerName: 'billing',
+				configs: [{ name: 'query', permissionPolicy: { type: 'always_ask' } }],
+			}],
+		});
+		fake.setScript('ses_1', [
+			{ kind: 'event', event: runtimeEvent({ type: 'tool.call.started', turnId: 1, toolCallId: 'call_mcp_1', name: 'mcp__billing__query', args: { month: '2026-07' } }) },
+			{ kind: 'approval', request: { toolCallId: 'call_mcp_1', toolName: 'mcp__billing__query', action: 'execute', display: { kind: 'generic', summary: 'query billing' } } },
+		]);
+
+		const promptDone = harness.prompt('ses_1', 'hi');
+		expect(sink.events.map(({ event }) => event)).toEqual([
+			{
+				type: 'approval_request',
+				tool_call_id: 'call_mcp_1',
+				tool_name: 'query',
+				server_name: 'billing',
+				arguments: { month: '2026-07' },
+				action: 'execute',
+				display: { kind: 'generic', summary: 'query billing' },
+			},
+		]);
+		registry.resolveApproval('ses_1', { toolCallId: 'call_mcp_1', decision: 'approved' });
+		await promptDone;
+		expect(fake.sessions.get('ses_1')?.approvalResponses).toEqual([{ decision: 'approved' }]);
+	});
 
   it('denies approval-worthy actions without a round trip under always_deny', async () => {
     const workDir = await mkdtemp(join(tmpdir(), 'oca-facade-bridge-'));
@@ -580,10 +781,13 @@ describe('pending call bridge: approval', () => {
       }],
     });
     fake.setScript('ses_1', [
+      { kind: 'event', event: runtimeEvent({ type: 'tool.call.started', turnId: 1, toolCallId: 'call_1', name: 'Bash', args: {} }) },
       { kind: 'approval', request: { toolCallId: 'call_1', toolName: 'Bash', action: 'execute', display: { kind: 'generic', summary: 'run tool' } } },
     ]);
     await harness.prompt('ses_1', 'hi');
-    expect(sink.events).toEqual([]);
+    expect(sink.events.map(({ event }) => event)).toEqual([
+      { type: 'agent.tool_use', id: 'call_1', name: 'Bash', arguments: {}, evaluated_permission: 'deny' },
+    ]);
     expect(registry.listPendingCalls('ses_1')).toEqual([]);
     expect(fake.sessions.get('ses_1')?.approvalResponses).toEqual([
       { decision: 'rejected', feedback: 'Denied by the session permission policy.' },
@@ -643,6 +847,14 @@ describe('pending call bridge: question', () => {
 describe('pending call bridge: external tool', () => {
   it('emits external_tool_request and maps the completed resolution', async () => {
     const { registry, sink, fake, harness } = await setup();
+		await harness.updateSessionConfig('ses_1', {
+			tools: [{
+				type: 'custom',
+				name: 'query_billing',
+				description: 'Query billing',
+				inputSchema: { type: 'object' },
+			}],
+		});
     fake.setScript('ses_1', [
       {
         kind: 'event',
@@ -654,7 +866,6 @@ describe('pending call bridge: external tool', () => {
     const promptDone = harness.prompt('ses_1', 'how many rows?');
 
     expect(sink.events.map(({ event }) => event)).toEqual([
-      { type: 'agent.tool_use', id: 'call_9a2', name: 'query_billing', arguments: { month: '2026-07' } },
       { type: 'external_tool_request', tool_call_id: 'call_9a2', name: 'query_billing', arguments: { month: '2026-07' } },
     ]);
     expect(registry.listPendingCalls('ses_1')).toEqual([

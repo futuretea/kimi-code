@@ -9,6 +9,7 @@
  */
 export const FACADE_ERROR_CODES = [
   'invalid_request',
+  'request_too_large',
   'session_not_found',
   'session_state_conflict',
   'prompt_rejected',
@@ -22,6 +23,7 @@ export type FacadeErrorCode = (typeof FACADE_ERROR_CODES)[number];
 
 const HTTP_STATUS_BY_CODE: Record<FacadeErrorCode, number> = {
   invalid_request: 400,
+  request_too_large: 413,
   session_not_found: 404,
   session_state_conflict: 409,
   prompt_rejected: 409,
@@ -33,6 +35,7 @@ const HTTP_STATUS_BY_CODE: Record<FacadeErrorCode, number> = {
 
 const NEUTRAL_MESSAGE_BY_CODE: Record<FacadeErrorCode, string> = {
   invalid_request: 'The request is invalid.',
+  request_too_large: 'The request is too large.',
   session_not_found: 'The session was not found.',
   session_state_conflict: 'The session state does not allow this operation.',
   prompt_rejected: 'The session cannot accept a prompt right now.',

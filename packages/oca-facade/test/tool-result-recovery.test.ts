@@ -1,10 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   LiveHarnessFactory,
   type FacadeEvent,
   type HarnessEventSink,
 } from '../src/harness';
+import { writeProfilePolicyState } from '../src/profile-policy-state';
 import {
   SessionRegistry,
   type PendingCall,
@@ -14,6 +19,24 @@ import {
 } from '../src/session-registry';
 
 import { createFakeHarness } from './fake-harness';
+
+const tempDirs: string[] = [];
+
+async function recoveryWorkDir(withState = false): Promise<string> {
+  const workDir = await mkdtemp(join(tmpdir(), 'oca-facade-tool-result-'));
+  tempDirs.push(workDir);
+  if (withState) {
+    await writeProfilePolicyState(workDir, { mainProfile: 'main', policies: new Map([['main', new Map()]]) });
+  }
+  return workDir;
+}
+
+afterEach(async () => {
+  while (tempDirs.length > 0) {
+    const workDir = tempDirs.pop();
+    if (workDir !== undefined) await rm(workDir, { recursive: true, force: true });
+  }
+});
 
 class MemoryPendingJournal implements PendingCallJournal {
   private calls: PendingCall[];
@@ -72,6 +95,7 @@ function copyCall(call: PendingCall): PendingCall {
 
 describe('recovered external-tool result delivery', () => {
   it('does not re-emit external_tool_request when a resumed runtime consumes a staged result', async () => {
+    const workDir = await recoveryWorkDir(true);
     const journal = new MemoryPendingJournal([
       {
         id: 'call_1',
@@ -97,7 +121,7 @@ describe('recovered external-tool result delivery', () => {
       turnEnded: () => {},
     };
     const { fake, createHarness } = createFakeHarness();
-    const harness = new LiveHarnessFactory({ registry, sink, createHarness });
+    const harness = new LiveHarnessFactory({ registry, sink, createHarness, resumeWorkDir: workDir });
     await harness.resumeSession('ses_1');
 
     const session = fake.sessions.get('ses_1');
@@ -110,6 +134,7 @@ describe('recovered external-tool result delivery', () => {
   });
 
   it('does not redeliver a runtime-accepted result after journal cleanup fails', async () => {
+    const workDir = await recoveryWorkDir();
     const journal = new MemoryPendingJournal([]);
     journal.failSettle = true;
     const registry = new SessionRegistry({ pendingJournal: journal });
@@ -125,7 +150,7 @@ describe('recovered external-tool result delivery', () => {
       sink: firstSink,
       createHarness: firstRuntime.createHarness,
     });
-    await firstHarness.createSession({ sessionId: 'ses_1', workDir: '/tmp' });
+    await firstHarness.createSession({ sessionId: 'ses_1', workDir });
 
     const firstSession = firstRuntime.fake.sessions.get('ses_1');
     if (firstSession?.toolCallHandler === undefined) throw new Error('missing tool-call handler');
@@ -160,6 +185,7 @@ describe('recovered external-tool result delivery', () => {
         turnEnded: () => {},
       },
       createHarness: restartRuntime.createHarness,
+      resumeWorkDir: workDir,
     });
     await restartHarness.resumeSession('ses_1');
 
@@ -195,6 +221,7 @@ describe('recovered external-tool result delivery', () => {
         turnEnded: () => {},
       },
       createHarness: settledRestartRuntime.createHarness,
+      resumeWorkDir: workDir,
     });
     await settledRestartHarness.resumeSession('ses_1');
 

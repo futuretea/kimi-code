@@ -104,11 +104,6 @@ describe('facade full loop', () => {
     expect(approved.status).toBe(202);
 
     // 5. external tool round trip
-    expect(asFrame(await nextNdjsonFrame(prompt.reader))).toMatchObject({
-      type: 'agent.tool_use',
-      id: 'call_9a2',
-      name: 'query_billing',
-    });
     const toolRequest = asFrame(await nextNdjsonFrame(prompt.reader));
     expect(toolRequest).toMatchObject({
       type: 'external_tool_request',
@@ -155,7 +150,7 @@ describe('facade full loop', () => {
     // 8. dual channel: the SSE stream saw the same facade events, numbered in order
     const sseTypes: string[] = [];
     const sseIds: number[] = [];
-    for (let i = 0; i < 8; i += 1) {
+    for (let i = 0; i < 7; i += 1) {
       const frame = await nextSseFrame(sse.reader);
       sseTypes.push(frame.event ?? '');
       sseIds.push(Number(frame.id));
@@ -164,13 +159,12 @@ describe('facade full loop', () => {
       'session.status_running',
       'agent.message',
       'approval_request',
-      'agent.tool_use',
       'external_tool_request',
       'question_request',
       'agent.message',
       'session.status_idle',
     ]);
-    expect(sseIds).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(sseIds).toEqual([1, 2, 3, 4, 5, 6, 7]);
 
     // 9. interrupt after the turn: nothing in flight
     const interruptIdle = await postJson(baseUrl, '/sessions/ses_1/interrupt', {});

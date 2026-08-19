@@ -2,6 +2,7 @@ import Fastify, {
   type FastifyInstance,
   type FastifyServerOptions,
 } from 'fastify';
+import multipart from '@fastify/multipart';
 
 import { EventPump } from './event-pump';
 import { FacadeError, isFacadeError, toErrorBody } from './errors';
@@ -16,6 +17,11 @@ import { registerQuestionRoutes } from './routes/questions';
 import { registerSessionRoutes } from './routes/sessions';
 import { registerToolResultRoutes } from './routes/tool-results';
 import { SessionRegistry, type PendingCallJournal, type RecoveredSession } from './session-registry';
+import {
+  MAX_SESSION_CONFIG_BYTES,
+  MAX_SESSION_SKILLS,
+  MAX_SKILL_ARCHIVE_BYTES,
+} from './session-create-multipart';
 
 /**
  * Composition root: builds the facade server (Fastify + pino on stdout),
@@ -28,6 +34,8 @@ export interface StartServerOptions {
   readonly host?: string;
   readonly port?: number;
   readonly homeDir?: string;
+  /** Workspace used by recovery; production defaults to the mounted /workspace. */
+  readonly resumeWorkDir?: string;
   readonly harnessFactory?: HarnessFactory;
   readonly deltaFlushIntervalMs?: number;
   readonly logger?: FastifyServerOptions['logger'];
@@ -83,6 +91,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     registry,
     sink: pump,
     ...(options.harnessFactory !== undefined ? { createHarness: options.harnessFactory } : {}),
+    ...(options.resumeWorkDir !== undefined ? { resumeWorkDir: options.resumeWorkDir } : {}),
     harnessOptions: homeDir !== undefined ? { homeDir } : {},
   });
 
@@ -91,6 +100,18 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     // Hijacked NDJSON/SSE connections stay open by design; close must not hang
     // on them, so shutdown forces all connections closed.
     forceCloseConnections: true,
+  });
+  await app.register(multipart, {
+    limits: {
+      fields: 1,
+      files: MAX_SESSION_SKILLS,
+      parts: MAX_SESSION_SKILLS + 1,
+      fieldNameSize: 64,
+      fieldSize: MAX_SESSION_CONFIG_BYTES,
+      fileSize: MAX_SKILL_ARCHIVE_BYTES,
+      headerPairs: 64,
+    },
+    throwFileSizeLimit: true,
   });
 
   app.setErrorHandler((error, _req, reply) => {
@@ -102,7 +123,13 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     const statusCode = (error as { statusCode?: number }).statusCode;
     const facadeError = isFacadeError(error)
       ? error
-      : new FacadeError(statusCode === 400 || statusCode === 415 ? 'invalid_request' : 'internal_error');
+      : new FacadeError(
+        statusCode === 413
+          ? 'request_too_large'
+          : statusCode === 400 || statusCode === 415
+            ? 'invalid_request'
+            : 'internal_error',
+      );
     void reply.code(facadeError.httpStatus).send(toErrorBody(facadeError));
   });
   app.setNotFoundHandler((_req, reply) => {

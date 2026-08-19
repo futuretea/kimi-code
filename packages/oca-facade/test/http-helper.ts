@@ -42,6 +42,7 @@ export async function bootTestServer(options?: {
     host: '127.0.0.1',
     port: 0,
     homeDir,
+    resumeWorkDir: homeDir,
     logger: false,
     harnessFactory: options?.harnessFactory ?? createHarness,
     deltaFlushIntervalMs: options?.deltaFlushIntervalMs ?? 50,
@@ -64,8 +65,26 @@ export interface JsonResponse {
   readonly body: unknown;
 }
 
+export async function postSessionMultipart(
+  baseUrl: string,
+  config: unknown,
+  archives: readonly Blob[] = [],
+): Promise<JsonResponse> {
+  const form = new FormData();
+  form.set('config', JSON.stringify(config));
+  for (const archive of archives) form.append('skill', archive, 'skill.zip');
+  const response = await fetch(`${baseUrl}/sessions`, {
+    method: 'POST',
+    body: form,
+  });
+  return { status: response.status, body: await response.json() };
+}
+
 export async function postJson(baseUrl: string, path: string, body?: unknown): Promise<JsonResponse> {
-  const response = await fetch(`${baseUrl}${path}`, {
+	if (path === '/sessions') {
+		return postSessionMultipart(baseUrl, body ?? {});
+	}
+	const response = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body ?? {}),

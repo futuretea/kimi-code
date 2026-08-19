@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { configureGitHubTokenEnvironment, materializeFileResources, materializeGitHubRepositoryResources, materializeSessionResources, snapshotMemoryStoreResources, validateDistinctWorkspacePVCPaths } from '../src/resource-materializer';
 import { materializeSessionSkills } from '../src/skill-materializer';
 
+import { writeSkillArchive } from './skill-archive-fixture';
+
 const tempDirs: string[] = [];
 
 async function workspace(): Promise<string> {
@@ -29,7 +31,8 @@ describe('file resource materialization', () => {
     const url = 'https://storage.example.test/file_1';
     const realFetch = globalThis.fetch;
     globalThis.fetch = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-      if (String(input) === url) {
+      const requestURL = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+      if (requestURL === url) {
         return Promise.resolve(new Response(payload, {
           status: 200,
           headers: { 'content-length': String(Buffer.byteLength(payload)) },
@@ -104,34 +107,81 @@ describe('file resource materialization', () => {
 describe('Skill materialization', () => {
   it('writes validated files to the kimi-code project skill root', async () => {
     const workDir = await workspace();
-    await materializeSessionSkills([{
-      id: 'skill_1',
+    const archive = await writeSkillArchive(workDir, {
       name: 'review',
-      version: 2,
-      files: [
-        { path: 'SKILL.md', contentBase64: Buffer.from('---\nname: review\ndescription: Review code\n---\n').toString('base64') },
-        { path: 'references/checklist.md', contentBase64: Buffer.from('check\n').toString('base64') },
-      ],
-    }], workDir);
+      files: {
+        'SKILL.md': '---\nname: review\ndescription: Review code\n---\n',
+        'references/checklist.md': 'check\n',
+      },
+    });
+    await materializeSessionSkills([{
+      id: archive.descriptor.id,
+      name: archive.descriptor.name,
+      version: archive.descriptor.version,
+		origin: archive.descriptor.origin,
+      contentSize: archive.descriptor.content_size,
+      contentSHA256: archive.descriptor.content_sha256,
+    }], [{ path: archive.path }], workDir);
 
     await expect(readFile(join(workDir, '.agents/skills/review/SKILL.md'), 'utf8')).resolves.toContain('name: review');
     await expect(readFile(join(workDir, '.agents/skills/review/references/checklist.md'), 'utf8')).resolves.toBe('check\n');
   });
 
-  it('rejects non-canonical archive paths', async () => {
+  it('rejects an archive whose root does not match its descriptor', async () => {
     const workDir = await workspace();
-    for (const path of ['../outside.txt', 'references/../duplicate.md']) {
-      await expect(materializeSessionSkills([{
-        id: 'skill_1',
-        name: 'review',
-        version: 1,
-        files: [
-          { path: 'SKILL.md', contentBase64: Buffer.from('skill').toString('base64') },
-          { path, contentBase64: Buffer.from('no').toString('base64') },
-        ],
-      }], workDir)).rejects.toThrow('path is invalid');
-    }
+    const archive = await writeSkillArchive(workDir, { name: 'review' });
+    await expect(materializeSessionSkills([{
+      id: archive.descriptor.id,
+      name: 'different',
+      version: archive.descriptor.version,
+		origin: archive.descriptor.origin,
+      contentSize: archive.descriptor.content_size,
+      contentSHA256: archive.descriptor.content_sha256,
+    }], [{ path: archive.path }], workDir)).rejects.toThrow('root does not match descriptor');
   });
+
+  it('materializes a canonical archive with a quoted YAML manifest name', async () => {
+    const workDir = await workspace();
+    const archive = await writeSkillArchive(workDir, {
+      name: 'review',
+      files: {
+        'SKILL.md': '---\nname: "review"\ndescription: Review code\n---\n',
+      },
+    });
+    await materializeSessionSkills([{
+      id: archive.descriptor.id,
+      name: archive.descriptor.name,
+      version: archive.descriptor.version,
+		origin: archive.descriptor.origin,
+      contentSize: archive.descriptor.content_size,
+      contentSHA256: archive.descriptor.content_sha256,
+    }], [{ path: archive.path }], workDir);
+
+    await expect(readFile(join(workDir, '.agents/skills/review/SKILL.md'), 'utf8')).resolves.toContain('name: "review"');
+  });
+
+	it('allows more than 256 Managed Skill entries while retaining the Forward limit', async () => {
+		const workDir = await workspace();
+		const files: Record<string, string> = {
+			'SKILL.md': '---\nname: review\ndescription: Review code\n---\n',
+		};
+		for (let index = 1; index <= 256; index += 1) {
+			files[`references/${index}.md`] = 'reference\n';
+		}
+		const archive = await writeSkillArchive(workDir, { name: 'review', files });
+		const managed = {
+			id: archive.descriptor.id,
+			name: archive.descriptor.name,
+			version: archive.descriptor.version,
+			origin: 'managed' as const,
+			contentSize: archive.descriptor.content_size,
+			contentSHA256: archive.descriptor.content_sha256,
+		};
+		await materializeSessionSkills([managed], [{ path: archive.path }], workDir);
+		await expect(readFile(join(workDir, '.agents/skills/review/references/256.md'), 'utf8')).resolves.toBe('reference\n');
+
+		await expect(materializeSessionSkills([{ ...managed, origin: 'forward' as const }], [{ path: archive.path }], workDir)).rejects.toThrow('file count is invalid');
+	});
 });
 
 describe('GitHub repository resource materialization', () => {
@@ -340,6 +390,103 @@ describe('Memory Store resource materialization', () => {
           entries: [{ id: 'mem_rw', path: 'writable.md', contentSha256: 'hash-rw', deleted: false, content: 'editable' }],
         },
       ]);
+    } finally {
+      if (priorAwareness === undefined) delete process.env['OCA_AWARENESS_ROOT'];
+      else process.env['OCA_AWARENESS_ROOT'] = priorAwareness;
+    }
+  });
+
+  it('lets later read-only Forward mounts shadow a writable path without writing it back', async () => {
+    const workDir = await workspace();
+    const awareness = join(workDir, 'awareness');
+    const priorAwareness = process.env['OCA_AWARENESS_ROOT'];
+    process.env['OCA_AWARENESS_ROOT'] = awareness;
+    try {
+      const resources = [
+        { id: 'default', type: 'memory_store' as const, memoryStoreId: 'default', access: 'read_write' as const, memoryEntries: [
+          { id: 'default_same', path: 'same.md', content: 'default', contentSha256: 'default-hash' },
+          { id: 'default_writable', path: 'writable.md', content: 'before', contentSha256: 'writable-hash' },
+        ] },
+        { id: 'first', type: 'memory_store' as const, memoryStoreId: 'first', access: 'read_only' as const, memoryEntries: [
+          { id: 'first_same', path: 'same.md', content: 'first shadow', contentSha256: 'first-hash' },
+        ] },
+        { id: 'second', type: 'memory_store' as const, memoryStoreId: 'second', access: 'read_only' as const, memoryEntries: [
+          { id: 'second_same', path: 'same.md', content: 'second shadow', contentSha256: 'second-hash' },
+        ] },
+      ];
+      await materializeSessionResources(resources, workDir);
+      await expect(readFile(join(awareness, 'same.md'), 'utf8')).resolves.toBe('second shadow');
+      expect((await stat(join(awareness, 'same.md'))).mode & 0o222).toBe(0);
+      await writeFile(join(awareness, 'writable.md'), 'after', 'utf8');
+
+      await expect(snapshotMemoryStoreResources(resources)).resolves.toEqual([{
+        resourceId: 'default', memoryStoreId: 'default',
+        entries: [{ id: 'default_writable', path: 'writable.md', contentSha256: 'writable-hash', deleted: false, content: 'after' }],
+      }]);
+    } finally {
+      if (priorAwareness === undefined) delete process.env['OCA_AWARENESS_ROOT'];
+      else process.env['OCA_AWARENESS_ROOT'] = priorAwareness;
+    }
+  });
+
+  it('uses the Forward Memory path and content contract for materialization and snapshots', async () => {
+    const workDir = await workspace();
+    const awareness = join(workDir, 'awareness');
+    const priorAwareness = process.env['OCA_AWARENESS_ROOT'];
+    process.env['OCA_AWARENESS_ROOT'] = awareness;
+    try {
+      await materializeSessionResources([{
+        id: 'res_memory', type: 'memory_store', memoryStoreId: 'memstore_1',
+        memoryEntries: [{ id: 'mem_1', path: 'releases/v1..v2.md', content: 'release\u0080notes', contentSha256: 'hash' }],
+      }], workDir);
+      await expect(readFile(join(awareness, 'releases/v1..v2.md'), 'utf8')).resolves.toBe('release\u0080notes');
+      await expect(materializeSessionResources([{
+        id: 'res_blank', type: 'memory_store', memoryStoreId: 'memstore_blank',
+        memoryEntries: [{ id: 'mem_blank', path: 'blank.md', content: ' \t\n', contentSha256: 'hash' }],
+      }], workDir)).resolves.toBeUndefined();
+      await expect(readFile(join(awareness, 'blank.md'), 'utf8')).resolves.toBe(' \t\n');
+      await expect(materializeSessionResources([{
+        id: 'res_empty', type: 'memory_store', memoryStoreId: 'memstore_empty',
+        memoryEntries: [{ id: 'mem_empty', path: 'empty.md', content: '', contentSha256: 'hash' }],
+      }], workDir)).resolves.toBeUndefined();
+      await expect(readFile(join(awareness, 'empty.md'), 'utf8')).resolves.toBe('');
+      await expect(materializeSessionResources([{
+        id: 'res_u0085', type: 'memory_store', memoryStoreId: 'memstore_u0085',
+        memoryEntries: [{ id: 'mem_u0085', path: '\u0085forbidden.md', content: 'content', contentSha256: 'hash' }],
+      }], workDir)).rejects.toThrow('memory path is invalid');
+      await expect(materializeSessionResources([{
+        id: 'res_ufeff', type: 'memory_store', memoryStoreId: 'memstore_ufeff',
+        memoryEntries: [{ id: 'mem_ufeff', path: '\uFEFFallowed.md', content: 'content', contentSha256: 'hash' }],
+      }], workDir)).resolves.toBeUndefined();
+      await expect(readFile(join(awareness, '\uFEFFallowed.md'), 'utf8')).resolves.toBe('content');
+      const boundaryContent = 'a'.repeat(100 * 1024);
+      await expect(materializeSessionResources([{
+        id: 'res_boundary', type: 'memory_store', memoryStoreId: 'memstore_boundary',
+        memoryEntries: [{ id: 'mem_boundary', path: 'boundary.md', content: boundaryContent, contentSha256: 'hash' }],
+      }], workDir)).resolves.toBeUndefined();
+      await expect(readFile(join(awareness, 'boundary.md'), 'utf8')).resolves.toBe(boundaryContent);
+      await expect(materializeSessionResources([{
+        id: 'res_carriage_return', type: 'memory_store', memoryStoreId: 'memstore_carriage_return',
+        memoryEntries: [{ id: 'mem_carriage_return', path: 'carriage-return.md', content: 'first\rsecond', contentSha256: 'hash' }],
+      }], workDir)).resolves.toBeUndefined();
+      await expect(readFile(join(awareness, 'carriage-return.md'), 'utf8')).resolves.toBe('first\rsecond');
+      await writeFile(join(awareness, 'bad\\name.md'), 'valid', 'utf8');
+      await expect(snapshotMemoryStoreResources([{ id: 'res_memory', type: 'memory_store', memoryStoreId: 'memstore_1', memoryEntries: [] }])).rejects.toThrow('memory path is invalid');
+      await rm(join(awareness, 'bad\\name.md'));
+      await writeFile(join(awareness, 'control.md'), 'invalid\u0001content', 'utf8');
+      await expect(snapshotMemoryStoreResources([{ id: 'res_memory', type: 'memory_store', memoryStoreId: 'memstore_1', memoryEntries: [] }])).rejects.toThrow('memory content violates the Memory Store contract');
+      await rm(join(awareness, 'control.md'));
+      await writeFile(join(awareness, 'del-control.md'), 'invalid\u007Fcontent', 'utf8');
+      await expect(snapshotMemoryStoreResources([{ id: 'res_memory', type: 'memory_store', memoryStoreId: 'memstore_1', memoryEntries: [] }])).rejects.toThrow('memory content violates the Memory Store contract');
+      await rm(join(awareness, 'del-control.md'));
+      await writeFile(join(awareness, '\u0085forbidden.md'), 'valid', 'utf8');
+      await expect(snapshotMemoryStoreResources([{ id: 'res_memory', type: 'memory_store', memoryStoreId: 'memstore_1', memoryEntries: [] }])).rejects.toThrow('memory path is invalid');
+      await rm(join(awareness, '\u0085forbidden.md'));
+      await writeFile(join(awareness, '\uFEFFallowed.md'), 'valid', 'utf8');
+      const snapshot = await snapshotMemoryStoreResources([{ id: 'res_memory', type: 'memory_store', memoryStoreId: 'memstore_1', memoryEntries: [] }]);
+      expect(snapshot[0]?.entries).toContainEqual({
+        id: '', path: '\uFEFFallowed.md', contentSha256: '', deleted: false, content: 'valid',
+      });
     } finally {
       if (priorAwareness === undefined) delete process.env['OCA_AWARENESS_ROOT'];
       else process.env['OCA_AWARENESS_ROOT'] = priorAwareness;

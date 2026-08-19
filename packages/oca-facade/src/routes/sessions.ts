@@ -12,6 +12,7 @@ import type {
 
 import type { RouteContext } from './context';
 import { defineRoute } from './define-route';
+import { MAX_SESSION_SKILLS, MAX_SKILL_ARCHIVE_BYTES, parseSessionCreateMultipart } from '../session-create-multipart';
 
 /**
  * Session lifecycle routes: create / resume / interrupt / cancel. The wire
@@ -96,11 +97,10 @@ const resourceSchema = z.object({
 const skillSchema = z.object({
   id: z.string().min(1),
   name: z.string().regex(/^[a-z0-9_-]{1,64}$/),
-  version: z.number().int().positive(),
-  files: z.array(z.object({
-    path: z.string().min(1),
-    content_base64: z.string(),
-  }).strict()).min(1),
+  version: z.string().regex(/^[1-9][0-9]*$/),
+	origin: z.enum(['managed', 'forward']),
+  content_size: z.number().int().nonnegative().max(MAX_SKILL_ARCHIVE_BYTES),
+  content_sha256: z.string().regex(/^[a-f0-9]{64}$/),
 }).strict();
 
 const agentProfileSubagentSchema = z.object({
@@ -115,6 +115,7 @@ const agentProfileSchema = z.object({
   description: z.string().optional(),
   system_prompt_template: z.string().optional(),
   tools: z.array(z.string()).optional(),
+	permission_policies: z.record(z.string(), z.enum(['always_allow', 'always_ask', 'always_deny'])).optional(),
   model_alias: z.string().min(1).optional(),
   thinking_effort: z.string().min(1).optional(),
   context_window: z.number().int().positive().optional(),
@@ -127,7 +128,7 @@ const agentProfilesSchema = z.object({
   profiles: z.array(agentProfileSchema),
 }).strict();
 
-const createSessionBodySchema = z.object({
+export const createSessionBodySchema = z.object({
   session_id: z.string().min(1),
   work_dir: z.string().min(1),
   system: z.string().optional(),
@@ -139,15 +140,17 @@ const createSessionBodySchema = z.object({
   tools: z.array(toolEntrySchema).optional(),
   mcp_servers: z.array(mcpServerSchema).optional(),
   resources: z.array(resourceSchema).optional(),
-  skills: z.array(skillSchema).optional(),
-  agent_profiles: agentProfilesSchema.optional(),
+  skills: z.array(skillSchema).max(MAX_SESSION_SKILLS).optional(),
+	agent_profiles: agentProfilesSchema.optional(),
+	session_environment_variables: z.record(z.string(), z.string()).optional(),
 	vault_environment_variables: z.record(z.string(), z.string()).optional(),
 }).strict();
 
 const updateSessionConfigBodySchema = z.object({
   tools: z.array(toolEntrySchema).optional(),
-  mcp_servers: z.array(mcpServerSchema).optional(),
-  mcp_credentials: z.record(z.string().min(1), z.string().min(1)).optional(),
+	mcp_servers: z.array(mcpServerSchema).optional(),
+	mcp_credentials: z.record(z.string().min(1), z.string().min(1)).optional(),
+	session_environment_variables: z.record(z.string(), z.string()).optional(),
 	vault_environment_variables: z.record(z.string(), z.string()).optional(),
 }).strict();
 
@@ -180,6 +183,12 @@ type MemoryAcknowledgeBody = z.infer<typeof memoryAcknowledgeBodySchema>;
 type WireToolEntry = z.infer<typeof toolEntrySchema>;
 type WireResource = z.infer<typeof resourceSchema>;
 type WireAgentProfiles = z.infer<typeof agentProfilesSchema>;
+
+export function parseCreateSessionBody(raw: unknown): CreateSessionBody {
+  const result = createSessionBodySchema.safeParse(raw);
+  if (!result.success) throw new FacadeError('invalid_request');
+  return result.data;
+}
 
 function toToolEntry(entry: WireToolEntry): FacadeToolEntry {
   switch (entry.type) {
@@ -251,6 +260,7 @@ function toAgentProfiles(profiles: WireAgentProfiles): NonNullable<FacadeCreateC
         ? { systemPromptTemplate: profile.system_prompt_template }
         : {}),
       ...(profile.tools !== undefined ? { tools: profile.tools } : {}),
+		...(profile.permission_policies !== undefined ? { permissionPolicies: profile.permission_policies } : {}),
       ...(profile.model_alias !== undefined ? { modelAlias: profile.model_alias } : {}),
       ...(profile.thinking_effort !== undefined ? { thinkingEffort: profile.thinking_effort } : {}),
       ...(profile.context_window !== undefined ? { contextWindow: profile.context_window } : {}),
@@ -283,7 +293,10 @@ function validateAgentProfiles(profiles: WireAgentProfiles | undefined): void {
   }
 }
 
-function toCreateConfig(body: CreateSessionBody): FacadeCreateConfig {
+function toCreateConfig(
+  body: CreateSessionBody,
+  skillArchives: FacadeCreateConfig['skillArchives'],
+): FacadeCreateConfig {
   return {
     sessionId: body.session_id,
     workDir: body.work_dir,
@@ -302,9 +315,13 @@ function toCreateConfig(body: CreateSessionBody): FacadeCreateConfig {
       id: skill.id,
       name: skill.name,
       version: skill.version,
-      files: skill.files.map((file) => ({ path: file.path, contentBase64: file.content_base64 })),
+		origin: skill.origin,
+      contentSize: skill.content_size,
+      contentSHA256: skill.content_sha256,
     })) } : {}),
+    ...(skillArchives !== undefined && skillArchives.length > 0 ? { skillArchives } : {}),
     ...(body.agent_profiles !== undefined ? { agentProfiles: toAgentProfiles(body.agent_profiles) } : {}),
+	...(body.session_environment_variables !== undefined ? { sessionEnvironmentVariables: body.session_environment_variables } : {}),
 	...(body.vault_environment_variables !== undefined ? { vaultEnvironmentVariables: body.vault_environment_variables } : {}),
   };
 }
@@ -314,6 +331,7 @@ function toSessionConfig(body: UpdateSessionConfigBody): FacadeSessionConfig {
     ...(body.tools !== undefined ? { tools: body.tools.map(toToolEntry) } : {}),
     ...(body.mcp_servers !== undefined ? { mcpServers: body.mcp_servers } : {}),
     ...(body.mcp_credentials !== undefined ? { mcpCredentials: body.mcp_credentials } : {}),
+	...(body.session_environment_variables !== undefined ? { sessionEnvironmentVariables: body.session_environment_variables } : {}),
 	...(body.vault_environment_variables !== undefined ? { vaultEnvironmentVariables: body.vault_environment_variables } : {}),
   };
 }
@@ -332,11 +350,11 @@ function toMemorySyncResources(body: MemoryAcknowledgeBody): FacadeMemorySyncRes
 }
 
 export function registerSessionRoutes(app: FastifyInstance, ctx: RouteContext): void {
-  const createRoute = defineRoute(
-    { method: 'POST', path: '/sessions', body: createSessionBodySchema },
-    async (req, reply) => {
-      validateAgentProfiles(req.body.agent_profiles);
-      const config = toCreateConfig(req.body);
+  app.post('/sessions', async (request, reply) => {
+    const parsed = await parseSessionCreateMultipart(request, parseCreateSessionBody);
+    try {
+      validateAgentProfiles(parsed.body.agent_profiles);
+      const config = toCreateConfig(parsed.body, parsed.archives);
       ctx.registry.createSession(config.sessionId);
       try {
         await ctx.harness.createSession(config);
@@ -346,10 +364,11 @@ export function registerSessionRoutes(app: FastifyInstance, ctx: RouteContext): 
         ctx.registry.markFailed(config.sessionId);
         throw error;
       }
-      return reply.code(201).send({ session_id: config.sessionId, status: 'active' });
-    },
-  );
-  app.post(createRoute.path, createRoute.options, createRoute.handler as RouteHandlerMethod);
+		return await reply.code(201).send({ session_id: config.sessionId, status: 'active' });
+    } finally {
+      await parsed.dispose();
+    }
+  });
 
   const resumeRoute = defineRoute(
     { method: 'POST', path: '/sessions/{id}/resume', params: sessionParamsSchema },

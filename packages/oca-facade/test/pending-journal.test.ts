@@ -117,6 +117,20 @@ describe('pending-call journal file primitives', () => {
     ]);
   });
 
+	it('keeps colliding child approval IDs separate by runtime Agent identity', async () => {
+		const dir = await makeSessionDir();
+		writePendingCall(dir, { id: 'shared_call', kind: 'approval', runtimeAgentId: 'runtime_child_1' });
+		writePendingCall(dir, { id: 'shared_call', kind: 'approval', runtimeAgentId: 'runtime_child_2' });
+		expect(readPendingCalls(dir)).toEqual([
+			{ id: 'shared_call', kind: 'approval', state: 'pending', runtimeAgentId: 'runtime_child_1' },
+			{ id: 'shared_call', kind: 'approval', state: 'pending', runtimeAgentId: 'runtime_child_2' },
+		]);
+		removePendingCall(dir, 'shared_call', 'runtime_child_1');
+		expect(readPendingCalls(dir)).toEqual([
+			{ id: 'shared_call', kind: 'approval', state: 'pending', runtimeAgentId: 'runtime_child_2' },
+		]);
+	});
+
   it('retains a terminal external-tool correlation without reporting it as pending', async () => {
     const dir = await makeSessionDir();
     writePendingCall(dir, { id: 'call_1', kind: 'external_tool' });
