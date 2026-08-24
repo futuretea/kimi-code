@@ -83,7 +83,7 @@ export async function runExtensionHostSmoke(options = {}) {
         "--skip-release-notes",
       ],
       extensionTestsEnv: {
-        KIMI_CODE_HOME: paths.kimiHome,
+        TEA_CODE_HOME: paths.kimiHome,
         KIMI_VSCODE_SMOKE_OS_HOME: paths.osHome,
         KIMI_VSCODE_SMOKE_REPORT: paths.report,
         KIMI_VSCODE_SMOKE_VSIX: basename(vsixPath),

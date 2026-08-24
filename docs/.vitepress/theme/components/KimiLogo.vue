@@ -1,22 +1,25 @@
 <script setup lang="ts">
-import logoUrl from '../Kimi.png'
-
 withDefaults(defineProps<{ size?: number }>(), { size: 56 })
 </script>
 
 <template>
-  <img
+  <span
     class="KimiLogo"
-    :src="logoUrl"
-    :width="size"
-    :height="size"
-    alt="Kimi"
-  />
+    :style="{ width: `${size}px`, height: `${size}px` }"
+    aria-label="Tea Code"
+    role="img"
+  >T</span>
 </template>
 
 <style scoped>
 .KimiLogo {
-  display: block;
-  object-fit: contain;
+  display: grid;
+  place-items: center;
+  border-radius: 24%;
+  background: var(--kimi-brand-gradient);
+  color: white;
+  font-size: 0.62em;
+  font-weight: 800;
+  line-height: 1;
 }
 </style>

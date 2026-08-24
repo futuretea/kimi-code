@@ -51,6 +51,7 @@ import { AcpServer, type AcpServerOptions, createAcpAgentApp } from './server';
 export interface RunAcpServerOptions extends AcpServerOptions {
   readonly homeDir?: string;
   readonly configPath?: string;
+  readonly osHomeDir?: string;
   readonly input?: NodeJS.ReadableStream;
   readonly output?: NodeJS.WritableStream;
   /**
@@ -111,6 +112,7 @@ export async function runAcpServerWithStream(
     {
       homeDir,
       configPath,
+      osHomeDir: opts.osHomeDir,
       clientIdentity: {
         productName: opts.agentInfo?.name ?? 'kimi-code-acp',
         version: opts.agentInfo?.version ?? '0.0.0',

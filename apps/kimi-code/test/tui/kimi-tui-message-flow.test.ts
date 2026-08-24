@@ -456,7 +456,7 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 const tempDirs: string[] = [];
-const originalKimiCodeHome = process.env['KIMI_CODE_HOME'];
+const originalKimiCodeHome = process.env['TEA_CODE_HOME'];
 const originalPluginMarketplaceUrl = process.env['KIMI_CODE_PLUGIN_MARKETPLACE_URL'];
 const originalVisual = process.env['VISUAL'];
 const originalEditor = process.env['EDITOR'];
@@ -501,9 +501,9 @@ afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
   }
   if (originalKimiCodeHome === undefined) {
-    delete process.env['KIMI_CODE_HOME'];
+    delete process.env['TEA_CODE_HOME'];
   } else {
-    process.env['KIMI_CODE_HOME'] = originalKimiCodeHome;
+    process.env['TEA_CODE_HOME'] = originalKimiCodeHome;
   }
   if (originalVisual === undefined) {
     delete process.env['VISUAL'];
@@ -1751,7 +1751,7 @@ describe('KimiTUI message flow', () => {
 
   it('hydrates lazy config defaults on a sessionless /reload (v2 engine)', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     const session = makeSession({ id: 'ses-lazy' });
     const getConfig = vi.fn(
       async (): Promise<{ models: Record<string, unknown>; defaultModel?: string }> => ({
@@ -1783,7 +1783,7 @@ describe('KimiTUI message flow', () => {
 
   it('clears stale lazy defaults when the default model is removed (v2 engine)', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     const session = makeSession({ id: 'ses-lazy' });
     const getConfig = vi.fn(
       async (): Promise<{ models: Record<string, unknown>; defaultModel?: string }> => ({
@@ -1856,7 +1856,7 @@ describe('KimiTUI message flow', () => {
 
   it('clears the stale permission default when it is removed from config (v2 engine)', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     const session = makeSession({ id: 'ses-lazy' });
     const getConfig = vi.fn(
       async (): Promise<{
@@ -2059,7 +2059,7 @@ describe('KimiTUI message flow', () => {
   });
 
   it('tracks theme changes from slash commands', async () => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     const { driver, harness } = await makeDriver();
     harness.track.mockClear();
 
@@ -2074,7 +2074,7 @@ describe('KimiTUI message flow', () => {
 
   it('dispatches /reload-tui without reloading the active session', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     await writeFile(
       join(homeDir, 'tui.toml'),
       `
@@ -2101,7 +2101,7 @@ command = "vim"
 
   it('dispatches /reload through session reload and applies tui.toml', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     await writeFile(join(homeDir, 'tui.toml'), 'theme = "light"\n', 'utf-8');
     const { driver, session, harness } = await makeDriver();
     harness.track.mockClear();
@@ -2140,7 +2140,7 @@ command = "vim"
     const transcript = stripSgr(renderTranscript(driver));
     expect(transcript).toContain("You're not signed in");
     expect(transcript).toContain('https://www.kimi.com/code');
-    expect(transcript).toContain('https://github.com/MoonshotAI/kimi-code/issues');
+    expect(transcript).toContain('https://github.com/futuretea/kimi-code/issues');
   });
 
   it('falls back to GitHub Issues when the sign-in status cannot be read', async () => {
@@ -2153,7 +2153,7 @@ command = "vim"
     await handleFeedbackCommand(feedbackDriver as any);
 
     expect(openUrl).toHaveBeenCalledTimes(1);
-    expect(openUrl).toHaveBeenCalledWith('https://github.com/MoonshotAI/kimi-code/issues');
+    expect(openUrl).toHaveBeenCalledWith('https://github.com/futuretea/kimi-code/issues');
     expect(promptFeedbackInput).not.toHaveBeenCalled();
     expect(harness.auth.submitFeedback).not.toHaveBeenCalled();
     const transcript = stripSgr(renderTranscript(driver));
@@ -2197,7 +2197,7 @@ command = "vim"
       expect.objectContaining({
         content: 'useful feedback',
         sessionId: 'ses-1',
-        version: 'kimi-code-0.0.0-test',
+        version: 'kimi-code-0.38.0',
         model: 'k2',
       }),
     );
@@ -2243,7 +2243,7 @@ command = "vim"
         expect.objectContaining({
           id: 'ses-1',
           includeGlobalLog: true,
-          version: '0.0.0-test',
+          version: '0.38.0',
         }),
       );
     });
@@ -2490,7 +2490,7 @@ command = "vim"
 
     await expect(handleFeedbackCommand(feedbackDriver as any)).rejects.toThrow('socket hangup');
 
-    expect(openUrl).toHaveBeenCalledWith('https://github.com/MoonshotAI/kimi-code/issues');
+    expect(openUrl).toHaveBeenCalledWith('https://github.com/futuretea/kimi-code/issues');
     const transcript = stripSgr(renderTranscript(driver));
     expect(transcript).toContain('Opening GitHub Issues as fallback');
   });
@@ -3427,7 +3427,7 @@ command = "vim"
   });
 
   it('releases every queued use of shared media when the queue is discarded', async () => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     const { driver, harness } = await makeDriver();
     const imageStore = (driver as unknown as { imageStore: ImageAttachmentStore }).imageStore;
     const attachment = stagedImage(imageStore, 'file-queued');
@@ -6500,7 +6500,7 @@ command = "vim"
       expect(getStatus).toHaveBeenCalledTimes(previousStatusCalls + 1);
       const output = stripSgr(driver.state.transcriptContainer.render(120).join('\n'));
       expect(output).toContain(' Status ');
-      expect(output).toContain('>_ Kimi Code');
+      expect(output).toContain('>_ Tea Code');
       expect(output).toContain('Model');
       expect(output).toContain('thinking high');
       expect(output).toContain('Permissions  auto');
@@ -7250,8 +7250,8 @@ command = "vim"
     });
     const picker = driver.state.editorContainer.children[0];
     const pickerOutput = stripSgr((picker as TabbedModelSelectorComponent).render(120).join('\n'));
-    expect(pickerOutput).toMatch(/Kimi K2\s+Kimi Code ← current/);
-    expect(pickerOutput).toMatch(/❯ Kimi Turbo\s+Kimi Code/);
+    expect(pickerOutput).toMatch(/Kimi K2\s+Tea Code ← current/);
+    expect(pickerOutput).toMatch(/❯ Kimi Turbo\s+Tea Code/);
     (picker as TabbedModelSelectorComponent).handleInput('t');
     (picker as TabbedModelSelectorComponent).handleInput('u');
     const filteredOutput = stripSgr((picker as TabbedModelSelectorComponent).render(120).join('\n'));
@@ -7725,11 +7725,11 @@ command = "vim"
         );
       });
       expect(copyTextToClipboard).toHaveBeenCalledWith(
-        "cd '/tmp/proj-a' && kimi --resume 'ses-fork'",
+        "cd '/tmp/proj-a' && tea-code --resume 'ses-fork'",
       );
       const transcript = driver.state.transcriptContainer.render(120).join('\n');
       expect(transcript).toContain(
-        "To enter the fork in a new process, run: cd '/tmp/proj-a' && kimi --resume 'ses-fork'",
+        "To enter the fork in a new process, run: cd '/tmp/proj-a' && tea-code --resume 'ses-fork'",
       );
       expect(transcript).toContain('Command copied to clipboard');
       expect(driver.getCurrentSessionId()).toBe('ses-source');
@@ -7756,7 +7756,7 @@ command = "vim"
     await vi.waitFor(() => {
       const transcript = driver.state.transcriptContainer.render(120).join('\n');
       expect(transcript).toContain(
-        "To enter the fork in a new process, run: cd '/tmp/proj-a' && kimi --resume 'ses-fork'",
+        "To enter the fork in a new process, run: cd '/tmp/proj-a' && tea-code --resume 'ses-fork'",
       );
       expect(transcript).toContain('Failed to copy command to clipboard');
     });
@@ -7797,7 +7797,7 @@ command = "vim"
       // cmd.exe's `cd` does not switch drives; pushd works in cmd + PowerShell.
       await vi.waitFor(() => {
         expect(copyTextToClipboard).toHaveBeenCalledWith(
-          'pushd "D:\\proj" && kimi --resume "ses-fork"',
+          'pushd "D:\\proj" && tea-code --resume "ses-fork"',
         );
       });
       expect(driver.getCurrentSessionId()).toBe('ses-source');

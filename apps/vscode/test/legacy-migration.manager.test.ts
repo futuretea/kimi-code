@@ -142,7 +142,7 @@ describe("legacy migration manager (discovery and migration coordination)", () =
   it("ignores legacy environment variables other than KIMI_SHARE_DIR", async () => {
     const rig = await createRig({
       legacyEnvironmentVariables: {
-        KIMI_CODE_HOME: join(tmpdir(), "must-not-be-read"),
+        TEA_CODE_HOME: join(tmpdir(), "must-not-be-read"),
         PATH: join(tmpdir(), "must-not-be-used"),
       },
     });

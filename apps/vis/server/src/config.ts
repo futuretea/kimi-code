@@ -1,13 +1,13 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-/** Resolve KIMI_CODE_HOME (env > ~/.kimi-code). */
+/** Resolve TEA_CODE_HOME (env > ~/.tea-code). */
 export function resolveKimiCodeHome(): string {
-  const envHome = process.env['KIMI_CODE_HOME'];
+  const envHome = process.env['TEA_CODE_HOME'];
   if (envHome !== undefined && envHome.length > 0) {
     return envHome;
   }
-  return join(homedir(), '.kimi-code');
+  return join(homedir(), '.tea-code');
 }
 
 /** HTTP port for the vis API server. */

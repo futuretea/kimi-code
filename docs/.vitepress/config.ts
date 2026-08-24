@@ -19,8 +19,8 @@ const mermaidOptimizeDeps = [
 
 const config = withMermaid(defineConfig({
   base,
-  title: 'Kimi Code CLI Docs',
-  description: 'Kimi Code CLI Documentation',
+  title: 'Tea Code Docs',
+  description: 'Tea Code Documentation',
 
   head: [
     ['link', { rel: 'icon', type: 'image/x-icon', href: `${base}favicon.ico` }],
@@ -34,8 +34,8 @@ const config = withMermaid(defineConfig({
       label: '简体中文',
       lang: 'zh-CN',
       link: '/zh/',
-      title: 'Kimi Code CLI 文档',
-      description: 'Kimi Code CLI 用户文档',
+      title: 'Tea Code 文档',
+      description: 'Tea Code 用户文档',
       themeConfig: {
         nav: [
           { text: '指南', link: '/zh/guides/getting-started', activeMatch: '/zh/guides/' },
@@ -89,8 +89,8 @@ const config = withMermaid(defineConfig({
             {
               text: '参考手册',
               items: [
-                { text: 'kimi 命令', link: '/zh/reference/kimi-command' },
-                { text: 'kimi acp 子命令', link: '/zh/reference/kimi-acp' },
+                { text: 'tea-code 命令', link: '/zh/reference/kimi-command' },
+                { text: 'tea-code acp 子命令', link: '/zh/reference/kimi-acp' },
                 { text: '服务 API', link: '/zh/reference/server-api' },
                 { text: '内置工具', link: '/zh/reference/tools' },
                 { text: '斜杠命令', link: '/zh/reference/slash-commands' },
@@ -113,8 +113,8 @@ const config = withMermaid(defineConfig({
       label: 'English',
       lang: 'en-US',
       link: '/en/',
-      title: 'Kimi Code CLI Docs',
-      description: 'Kimi Code CLI User Documentation',
+      title: 'Tea Code Docs',
+      description: 'Tea Code User Documentation',
       themeConfig: {
         nav: [
           { text: 'Guides', link: '/en/guides/getting-started', activeMatch: '/en/guides/' },
@@ -168,8 +168,8 @@ const config = withMermaid(defineConfig({
             {
               text: 'Reference',
               items: [
-                { text: 'kimi Command', link: '/en/reference/kimi-command' },
-                { text: 'kimi acp Subcommand', link: '/en/reference/kimi-acp' },
+                { text: 'tea-code Command', link: '/en/reference/kimi-command' },
+                { text: 'tea-code acp Subcommand', link: '/en/reference/kimi-acp' },
                 { text: 'Server API', link: '/en/reference/server-api' },
                 { text: 'Built-in Tools', link: '/en/reference/tools' },
                 { text: 'Slash Commands', link: '/en/reference/slash-commands' },
@@ -194,7 +194,7 @@ const config = withMermaid(defineConfig({
     outline: [2, 3],
     search: { provider: 'local' },
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/MoonshotAI/kimi-code' },
+      { icon: 'github', link: 'https://github.com/futuretea/kimi-code' },
     ],
   },
 

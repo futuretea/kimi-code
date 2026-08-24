@@ -1,9 +1,9 @@
 <!--
-Thank you for your contribution to Kimi Code!
+Thank you for your contribution to Tea Code!
 External PRs are accepted for approved bug fixes only: link an issue that a maintainer has approved (an `/approve` comment). External feature PRs are not accepted.
 外部 PR 仅接受获批准的 bug 修复：请链接维护者已批准（`/approve` 评论）的 issue；不接受外部 feature PR。
 
-See https://github.com/MoonshotAI/kimi-code/blob/main/CONTRIBUTING.md for more.
+See https://github.com/futuretea/kimi-code/blob/main/CONTRIBUTING.md for more.
 -->
 
 ## Related Issue
@@ -18,11 +18,11 @@ Resolve #(issue_number)
 
 ## What changed
 
-<!-- What did you implement, and why does this approach fit Kimi Code? -->
+<!-- What did you implement, and why does this approach fit Tea Code? -->
 
 ## Checklist
 
-- [ ] I have read the [CONTRIBUTING](https://github.com/MoonshotAI/kimi-code/blob/main/CONTRIBUTING.md) document.
+- [ ] I have read the [CONTRIBUTING](https://github.com/futuretea/kimi-code/blob/main/CONTRIBUTING.md) document.
 - [ ] I have linked a related issue (external PRs: the issue must have a maintainer's `/approve`).
 - [ ] I have added tests that prove my feature works.
 - [ ] Ran `gen-changesets` skill, or this PR needs no changeset.

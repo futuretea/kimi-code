@@ -16,7 +16,7 @@ import {
 } from '@moonshot-ai/kimi-code-sdk';
 import { resolve } from 'pathe';
 
-import { CLI_SHUTDOWN_TIMEOUT_MS, PROMPT_CLEANUP_TIMEOUT_MS } from '#/constant/app';
+import { CLI_COMMAND_NAME, CLI_SHUTDOWN_TIMEOUT_MS, PROMPT_CLEANUP_TIMEOUT_MS } from '#/constant/app';
 
 import { resolveAgentProfileSelection } from './agent-selection';
 import { isKimiV2Enabled } from './experimental-v2';
@@ -123,7 +123,7 @@ export async function runPrompt(
   };
   const harness = await createPromptHarness({
     homeDir: telemetryBootstrap.homeDir,
-    identity: createKimiCodeHostIdentity(version),
+    identity: createKimiCodeHostIdentity(),
     uiMode: PROMPT_UI_MODE,
     skillDirs: opts.skillsDirs,
     telemetry: telemetryClient,
@@ -189,7 +189,6 @@ export async function runPrompt(
       harness,
       bootstrap: telemetryBootstrap,
       config,
-      version,
       uiMode: PROMPT_UI_MODE,
       model: telemetryModel,
       sessionId: session.id,
@@ -309,7 +308,7 @@ async function resolvePromptSession(
       stderr.write(
         `${chalk.hex('#E8A838')(
           `Session "${opts.session}" was created under a different directory.\n` +
-            `  cd "${target.workDir}" && kimi -r ${opts.session}`,
+            `  cd "${target.workDir}" && tea-code -r ${opts.session}`,
         )}\n\n`,
       );
       throw new Error(
@@ -413,7 +412,7 @@ export function requireConfiguredModel(...models: readonly (string | undefined)[
   const model = configuredModel(...models);
   if (model === undefined) {
     throw new Error(
-      'No model configured. Run `kimi` and use /login to sign in, then retry; or set default_model in config.toml.',
+      `No model configured. Run \`${CLI_COMMAND_NAME}\` and use /login to sign in, then retry; or set default_model in config.toml.`,
     );
   }
   return model;

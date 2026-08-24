@@ -1,6 +1,6 @@
 # Plugins
 
-Plugins package reusable Kimi Code CLI capabilities into installable units — they can add [Agent Skills](./skills.md), custom [agents](./agents.md), automatically load a specified Skill at session start, contribute system-prompt instructions, and declare MCP servers to provide real tool capabilities. They are ideal for sharing workflows with a team, connecting to external services, or installing extensions from the [official plugins](#official-plugins).
+Plugins package reusable Tea Code capabilities into installable units — they can add [Agent Skills](./skills.md), custom [agents](./agents.md), automatically load a specified Skill at session start, contribute system-prompt instructions, and declare MCP servers to provide real tool capabilities. They are ideal for sharing workflows with a team, connecting to external services, or installing extensions from the [official plugins](#official-plugins).
 
 ## Installation and Management
 
@@ -54,7 +54,7 @@ Network requests only go through `github.com` redirects and `codeload.github.com
 ### Notes
 
 - Plugin changes apply after `/reload` or in new sessions. After installing, enabling/disabling, or removing a plugin, run `/reload` or `/new`; the current session will not update.
-- Local installations are copied to `$KIMI_CODE_HOME/plugins/managed/<id>/`, and the CLI always runs from this managed copy. Editing the original source directory after installation has no effect; you must reinstall.
+- Local installations are copied to `$TEA_CODE_HOME/plugins/managed/<id>/`, and the CLI always runs from this managed copy. Editing the original source directory after installation has no effect; you must reinstall.
 - Removing a plugin only deletes the installation record; the managed copy and original source files remain on disk.
 - Plugins are currently installed per-user and apply to all projects; project-level installation scope is not yet supported.
 
@@ -236,7 +236,7 @@ Example:
 {
   "name": "kimi-finance",
   "version": "1.0.0",
-  "description": "Finance data and analysis workflows for Kimi Code CLI",
+  "description": "Finance data and analysis workflows for Tea Code",
   "skills": "./skills/",
   "systemPromptPath": "./SYSTEM.md",
   "sessionStart": {
@@ -279,7 +279,7 @@ Use `systemPrompt` for a short inline instruction, or `systemPromptPath` to keep
 }
 ```
 
-System-prompt contributions take effect on both agent engines. The interactive TUI, `kimi -p`, and `kimi web` use the v2 engine by default; setting `KIMI_CODE_LEGACY_FLAG=1` routes the local CLI surfaces to the legacy engine.
+System-prompt contributions take effect on both agent engines. The interactive TUI, `tea-code -p`, and `tea-code web` use the v2 engine by default; setting `KIMI_CODE_LEGACY_FLAG=1` routes the local CLI surfaces to the legacy engine.
 
 Each field — the inline `systemPrompt` and the `systemPromptPath` file — is limited to 32 KB (UTF-8 bytes): oversized content is ignored and reported in the plugin diagnostics. Across all enabled plugins, one prompt build injects at most 64 KB of instructions; contributions beyond the budget are skipped with a warning, including a single plugin whose inline text and file together exceed that budget.
 
@@ -363,7 +363,7 @@ my-plugin/
       SKILL.md
 ```
 
-`sessionStart.skill` loads a plugin Skill into the main Agent at session start, making it suitable for initialization instructions, workflow rules, or mapping terminology from other tools to Kimi Code CLI. It only injects text; it does not execute code.
+`sessionStart.skill` loads a plugin Skill into the main Agent at session start, making it suitable for initialization instructions, workflow rules, or mapping terminology from other tools to Tea Code. It only injects text; it does not execute code.
 
 Regardless of how a Skill is loaded (`sessionStart.skill`, `/skill:<name>`, or automatic model invocation), `skillInstructions` appears alongside that plugin's Skill.
 
@@ -442,7 +442,7 @@ Plugin hooks reuse the same mechanism as global hooks — see [Hooks](./hooks.md
 
 - A plugin's hooks are active only while the plugin is **enabled**; disabling the plugin stops its hooks.
 - Each hook runs with its working directory set to the plugin root, so `command` can use `./` paths inside the plugin.
-- The hook process receives two extra environment variables: `KIMI_CODE_HOME` and `KIMI_PLUGIN_ROOT` (the plugin root directory).
+- The hook process receives two extra environment variables: `TEA_CODE_HOME` and `KIMI_PLUGIN_ROOT` (the plugin root directory).
 
 Installing a plugin never runs its hooks by itself — they only fire when their matching event occurs while the plugin is enabled.
 

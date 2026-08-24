@@ -2,9 +2,9 @@ import { ErrorCodes } from '@moonshot-ai/kimi-code-sdk';
 
 import { currentKimiProfile } from '#/utils/region';
 
-export const PRODUCT_NAME = 'Kimi Code';
-export const CLI_COMMAND_NAME = 'kimi';
-export const PROCESS_NAME = 'kimi-code';
+export const PRODUCT_NAME = 'Tea Code';
+export const CLI_COMMAND_NAME = 'tea-code';
+export const PROCESS_NAME = 'tea-code';
 
 // Used in telemetry app names and HTTP User-Agent headers.
 export const CLI_USER_AGENT_PRODUCT = 'kimi-code-cli';
@@ -41,11 +41,11 @@ export const HEADLESS_FORCE_EXIT_GRACE_MS = 2000;
 export const HEADLESS_STDIO_DRAIN_TIMEOUT_MS = 10000;
 
 // Published npm package name; this can differ from the executable command.
-export const NPM_PACKAGE_NAME = '@moonshot-ai/kimi-code';
+export const NPM_PACKAGE_NAME = '@futuretea/tea-code';
 
 // App-owned data paths. SDK/core runtime config is intentionally not routed here.
-export const KIMI_CODE_HOME_ENV = 'KIMI_CODE_HOME';
-export const KIMI_CODE_DATA_DIR_NAME = '.kimi-code';
+export const KIMI_CODE_HOME_ENV = 'TEA_CODE_HOME';
+export const KIMI_CODE_DATA_DIR_NAME = '.tea-code';
 export const KIMI_CODE_LOG_DIR_NAME = 'logs';
 export const KIMI_CODE_CACHE_DIR_NAME = 'cache';
 export const KIMI_CODE_UPDATE_DIR_NAME = 'updates';
@@ -73,7 +73,7 @@ export const DEFAULT_OAUTH_PROVIDER_NAME = 'managed:kimi-code';
 // auto-propagates instead of silently breaking the startup recovery path.
 export const OAUTH_LOGIN_REQUIRED_CODE = ErrorCodes.AUTH_LOGIN_REQUIRED;
 
-export const FEEDBACK_ISSUE_URL = 'https://github.com/MoonshotAI/kimi-code/issues';
+export const FEEDBACK_ISSUE_URL = 'https://github.com/futuretea/kimi-code/issues';
 // Sign-up / sign-in page offered to signed-out users so they can create an
 // account and submit feedback through the authenticated channel next time.
 export function kimiCodeSignupUrl(): string {

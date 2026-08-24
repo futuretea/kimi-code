@@ -21,7 +21,7 @@ export function logsRoute(home: string = KIMI_CODE_HOME): Hono {
     const sessionLog = join(detail.sessionDir, ...SESSION_LOG_REL);
     // The global diagnostic log is a single shared file. In an exported bundle
     // it is captured under the session dir (logs/global/kimi-code.log); for a
-    // live local session it lives at <KIMI_CODE_HOME>/logs/kimi-code.log
+    // live local session it lives at <TEA_CODE_HOME>/logs/kimi-code.log
     // (agent-core's resolveGlobalLogPath), NOT under the session dir.
     const globalLog = detail.imported
       ? join(detail.sessionDir, ...GLOBAL_LOG_REL)

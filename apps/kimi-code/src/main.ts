@@ -1,5 +1,5 @@
 /**
- * Kimi Code entry point.
+ * Tea Code entry point.
  *
  * Parses CLI arguments via Commander.js, validates options, runs the
  * outer update preflight, then delegates to the requested UI runner.
@@ -107,7 +107,7 @@ export async function handleUpgradeCommand(version: string): Promise<void> {
   };
   const harness = createKimiHarness({
     homeDir: telemetryBootstrap.homeDir,
-    identity: createKimiCodeHostIdentity(version),
+    identity: createKimiCodeHostIdentity(),
     telemetry: telemetryClient,
   });
   let exitCode = 1;
@@ -118,7 +118,6 @@ export async function handleUpgradeCommand(version: string): Promise<void> {
       harness,
       bootstrap: telemetryBootstrap,
       config,
-      version,
       uiMode: CLI_UI_MODE,
     });
     exitCode = await handleUpgrade(version, { track, logger: log });

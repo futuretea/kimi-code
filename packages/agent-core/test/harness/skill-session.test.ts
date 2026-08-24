@@ -107,7 +107,7 @@ describe('HarnessAPI session skills', () => {
     expect(mcpConfig?.path).toBe('builtin://mcp-config');
     expect(importer).toMatchObject({
       name: 'import-from-cc-codex',
-      description: 'Import Claude Code and Codex instructions, skills, and MCP settings into Kimi Code.',
+      description: 'Import Claude Code and Codex instructions, skills, and MCP settings into Tea Code.',
       source: 'builtin',
       disableModelInvocation: true,
     });
@@ -130,10 +130,10 @@ describe('HarnessAPI session skills', () => {
     expect(names.has('sandbox-only')).toBe(true);
   });
 
-  it('resolves user brand skills from KIMI_CODE_HOME when no explicit home is set', async () => {
+  it('resolves user brand skills from TEA_CODE_HOME when no explicit home is set', async () => {
     const processHome = join(tmp, 'env-process-home');
     vi.stubEnv('HOME', processHome);
-    vi.stubEnv('KIMI_CODE_HOME', homeDir);
+    vi.stubEnv('TEA_CODE_HOME', homeDir);
     await writeLegacyUserSkill(processHome, 'env-real-home-only', 'Env real home skill');
     await writeBrandUserSkill(homeDir, 'env-sandbox-only', 'Env sandbox skill');
     const { rpc } = await createTestRpc({});

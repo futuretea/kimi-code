@@ -1,13 +1,13 @@
 # Sessions and context
 
-Kimi Code CLI persists every conversation as a "session" — storing message history and metadata so you can close the terminal and pick up right where you left off. This page covers how to resume sessions, manage context, and export or fork sessions.
+Tea Code persists every conversation as a "session" — storing message history and metadata so you can close the terminal and pick up right where you left off. This page covers how to resume sessions, manage context, and export or fork sessions.
 
 ## Session storage
 
-All sessions are saved under `$KIMI_CODE_HOME/sessions/` (default: `~/.kimi-code/sessions/`), grouped by working directory:
+All sessions are saved under `$TEA_CODE_HOME/sessions/` (default: `~/.tea-code/sessions/`), grouped by working directory:
 
 ```text
-~/.kimi-code/
+~/.tea-code/
 ├── config.toml
 ├── session_index.jsonl
 └── sessions/
@@ -30,24 +30,24 @@ Do not manually edit files inside the `sessions/` directory — doing so may pre
 
 ## Starting and resuming sessions
 
-Every time you run `kimi` directly it creates a new session. To resume a previous session, use one of the following:
+Every time you run `tea-code` directly it creates a new session. To resume a previous session, use one of the following:
 
 **Resume the most recent session in the current directory:**
 
 ```sh
-kimi --continue
+tea-code --continue
 ```
 
 **Resume a specific session by ID:**
 
 ```sh
-kimi --session abc123
+tea-code --session abc123
 ```
 
 **Interactively browse session history and choose one:**
 
 ```sh
-kimi --session
+tea-code --session
 ```
 
 ::: warning
@@ -65,7 +65,7 @@ You can manage sessions without leaving the terminal. The following slash comman
 
 ## Context compression
 
-As a conversation grows, Kimi Code CLI automatically compresses the message history when the context approaches the window limit, freeing up token space. You can also trigger compression manually at any time:
+As a conversation grows, Tea Code automatically compresses the message history when the context approaches the window limit, freeing up token space. You can also trigger compression manually at any time:
 
 ```
 /compact
@@ -87,27 +87,27 @@ To explore a new direction without disrupting the current conversation, use `/fo
 
 Forking does not switch you away: you stay in the original session and the conversation continues untouched. The fork is an independent copy you can switch to at any time using `/sessions`. A saved `/goal` is not copied to the fork. Start a new goal there if you want autonomous goal work.
 
-After forking, the CLI prints a ready-to-run `kimi --resume` command (also copied to the clipboard) so you can enter the fork directly from a new terminal process.
+After forking, the CLI prints a ready-to-run `tea-code --resume` command (also copied to the clipboard) so you can enter the fork directly from a new terminal process.
 
 ## Exporting a session
 
-Use `kimi export` to package a session as a ZIP file — useful for sharing, archiving, or filing a bug report:
+Use `tea-code export` to package a session as a ZIP file — useful for sharing, archiving, or filing a bug report:
 
 ```sh
-kimi export <sessionId>
+tea-code export <sessionId>
 ```
 
 Omitting `sessionId` exports the most recent session in the current directory (with an interactive confirmation prompt; add `-y` to skip). Use `-o` to specify an output path:
 
 ```sh
-kimi export <sessionId> -o ~/Desktop/my-session.zip
+tea-code export <sessionId> -o ~/Desktop/my-session.zip
 ```
 
-The export includes all files in the session directory, including diagnostic logs. The global diagnostic log (`~/.kimi-code/logs/kimi-code.log`) is also bundled by default; add `--no-include-global-log` to exclude it.
+The export includes all files in the session directory, including diagnostic logs. The global diagnostic log (`~/.tea-code/logs/kimi-code.log`) is also bundled by default; add `--no-include-global-log` to exclude it.
 
 You can also export from inside the TUI without leaving the interactive session:
 
-- **`/export-debug-zip`**: produces the same debug ZIP as `kimi export`.
+- **`/export-debug-zip`**: produces the same debug ZIP as `tea-code export`.
 - **`/export-md`** (alias `/export`): exports the conversation as a human-readable Markdown file, suitable for sharing or archiving. Accepts an optional path argument; without one, it writes to `kimi-export-<short-id>-<timestamp>.md` in the current working directory.
 
 In the web UI, `/export` downloads the current session as a diagnostic ZIP. It includes the persisted session data, diagnostic logs, and a bounded metadata-only `logs/kimi-web.jsonl` record of key browser events. Prompt text, WebSocket payloads, and console arguments are not copied into this browser log. This web command differs from the TUI `/export` alias above.

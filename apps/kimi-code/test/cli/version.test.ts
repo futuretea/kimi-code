@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createKimiCodeUserAgent,
+  createKimiCodeHostIdentity,
   getHostPackageJsonPath,
   getHostPackageRoot,
+  getUpstreamVersion,
   getVersion,
 } from '#/cli/version';
 
@@ -20,7 +22,13 @@ describe('cli version helpers', () => {
     expect(getVersion()).toBe(pkg.version);
   });
 
-  it('builds the product user-agent for ad-hoc fetches', () => {
-    expect(createKimiCodeUserAgent('1.2.3')).toBe('kimi-code-cli/1.2.3');
+  it('reads the packaged upstream release identity separately from the local package version', () => {
+    expect(getUpstreamVersion()).toBe('0.38.0');
+    expect(createKimiCodeHostIdentity()).toMatchObject({ version: '0.38.0' });
+    expect(createKimiCodeUserAgent()).toBe('kimi-code-cli/0.38.0');
+  });
+
+  it('uses the packaged upstream release for every ad-hoc fetch user-agent', () => {
+    expect(createKimiCodeUserAgent()).toBe('kimi-code-cli/0.38.0');
   });
 });

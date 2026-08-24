@@ -7,6 +7,8 @@ import { Worker } from 'node:worker_threads';
 import { MiniDb } from '@moonshot-ai/minidb';
 import { getSearchWorkerRuntimeState } from '@moonshot-ai/kap-server/search-worker-runtime';
 
+import { getUpstreamVersion } from '#/cli/version';
+
 import {
   getEmbeddedNativeAssetManifest,
   getNativeCacheBase,
@@ -117,7 +119,7 @@ async function runSmoke(): Promise<void> {
   await smokeMinidbWorker();
   await smokeSearchWorker();
   process.stdout.write(
-    `Native asset smoke passed: ${manifest.target}; MiniDb worker build passed; search worker ready\n`,
+    `Native asset smoke passed: ${manifest.target}; upstream identity version ${getUpstreamVersion()}; MiniDb worker build passed; search worker ready\n`,
   );
 }
 

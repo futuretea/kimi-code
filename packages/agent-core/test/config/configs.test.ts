@@ -398,7 +398,7 @@ removed_flag = true
     await ensureConfigFile(configPath);
 
     const text = await readFile(configPath, 'utf-8');
-    expect(text).toContain('Runtime settings for Kimi Code.');
+    expect(text).toContain('Runtime settings for Tea Code.');
     expect(text).not.toMatch(/^default_thinking =/m);
     expect(text).not.toMatch(/^default_model =/m);
 
@@ -673,18 +673,18 @@ micro_compaction = false
 });
 
 describe('config path env override', () => {
-  it('uses KIMI_CODE_HOME when no explicit homeDir is supplied', () => {
-    const saved = process.env['KIMI_CODE_HOME'];
+  it('uses TEA_CODE_HOME when no explicit homeDir is supplied', () => {
+    const saved = process.env['TEA_CODE_HOME'];
     try {
-      process.env['KIMI_CODE_HOME'] = '/tmp/kimi-from-env';
+      process.env['TEA_CODE_HOME'] = '/tmp/kimi-from-env';
 
       expect(resolveKimiHome()).toBe('/tmp/kimi-from-env');
       expect(resolveKimiHome('/tmp/kimi-explicit')).toBe('/tmp/kimi-explicit');
       expect(resolveConfigPath({})).toBe('/tmp/kimi-from-env/config.toml');
       expect(resolveConfigPath({ configPath: '/tmp/custom.toml' })).toBe('/tmp/custom.toml');
     } finally {
-      if (saved === undefined) delete process.env['KIMI_CODE_HOME'];
-      else process.env['KIMI_CODE_HOME'] = saved;
+      if (saved === undefined) delete process.env['TEA_CODE_HOME'];
+      else process.env['TEA_CODE_HOME'] = saved;
     }
   });
 });
@@ -934,7 +934,7 @@ max_steps_per_turn = "nope"
     } catch (error) {
       expect(error).toBeInstanceOf(KimiError);
       expect((error as KimiError).message).toContain('fix it first');
-      expect((error as KimiError).message).toContain('kimi doctor');
+      expect((error as KimiError).message).toContain('tea-code doctor');
       expect((error as KimiError).message).not.toContain('invalid_type');
     }
 

@@ -71,10 +71,10 @@ describe('CloudAppender', () => {
     homeDir = mkdtempSync(join(tmpdir(), 'cloud-appender-'));
     savedOauthHost = process.env['KIMI_CODE_OAUTH_HOST'];
     savedLegacyOauthHost = process.env['KIMI_OAUTH_HOST'];
-    savedKimiHome = process.env['KIMI_CODE_HOME'];
+    savedKimiHome = process.env['TEA_CODE_HOME'];
     delete process.env['KIMI_CODE_OAUTH_HOST'];
     delete process.env['KIMI_OAUTH_HOST'];
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
   });
 
   afterEach(() => {
@@ -83,8 +83,8 @@ describe('CloudAppender', () => {
     else process.env['KIMI_CODE_OAUTH_HOST'] = savedOauthHost;
     if (savedLegacyOauthHost === undefined) delete process.env['KIMI_OAUTH_HOST'];
     else process.env['KIMI_OAUTH_HOST'] = savedLegacyOauthHost;
-    if (savedKimiHome === undefined) delete process.env['KIMI_CODE_HOME'];
-    else process.env['KIMI_CODE_HOME'] = savedKimiHome;
+    if (savedKimiHome === undefined) delete process.env['TEA_CODE_HOME'];
+    else process.env['TEA_CODE_HOME'] = savedKimiHome;
   });
 
   it('sends a flattened, prefixed payload with user_id and context', async () => {
@@ -119,6 +119,32 @@ describe('CloudAppender', () => {
     expect(typeof event?.['context_core_version']).toBe('string');
     expect(typeof event?.['event_id']).toBe('string');
     expect(typeof event?.['timestamp']).toBe('number');
+  });
+
+  it('uses the host-provided upstream version instead of the local client identity', async () => {
+    const requests: CapturedRequest[] = [];
+    const appender = new CloudAppender(
+      baseOptions({
+        homeDir,
+        bootstrap: {
+          ...stubBootstrap(homeDir),
+          clientIdentity: { ...stubClientIdentity, version: 'tea-release-1.2.3' },
+        },
+        telemetryVersion: '0.38.0',
+        fetchImpl: makeFetch((req) => {
+          requests.push(req);
+          return okResponse();
+        }),
+      }),
+    );
+
+    appender.track('tool.call');
+    await appender.flush();
+
+    const event = requests[0]?.body.events[0];
+    expect(event?.['context_client_version']).toBe('0.38.0');
+    expect(event?.['context_version']).toBe('0.38.0');
+    expect(JSON.stringify(requests[0]?.body)).not.toContain('tea-release-1.2.3');
   });
 
   it('derives the global endpoint when the env pins the global region', async () => {

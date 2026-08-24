@@ -302,12 +302,12 @@ describe('Session skills', () => {
     }
   });
 
-  it('resolves user brand skills from KIMI_CODE_HOME, not the OS home', async () => {
+  it('resolves user brand skills from TEA_CODE_HOME, not the OS home', async () => {
     const homeDir = await makeTempDir(tempDirs, 'kimi-sdk-skills-home-');
     const processHome = await makeTempDir(tempDirs, 'kimi-sdk-skills-process-home-');
     const workDir = await makeTempDir(tempDirs, 'kimi-sdk-skills-work-');
     vi.stubEnv('HOME', processHome);
-    vi.stubEnv('KIMI_CODE_HOME', homeDir);
+    vi.stubEnv('TEA_CODE_HOME', homeDir);
     await writeLegacyUserSkill(processHome, 'sdk-real-home-only', 'SDK real home skill');
     await writeBrandUserSkill(homeDir, 'sdk-sandbox-only', 'SDK sandbox skill');
     const harness = createKimiHarness({ identity: TEST_IDENTITY });

@@ -10,7 +10,7 @@ import {
   writeUpdateInstallState,
 } from '#/cli/update/install-state';
 import { readUpdateCache, writeUpdateCache } from '#/cli/update/cache';
-import { emptyUpdateCache, type UpdateInstallState } from '#/cli/update/types';
+import { emptyUpdateCache, type UpdateCache, type UpdateInstallState } from '#/cli/update/types';
 import { getUpdateInstallStateFile, getUpdateStateFile } from '#/utils/paths';
 
 const originalEnv = { ...process.env };
@@ -19,7 +19,7 @@ let dir: string;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'kimi-update-cache-'));
-  process.env['KIMI_CODE_HOME'] = dir;
+  process.env['TEA_CODE_HOME'] = dir;
 });
 
 afterEach(() => {
@@ -43,7 +43,7 @@ describe('update cache', () => {
     writeFileSync(
       getUpdateStateFile(),
       JSON.stringify({
-        packageName: '@moonshot-ai/kimi-code',
+        packageName: '@futuretea/tea-code',
         checkedAt: '2026-04-23T08:00:00.000Z',
         distTags: { beta: '0.0.1-beta.1' },
       }),
@@ -54,7 +54,7 @@ describe('update cache', () => {
 
   it('writes and reads back the cache from updates/latest.json', async () => {
     const cache = {
-      source: 'cdn',
+      source: 'npm-registry',
       checkedAt: '2026-04-23T08:00:00.000Z',
       latest: '0.5.0',
       manifest: null,
@@ -66,9 +66,9 @@ describe('update cache', () => {
     await expect(readUpdateCache()).resolves.toEqual(cache);
   });
 
-  it('writes and reads back a cache carrying a rollout manifest', async () => {
+  it('rejects a cache carrying an upstream rollout manifest', async () => {
     const cache = {
-      source: 'cdn',
+      source: 'npm-registry',
       checkedAt: '2026-04-23T08:00:00.000Z',
       latest: '0.5.0',
       manifest: {
@@ -82,9 +82,7 @@ describe('update cache', () => {
       },
     } as const;
 
-    await writeUpdateCache(cache);
-
-    await expect(readUpdateCache()).resolves.toEqual(cache);
+    await expect(writeUpdateCache(cache as unknown as UpdateCache)).rejects.toThrow();
   });
 
   it('reads a legacy cache file without a manifest field as manifest null', async () => {
@@ -92,7 +90,7 @@ describe('update cache', () => {
     writeFileSync(
       getUpdateStateFile(),
       JSON.stringify({
-        source: 'cdn',
+        source: 'npm-registry',
         checkedAt: '2026-04-23T08:00:00.000Z',
         latest: '0.5.0',
       }),
@@ -100,19 +98,19 @@ describe('update cache', () => {
     );
 
     await expect(readUpdateCache()).resolves.toEqual({
-      source: 'cdn',
+      source: 'npm-registry',
       checkedAt: '2026-04-23T08:00:00.000Z',
       latest: '0.5.0',
       manifest: null,
     });
   });
 
-  it('keeps latest and treats a malformed manifest field as null', async () => {
+  it('falls back to an empty cache when the manifest field is not null', async () => {
     mkdirSync(join(dir, 'updates'), { recursive: true });
     writeFileSync(
       getUpdateStateFile(),
       JSON.stringify({
-        source: 'cdn',
+        source: 'npm-registry',
         checkedAt: '2026-04-23T08:00:00.000Z',
         latest: '0.5.0',
         manifest: { version: 'not-semver', publishedAt: 'nope', rollout: 'bad' },
@@ -120,12 +118,7 @@ describe('update cache', () => {
       'utf-8',
     );
 
-    await expect(readUpdateCache()).resolves.toEqual({
-      source: 'cdn',
-      checkedAt: '2026-04-23T08:00:00.000Z',
-      latest: '0.5.0',
-      manifest: null,
-    });
+    await expect(readUpdateCache()).resolves.toEqual(emptyUpdateCache());
   });
 });
 

@@ -586,7 +586,7 @@ describe('PluginService (plugin boundary)', () => {
             KIMI_CODE_BASE_URL: 'https://api.example.test/',
             KIMI_CODE_OAUTH_HOST: 'https://auth.example.test',
             CUSTOM: '1',
-            KIMI_CODE_HOME: home,
+            TEA_CODE_HOME: home,
             KIMI_PLUGIN_ROOT: await realpath(managedRoot),
           }),
         }),

@@ -29,9 +29,9 @@ import {
 } from '#/constant/app';
 
 /**
- * Return the root data directory for Kimi Code.
+ * Return the root data directory for Tea Code.
  *
- * Priority: `KIMI_CODE_HOME` env var > `~/.kimi-code`.
+ * Priority: `TEA_CODE_HOME` env var > `~/.tea-code`.
  */
 export function getDataDir(): string {
   const envDir = process.env[KIMI_CODE_HOME_ENV];
@@ -104,7 +104,7 @@ export function getPluginUpdateNoticeStateFile(): string {
 /**
  * Return the native staged-update directory: `<exe dir>/.staging/`.
  *
- * Anchored on the running executable (not `~/.kimi-code/bin`) because the
+ * Anchored on the running executable (not `~/.tea-code/bin`) because the
  * Windows installer honors `KIMI_INSTALL_DIR`, and the swap's atomic renames
  * require the staged binary to sit on the same volume as the exe.
  */

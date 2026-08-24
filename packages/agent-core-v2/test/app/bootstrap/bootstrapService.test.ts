@@ -58,7 +58,7 @@ describe('BootstrapService (scoped)', () => {
 });
 
 describe('resolveBootstrapOptions', () => {
-  it('prefers explicit homeDir over KIMI_CODE_HOME over osHomeDir', () => {
+  it('prefers explicit homeDir over TEA_CODE_HOME over osHomeDir', () => {
     expect(
       resolveBootstrapOptions({ homeDir: '/a', osHomeDir: '/b', env: {}, clientIdentity: stubClientIdentity })
         .homeDir,
@@ -66,13 +66,13 @@ describe('resolveBootstrapOptions', () => {
     expect(
       resolveBootstrapOptions({
         osHomeDir: '/b',
-        env: { KIMI_CODE_HOME: '/c' },
+        env: { TEA_CODE_HOME: '/c' },
         clientIdentity: stubClientIdentity,
       }).homeDir,
     ).toBe('/c');
     expect(
       resolveBootstrapOptions({ osHomeDir: '/b', env: {}, clientIdentity: stubClientIdentity }).homeDir,
-    ).toBe('/b/.kimi-code');
+    ).toBe('/b/.tea-code');
   });
 
   it('passes through an explicit clientIdentity', () => {

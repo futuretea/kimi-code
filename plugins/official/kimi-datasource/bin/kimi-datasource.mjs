@@ -262,8 +262,8 @@ function appendTrace(text, trace) {
 }
 
 function resolveKimiHome() {
-  const explicit = process.env.KIMI_CODE_HOME?.trim();
-  return explicit && explicit.length > 0 ? explicit : path.join(homedir(), '.kimi-code');
+  const explicit = process.env.TEA_CODE_HOME?.trim();
+  return explicit && explicit.length > 0 ? explicit : path.join(homedir(), '.tea-code');
 }
 
 function datasourceApiUrl() {
@@ -319,21 +319,21 @@ async function loadAccessToken() {
   } catch (err) {
     if (isNotFound(err)) {
       throw new Error(
-        `Kimi Code credentials file not found: ${credentialsFile}\nRun /login in Kimi Code first.`,
+        `Tea Code credentials file not found: ${credentialsFile}\nRun /login in Tea Code first.`,
       );
     }
     if (err instanceof SyntaxError) {
-      throw new Error(`Failed to parse Kimi Code credentials file: ${err.message}`);
+      throw new Error(`Failed to parse Tea Code credentials file: ${err.message}`);
     }
     throw err;
   }
 
   if (!isRecord(parsed)) {
-    throw new Error(`Invalid Kimi Code credentials file: ${credentialsFile}`);
+    throw new Error(`Invalid Tea Code credentials file: ${credentialsFile}`);
   }
   const token = typeof parsed.access_token === 'string' ? parsed.access_token : '';
   if (token.length === 0) {
-    throw new Error('Kimi Code credentials do not contain access_token. Run /login again.');
+    throw new Error('Tea Code credentials do not contain access_token. Run /login again.');
   }
   return { kimiHome, token };
 }
@@ -369,7 +369,7 @@ async function callKimiTool(method, params, trace = {}) {
     trace.requestId = extractRequestId(response.headers);
     if (!response.ok) {
       if (response.status === 401) {
-        throw new Error('Kimi Code access_token was rejected. Run /login again and retry.');
+        throw new Error('Tea Code access_token was rejected. Run /login again and retry.');
       }
       throw new Error(`HTTP ${response.status} error: ${text}`);
     }

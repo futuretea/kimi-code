@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     branches:
-      - main
+      - tea/moonshot-038
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -11,7 +11,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'MoonshotAI'
+    if: github.repository == 'futuretea/kimi-code'
     outputs:
       packages_published: ${{ steps.changesets.outputs.published }}
       kimi_native_release: ${{ steps.kimi-release.outputs.should_publish }}
@@ -87,7 +87,7 @@ jobs:
     if: needs.release.outputs.kimi_native_release == 'true'
     uses: ./.github/workflows/_native-build.yml
     with:
-      upload-artifact-prefix: kimi-code-native
+      upload-artifact-prefix: tea-code-native
       retention-days: 7
       sign-macos: true
     secrets:
@@ -114,7 +114,7 @@ jobs:
       - name: Download native artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: kimi-code-native-*
+          pattern: tea-code-native-*
           path: dist-native-release
           merge-multiple: true
 

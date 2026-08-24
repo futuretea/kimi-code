@@ -13,7 +13,7 @@ scoped DI registry).
 2. `pnpm --filter @moonshot-ai/kimi-inspect dev` — the Vite dev server proxies
    `/api` to the server (`KIMI_SERVER_URL`, default `http://127.0.0.1:58627`)
    and auto-discovers running instances
-   (`~/.kimi-code/server/instances`); switch servers from the header dropdown.
+   (`~/.tea-code/server/instances`); switch servers from the header dropdown.
 
 A connection failure shows a blocking "Debug surface unavailable" screen —
 there is no fallback data source.

@@ -1,5 +1,5 @@
 /**
- * Kimi Code version helpers.
+ * Tea Code version helpers.
  *
  * `getVersion` reads the host CLI's `package.json#version`.
  */
@@ -13,7 +13,14 @@ import { CLI_USER_AGENT_PRODUCT } from '#/constant/app';
 
 import { KIMI_BUILD_INFO } from './build-info';
 
+declare const __KIMI_CODE_UPSTREAM_VERSION__: string | undefined;
+
 const MODULE_DIR = import.meta.dirname;
+
+const BUNDLED_UPSTREAM_VERSION =
+  typeof __KIMI_CODE_UPSTREAM_VERSION__ === 'string'
+    ? __KIMI_CODE_UPSTREAM_VERSION__
+    : undefined;
 
 export function getHostPackageJsonPath(): string {
   // Walk upwards from this file's directory until a `package.json` shows up,
@@ -47,18 +54,23 @@ export function getVersion(): string {
   return pkg.version;
 }
 
-export function createKimiCodeHostIdentity(version = getVersion()): KimiHostIdentity {
+export function getUpstreamVersion(): string {
+  if (BUNDLED_UPSTREAM_VERSION !== undefined) return BUNDLED_UPSTREAM_VERSION;
+  return readFileSync(resolve(getHostPackageRoot(), 'UPSTREAM_VERSION'), 'utf-8').trim();
+}
+
+export function createKimiCodeHostIdentity(): KimiHostIdentity {
   return {
     productName: CLI_USER_AGENT_PRODUCT,
-    version,
+    version: getUpstreamVersion(),
     platform: KIMI_CODE_PLATFORM,
   };
 }
 
 /**
- * Product User-Agent (`kimi-code-cli/<version>`) for ad-hoc outbound fetches
- * that don't go through the provider pipeline (registry / catalog imports).
+ * Product User-Agent (`kimi-code-cli/<upstream-version>`) for ad-hoc outbound
+ * fetches that don't go through the provider pipeline (registry / catalog imports).
  */
-export function createKimiCodeUserAgent(version = getVersion()): string {
-  return createKimiUserAgent(createKimiCodeHostIdentity(version));
+export function createKimiCodeUserAgent(): string {
+  return createKimiUserAgent(createKimiCodeHostIdentity());
 }

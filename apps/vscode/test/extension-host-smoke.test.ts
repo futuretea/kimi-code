@@ -61,7 +61,7 @@ describe('installed VSIX Extension Host smoke', () => {
     expect(second.vscodeVersion).toBe('1.127.0');
   });
 
-  it('gives the harness separate Kimi and operating-system homes before activation', async () => {
+  it('gives the harness separate Tea and operating-system homes before activation', async () => {
     const fixture = await makeFixture();
 
     await runExtensionHostSmoke({
@@ -72,7 +72,8 @@ describe('installed VSIX Extension Host smoke', () => {
 
     const options = vscodeTest.runTests.mock.calls[0]?.[0];
     const env = options.extensionTestsEnv;
-    expect(env.KIMI_CODE_HOME).not.toBe(env.KIMI_VSCODE_SMOKE_OS_HOME);
+    expect(env.TEA_CODE_HOME).toContain('home');
+    expect(env.TEA_CODE_HOME).not.toBe(env.KIMI_VSCODE_SMOKE_OS_HOME);
     expect(env.KIMI_VSCODE_SMOKE_OS_HOME).toContain('os-home');
   });
 

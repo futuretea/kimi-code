@@ -83,7 +83,7 @@ export async function handleDoctor(deps: DoctorDeps, options: DoctorOptions): Pr
 export function registerDoctorCommand(parent: Command, deps?: Partial<DoctorDeps>): void {
   const doctor = parent
     .command('doctor')
-    .description('Validate Kimi Code configuration files.')
+    .description('Validate Tea Code configuration files.')
     .action(async () => {
       await runDoctorCommand(deps, {});
     });
@@ -250,7 +250,7 @@ function resolveInputPath(input: string, cwd: string): string {
 
 function formatSuccess(results: readonly CheckResult[]): string {
   return [
-    'Kimi doctor',
+    'Tea Code doctor',
     '',
     ...formatResults(results),
     '',
@@ -261,7 +261,7 @@ function formatSuccess(results: readonly CheckResult[]): string {
 
 function formatFailure(results: readonly CheckResult[], issueCount: number): string {
   return [
-    `Kimi doctor found ${String(issueCount)} ${issueCount === 1 ? 'issue' : 'issues'}.`,
+    `Tea Code doctor found ${String(issueCount)} ${issueCount === 1 ? 'issue' : 'issues'}.`,
     '',
     ...formatResults(results),
     '',

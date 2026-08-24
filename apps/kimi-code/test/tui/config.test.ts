@@ -32,7 +32,7 @@ describe('TUI config', () => {
 
     expect(result).toEqual(DEFAULT_TUI_CONFIG);
     const text = readFileSync(filePath, 'utf-8');
-    expect(text).toContain('Client preferences for kimi-code.');
+    expect(text).toContain('Client preferences for Tea Code.');
     expect(text).toContain('theme = "auto"');
     expect(text).toContain('cache_expiry_hint = true');
     expect(text).toContain('command = ""');
@@ -193,12 +193,12 @@ describe('TUI config status_line', () => {
     const config = parseTuiConfig(`
 [status_line]
 items = ["model", "git", "cwd"]
-command = "~/.kimi-code/statusline.sh"
+command = "~/.tea-code/statusline.sh"
 `);
 
     expect(config.statusLine).toEqual({
       items: ['model', 'git', 'cwd'],
-      command: '~/.kimi-code/statusline.sh',
+      command: '~/.tea-code/statusline.sh',
     });
   });
 
@@ -249,7 +249,7 @@ describe('TUI config status_line round-trip', () => {
     await saveTuiConfig(
       {
         ...DEFAULT_TUI_CONFIG,
-        statusLine: { items: ['model', 'git'], command: '~/.kimi-code/statusline.sh' },
+        statusLine: { items: ['model', 'git'], command: '~/.tea-code/statusline.sh' },
       },
       filePath,
     );
@@ -257,7 +257,7 @@ describe('TUI config status_line round-trip', () => {
     const reloaded = await loadTuiConfig(filePath);
     expect(reloaded.statusLine).toEqual({
       items: ['model', 'git'],
-      command: '~/.kimi-code/statusline.sh',
+      command: '~/.tea-code/statusline.sh',
     });
   });
 

@@ -1,5 +1,5 @@
 /**
- * The v1 user-global MCP surface (`<KIMI_CODE_HOME>/mcp.json` CRUD plus the
+ * The v1 user-global MCP surface (`<TEA_CODE_HOME>/mcp.json` CRUD plus the
  * standalone connection probe), rebuilt for the v2 client.
  *
  * Why a replica exists: agent-core-v2 only READS the user-global file (its

@@ -3,6 +3,7 @@ import { appendFile, mkdir, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { detectInstallSource } from '#/cli/update/source';
+import { getUpstreamVersion } from '#/cli/version';
 import type { SlashCommandHost } from '#/tui/commands/dispatch';
 import type { FeedbackAttachmentLevel } from '#/tui/commands/prompts';
 import { getLogDir } from '#/utils/paths';
@@ -68,7 +69,7 @@ async function prepareAndUploadSessionArchive(
       id: host.state.appState.sessionId,
       outputPath: archivePath,
       includeGlobalLog: true,
-      version: host.state.appState.version,
+      version: getUpstreamVersion(),
       installSource: await detectInstallSource(),
       shellEnv: detectShellEnvironment(),
     });

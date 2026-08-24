@@ -24,6 +24,7 @@ export interface CloudAppenderOptions {
   readonly deviceId: string;
   readonly sessionId?: string;
   readonly appName: string;
+  readonly telemetryVersion?: string;
   readonly uiMode?: string;
   readonly model?: string;
   readonly buildSha?: string;
@@ -43,6 +44,7 @@ export interface CloudAppenderOptions {
 export interface CloudAppenderHostOptions {
   readonly deviceId: string;
   readonly appName: string;
+  readonly telemetryVersion?: string;
   readonly uiMode?: string;
   readonly model?: string;
   readonly buildSha?: string;
@@ -177,10 +179,11 @@ function sanitizeProperties(input?: TelemetryProperties): CloudProperties {
 
 function buildContext(options: CloudAppenderOptions): CloudContext {
   const { bootstrap } = options;
+  const telemetryVersion = options.telemetryVersion ?? bootstrap.clientIdentity.version;
   const context: CloudContext = {
     app_name: options.appName,
-    client_version: bootstrap.clientIdentity.version,
-    version: bootstrap.clientIdentity.version,
+    client_version: telemetryVersion,
+    version: telemetryVersion,
     core_version: resolveCoreVersion(),
     runtime: 'node',
     platform: bootstrap.platform,

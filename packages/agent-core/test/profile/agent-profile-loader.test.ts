@@ -247,7 +247,7 @@ describe('default agent profiles', () => {
       cwd: '/workspace/two',
     });
 
-    expect(first).toContain('You are Kimi Code CLI');
+    expect(first).toContain('You are Tea Code');
     expect(first).toContain('Available skills');
     expect(first).toContain('/workspace/one');
     expect(second).toContain('/workspace/two');

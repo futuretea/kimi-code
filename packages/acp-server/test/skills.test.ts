@@ -136,7 +136,10 @@ describe('acp-server skills / available commands', () => {
       .toEqual(ACP_BUILTIN_SLASH_COMMANDS.map((command) => command.name));
     // …followed by the engine's builtin skills (bare command names).
     expect(commands.length).toBeGreaterThan(ACP_BUILTIN_SLASH_COMMANDS.length);
-    expect(commands.some((command) => command.name === 'write-goal')).toBe(true);
+    expect(
+      commands.some((command) => command.name === 'write-goal'),
+      `available commands: ${commands.map((command) => command.name).join(', ')}`,
+    ).toBe(true);
     const compact = commands.find((command) => command.name === 'compact');
     expect(compact?.input?.hint).toBe('<optional custom summarization instructions>');
   }, 30_000);

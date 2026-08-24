@@ -468,7 +468,7 @@ export class KimiHarness {
   }
 
   /**
-   * The unified MCP management view: user-level `<KIMI_CODE_HOME>/mcp.json`
+   * The unified MCP management view: user-level `<TEA_CODE_HOME>/mcp.json`
    * entries (mutable), plus read-only project-layer entries when `cwd` is
    * given and plugin-contributed entries — each tagged with its `source`,
    * `origin`, and `mutable` flag.

@@ -53,7 +53,7 @@ export interface IInstanceRegistry {
 }
 
 export interface InstanceRegistryOptions {
-  /** Directory holding `<serverId>.json` files. Defaults to `<KIMI_CODE_HOME>/server/instances`. */
+  /** Directory holding `<serverId>.json` files. Defaults to `<TEA_CODE_HOME>/server/instances`. */
   readonly instancesDir?: string;
   /** Override `Date.now` — used in tests for deterministic timestamps. */
   readonly now?: () => number;

@@ -79,15 +79,15 @@ describe('kimi acp', () => {
     expect(optsArg).toEqual(
       expect.objectContaining({
         homeDir: getDataDir(),
-        agentInfo: { name: 'Kimi Code CLI', version: expect.any(String) },
+        agentInfo: { name: 'Tea Code CLI', version: expect.any(String) },
       }),
     );
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
-  it('forwards KIMI_CODE_HOME to terminalAuthEnv and homeDir when set', async () => {
-    const previous = process.env['KIMI_CODE_HOME'];
-    process.env['KIMI_CODE_HOME'] = '/tmp/kimi-debug';
+  it('forwards TEA_CODE_HOME to terminalAuthEnv and homeDir when set', async () => {
+    const previous = process.env['TEA_CODE_HOME'];
+    process.env['TEA_CODE_HOME'] = '/tmp/kimi-debug';
     try {
       const program = new Command('kimi').exitOverride();
       registerNativeAcpCommand(program);
@@ -98,21 +98,21 @@ describe('kimi acp', () => {
       expect(optsArg).toEqual(
         expect.objectContaining({
           homeDir: '/tmp/kimi-debug',
-          terminalAuthEnv: { KIMI_CODE_HOME: '/tmp/kimi-debug' },
+          terminalAuthEnv: { TEA_CODE_HOME: '/tmp/kimi-debug' },
         }),
       );
     } finally {
       if (previous === undefined) {
-        delete process.env['KIMI_CODE_HOME'];
+        delete process.env['TEA_CODE_HOME'];
       } else {
-        process.env['KIMI_CODE_HOME'] = previous;
+        process.env['TEA_CODE_HOME'] = previous;
       }
     }
   });
 
-  it('omits terminalAuthEnv when KIMI_CODE_HOME is unset', async () => {
-    const previous = process.env['KIMI_CODE_HOME'];
-    delete process.env['KIMI_CODE_HOME'];
+  it('omits terminalAuthEnv when TEA_CODE_HOME is unset', async () => {
+    const previous = process.env['TEA_CODE_HOME'];
+    delete process.env['TEA_CODE_HOME'];
     try {
       const program = new Command('kimi').exitOverride();
       registerNativeAcpCommand(program);
@@ -125,9 +125,9 @@ describe('kimi acp', () => {
       expect(optsArg.terminalAuthEnv).toBeUndefined();
     } finally {
       if (previous === undefined) {
-        delete process.env['KIMI_CODE_HOME'];
+        delete process.env['TEA_CODE_HOME'];
       } else {
-        process.env['KIMI_CODE_HOME'] = previous;
+        process.env['TEA_CODE_HOME'] = previous;
       }
     }
   });

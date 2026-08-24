@@ -32,7 +32,7 @@ export function createProgram(
     .configureHelp({ helpWidth: 100 })
     .helpOption('-h, --help', 'Show help.')
     .usage('[options] [command]')
-    .addHelpText('after', '\nDocumentation:        https://moonshotai.github.io/kimi-code/\n');
+    .addHelpText('after', '\nDocumentation:        https://github.com/futuretea/kimi-code/tree/main/docs\n');
 
   program
     .addOption(
@@ -126,7 +126,7 @@ export function createProgram(
   program
     .command('upgrade')
     .alias('update')
-    .description('Upgrade Kimi Code to the latest version.')
+    .description('Upgrade Tea Code to the latest version.')
     .action(async () => {
       await onUpgrade();
     });
@@ -141,7 +141,7 @@ export function createProgram(
     });
 
   // Self-spawned worker for native staged updates (detached background
-  // download, or foreground from `kimi upgrade` — `--manual` marks the
+  // download, or foreground from `tea-code upgrade` — `--manual` marks the
   // latter's stage as user-requested). Hidden: not user-facing.
   program
     .command('__update_download', { hidden: true })

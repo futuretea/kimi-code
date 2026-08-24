@@ -1,6 +1,6 @@
 # Environment variables
 
-Kimi Code CLI uses environment variables to control a small number of runtime behaviors — relocating the data directory, turning off telemetry, and temporarily switching models without touching the config file.
+Tea Code uses environment variables to control a small number of runtime behaviors — relocating the data directory, turning off telemetry, and temporarily switching models without touching the config file.
 
 ::: warning Important: API keys are not configured here
 Credential variables such as `KIMI_API_KEY`, `ANTHROPIC_API_KEY`, and `OPENAI_API_KEY` are **not** read automatically from shell environment variables. Running `export KIMI_API_KEY=xxx` in the terminal does not give any provider its key — they must be written in `config.toml` under `[providers.<name>]` or the `[providers.<name>.env]` sub-table.
@@ -12,15 +12,15 @@ For background, see [Config overrides: provider credentials](./overrides.md#prov
 
 ## Core paths
 
-### `KIMI_CODE_HOME`
+### `TEA_CODE_HOME`
 
-Overrides the data root directory; the default is `~/.kimi-code`. Once set, the config file, sessions, logs, OAuth credentials, and all other data land under the new path:
+Overrides the data root directory; the default is `~/.tea-code`. Once set, the config file, sessions, logs, OAuth credentials, and all other data land under the new path:
 
 ```sh
-export KIMI_CODE_HOME="/path/to/custom/kimi-code"
+export TEA_CODE_HOME="/path/to/custom/kimi-code"
 ```
 
-> Make sure the directory is writable. Multiple `kimi` instances sharing the same `KIMI_CODE_HOME` will share config and credential files.
+> Make sure the directory is writable. Multiple `tea-code` instances sharing the same `TEA_CODE_HOME` will share config and credential files.
 
 For the complete data directory structure, see [Data locations](./data-locations.md).
 
@@ -109,7 +109,7 @@ export KIMI_MODEL_API_KEY="YOUR_API_KEY"
 export KIMI_MODEL_BASE_URL="https://api.example.com/v1"
 export KIMI_MODEL_MAX_CONTEXT_SIZE="262144"
 export KIMI_MODEL_CAPABILITIES="image_in,thinking"
-kimi
+tea-code
 ```
 
 Complete variable list:
@@ -137,7 +137,7 @@ Switches that control the behavior of subsystems such as telemetry, background t
 | Variable | Purpose | Valid values |
 | --- | --- | --- |
 | `KIMI_DISABLE_TELEMETRY` | Disable anonymous telemetry reporting | `1`, `true`, `yes`, `y` (case-insensitive) |
-| `KIMI_CODE_PASSWORD` | Set a parallel auth credential for the `kimi web` local server, valid alongside the bearer token; recommended when binding the server beyond loopback — see [Local server and API](../guides/server.md#authentication) | Any non-empty string; when unset, only the token is valid |
+| `KIMI_CODE_PASSWORD` | Set a parallel auth credential for the `tea-code web` local server, valid alongside the bearer token; recommended when binding the server beyond loopback — see [Local server and API](../guides/server.md#authentication) | Any non-empty string; when unset, only the token is valid |
 | `KIMI_CODE_BACKGROUND_KEEP_ALIVE_ON_EXIT` | Whether to keep background tasks when the session closes; takes higher priority than `config.toml`. The default is to stop them on exit | Truthy: `1`/`true`/`yes`/`on`; falsy: `0`/`false`/`no`/`off` |
 | `KIMI_CODE_BACKGROUND_MAX_RUNNING_TASKS` | Cap on concurrently running background tasks; takes higher priority than `[background] max_running_tasks` in `config.toml` (unset means no cap) | Positive integer; invalid values are ignored |
 | `KIMI_IMAGE_MAX_EDGE_PX` | Longest-edge ceiling (px) for image compression; takes higher priority than `[image] max_edge_px` in `config.toml` (default `2000`) | Positive integer; invalid values are ignored |
@@ -147,7 +147,7 @@ Switches that control the behavior of subsystems such as telemetry, background t
 | `KIMI_SUBAGENT_TIMEOUT_MS` | Maximum wall-clock time (ms) a single subagent (`Agent` / `AgentSwarm`) may run; takes higher priority than `[subagent] timeout_ms` in `config.toml` (default `7200000`, i.e. 2 hours) | Positive integer; invalid values fall back to the config or default |
 | `KIMI_CODE_IDENTITY_NAME` | Display name the agent calls itself in the system prompt; takes higher priority than `[identity] name` in `config.toml` and is never written back to it | Any non-empty string; blank values read as unset |
 | `KIMI_CODE_IDENTITY_SLUG` | Protocol identifier for the `User-Agent` product token sent to third-party providers and the MCP client name; takes higher priority than `[identity] slug`. Derived from the name when unset | Any non-empty string; normalized to lowercase with non-alphanumeric runs folded to `-` |
-| `KIMI_CODE_BUILTIN_PRODUCT_SKILLS` | Whether the built-in skills documenting Kimi Code itself are offered to the model; takes higher priority than `builtin_product_skills` in `config.toml` (default enabled) | Truthy: `1`/`true`/`yes`/`on`; falsy: `0`/`false`/`no`/`off` |
+| `KIMI_CODE_BUILTIN_PRODUCT_SKILLS` | Whether the built-in skills documenting Tea Code itself are offered to the model; takes higher priority than `builtin_product_skills` in `config.toml` (default enabled) | Truthy: `1`/`true`/`yes`/`on`; falsy: `0`/`false`/`no`/`off` |
 | `KIMI_CODE_TUI_FULL_SCREEN` | Enable the experimental fullscreen alternate-screen UI: scrollable transcript viewport, mouse text selection, clickable links, and Ctrl-Shift-F transcript search | `1` enables it; anything else keeps the regular inline UI |
 | `KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL` | Enable the experimental [subagent model pool](./config-files.md#subagent-model-pool) in every launch mode, including the interactive TUI; the master `KIMI_CODE_EXPERIMENTAL_FLAG=1` also enables it | Truthy: `1`/`true`/`yes`/`on`; falsy: `0`/`false`/`no`/`off` |
 | `KIMI_MCP_STARTUP_TIMEOUT_MS` | Global default connection timeout (ms) for all MCP servers; takes higher priority than `[mcp] startup_timeout_ms` in `config.toml`, but a per-server `startupTimeoutMs` in `mcp.json` still wins (default `30000`) | Integer from `1` to `2147483647`; invalid values are ignored |
@@ -160,7 +160,7 @@ Switches that control the behavior of subsystems such as telemetry, background t
 | `KIMI_WEB_FETCH_BASE_URL` | API URL of the web fetch (`FetchURL`) service; takes higher priority than `[services.moonshot_fetch] base_url`. Persisted credentials and custom headers are not forwarded to an env-selected endpoint. Without an env or config endpoint, signed-in users try the managed Kimi OAuth fetch service before direct local requests | Non-blank string; blank values are ignored |
 | `KIMI_WEB_FETCH_API_KEY` | API key of the web fetch (`FetchURL`) service; replaces both the configured API key and OAuth credential when set | Non-blank string; blank values are ignored |
 | `KIMI_CODE_EXPERIMENTAL_FLAG` | Enable all registered experimental features for this process; it does not select the agent engine | `1`, `true`, `yes`, `on` |
-| `KIMI_CODE_LEGACY_FLAG` | Use the legacy `agent-core` engine for `kimi`, `kimi -p`, `kimi doctor`, `kimi acp`, `kimi export`, and `kimi provider`; these commands use `agent-core-v2` by default | `1`, `true`, `yes`, `on` |
+| `KIMI_CODE_LEGACY_FLAG` | Use the legacy `agent-core` engine for `tea-code`, `tea-code -p`, `tea-code doctor`, `tea-code acp`, `tea-code export`, and `tea-code provider`; these commands use `agent-core-v2` by default | `1`, `true`, `yes`, `on` |
 | `KIMI_SHELL_PATH` | Override the Git Bash path on Windows (used when auto-detection fails) | Absolute path |
 | `KIMI_MODEL_MAX_COMPLETION_TOKENS` | Hard cap on `max_completion_tokens` per LLM step; applies to the `kimi` provider only | Positive integer; `0` or negative disables clamping |
 | `KIMI_MODEL_TEMPERATURE` | Sampling temperature for every request; applies to the `kimi` provider only (global — independent of `KIMI_MODEL_NAME`) | Number, e.g. `0.3` |
@@ -170,7 +170,7 @@ Switches that control the behavior of subsystems such as telemetry, background t
 | `KIMI_CODE_NO_AUTO_UPDATE` | Fully disable the update preflight — no check, background install, or prompt. Legacy alias `KIMI_CLI_NO_AUTO_UPDATE` is also honored | Truthy: `1`/`true`/`yes`/`on` |
 | `KIMI_DISABLE_CRON` | Disable the scheduled-task tool (`CronCreate` rejects new schedules; existing tasks do not fire) | `1` to disable |
 
-The three `KIMI_CODE_IDENTITY_*` / `KIMI_CODE_BUILTIN_PRODUCT_SKILLS` variables are read by the default `agent-core-v2` engine. The legacy `kimi` / `kimi -p` path selected with `KIMI_CODE_LEGACY_FLAG=1` ignores them.
+The three `KIMI_CODE_IDENTITY_*` / `KIMI_CODE_BUILTIN_PRODUCT_SKILLS` variables are read by the default `agent-core-v2` engine. The legacy `tea-code` / `tea-code -p` path selected with `KIMI_CODE_LEGACY_FLAG=1` ignores them.
 
 ## Diagnostic logs
 
@@ -200,7 +200,7 @@ The CLI also reads several standard system variables to detect the runtime envir
 
 ## HTTP proxy
 
-Kimi Code honors the standard proxy environment variables for all outbound traffic — model API calls, MCP servers, web tools, telemetry, sign-in, and update checks:
+Tea Code honors the standard proxy environment variables for all outbound traffic — model API calls, MCP servers, web tools, telemetry, sign-in, and update checks:
 
 - `HTTP_PROXY` / `http_proxy`: proxy for `http://` requests
 - `HTTPS_PROXY` / `https_proxy`: proxy for `https://` requests
@@ -211,10 +211,10 @@ Both HTTP(S) and SOCKS proxies are supported. A SOCKS proxy is recognized by its
 
 The proxy is applied only when one of these variables is set; otherwise connections are made directly. Loopback hosts (`localhost`, `127.0.0.1`, `::1`) always bypass the proxy, so a local server such as a localhost MCP server keeps working when a proxy is configured — add your own internal hosts to `NO_PROXY` to exempt them too.
 
-Stdio MCP servers that run as Node child processes honor `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` automatically when the child's Node version supports `NODE_USE_ENV_PROXY` (Node ≥ 22.21 or ≥ 24.5); SOCKS proxying applies to Kimi Code's own traffic only.
+Stdio MCP servers that run as Node child processes honor `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` automatically when the child's Node version supports `NODE_USE_ENV_PROXY` (Node ≥ 22.21 or ≥ 24.5); SOCKS proxying applies to Tea Code's own traffic only.
 
 ## Next steps
 
 - [Config overrides](./overrides.md) — how environment variables, CLI options, and the config file interact by priority
-- [Data locations](./data-locations.md) — directory structure affected by `KIMI_CODE_HOME`
+- [Data locations](./data-locations.md) — directory structure affected by `TEA_CODE_HOME`
 - [Providers and models](./providers.md) — full connection examples per provider type

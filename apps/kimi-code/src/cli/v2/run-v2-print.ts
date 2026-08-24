@@ -93,7 +93,7 @@ import {
   raceWithTimeout,
   requireConfiguredModel,
 } from '../run-prompt';
-import { createKimiCodeHostIdentity } from '../version';
+import { createKimiCodeHostIdentity, getUpstreamVersion } from '../version';
 
 import { resolveOutputFormat } from '../options';
 import type { CLIOptions, PromptOutputFormat } from '../options';
@@ -138,7 +138,7 @@ export async function runV2Print(
     },
   });
   const logging = resolveLoggingConfig({ homeDir, env: process.env });
-  const identity = createKimiCodeHostIdentity(version);
+  const identity = createKimiCodeHostIdentity();
   const hostHeaders = createKimiDefaultHeaders({ homeDir, ...identity });
 
   const { app } = bootstrap(
@@ -212,6 +212,7 @@ export async function runV2Print(
         createCloudAppender(app.accessor, {
           deviceId,
           appName: CLI_USER_AGENT_PRODUCT,
+          telemetryVersion: getUpstreamVersion(),
           uiMode: PROMPT_UI_MODE,
           model: opts.model ?? defaultModel,
           getAccessToken: async () => (await auth.getCachedAccessToken()) ?? null,
@@ -351,7 +352,7 @@ async function resolveNativeSession(
     if (target.cwd !== undefined && resolve(target.cwd) !== resolve(workDir)) {
       stderr.write(
         `Session "${opts.session}" was created under a different directory.\n` +
-          `  cd "${target.cwd}" && kimi -r ${opts.session}\n\n`,
+          `  cd "${target.cwd}" && tea-code -r ${opts.session}\n\n`,
       );
       throw new Error(`Session "${opts.session}" was created under a different directory.`);
     }

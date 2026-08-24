@@ -1,4 +1,10 @@
-# @moonshot-ai/kimi-code
+# @futuretea/tea-code
+
+## 0.3.0
+
+### Minor Changes
+
+- Update Tea Code to version 0.3.0, aligned with Kimi Code 0.38.0.
 
 ## 0.38.0
 

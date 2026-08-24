@@ -117,10 +117,10 @@ into runtime code or packaging scripts.
 
 ### Shared Kimi Code home
 
-The SDK resolves the home directory using the normal Kimi Code rules:
+The SDK resolves the home directory using the normal Tea Code rules:
 
-1. system-level `KIMI_CODE_HOME`, when set;
-2. otherwise `~/.kimi-code`.
+1. system-level `TEA_CODE_HOME`, when set;
+2. otherwise `~/.tea-code`.
 
 The extension does not add a separate `kimi.homeDir` setting and does not pass
 its own default home to the SDK. VS Code and the TUI share the following data
@@ -131,7 +131,7 @@ only when they resolve the same home:
 - authentication state
 - `sessions/`
 - `session_index.jsonl`
-- other SDK-owned Kimi Code data
+- other SDK-owned Tea Code data
 
 Remote SSH, WSL, and Dev Container installations use the environment and home
 of the remote Extension Host. They do not automatically share the local
@@ -256,7 +256,7 @@ offers **Migrate now** or **Later**. The command
 
 The shared marker `.migrated-to-kimi-code` can contain multiple target homes.
 This prevents duplicate migration when the TUI migrated the same source first,
-while still allowing a different `KIMI_CODE_HOME` to be migrated later.
+while still allowing a different `TEA_CODE_HOME` to be migrated later.
 
 Migrated sessions keep source metadata in `state.json.custom`, including the
 legacy source path and session identity. This metadata also supports legacy

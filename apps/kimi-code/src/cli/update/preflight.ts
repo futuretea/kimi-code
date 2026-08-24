@@ -3,11 +3,6 @@ import { spawn } from 'node:child_process';
 import { log, type Logger } from '@moonshot-ai/kimi-code-sdk';
 import type { TelemetryProperties } from '@moonshot-ai/kimi-telemetry';
 
-import {
-  kimiCodeOfficialInstallUrl,
-  nativeInstallCommandUnix,
-  nativeInstallCommandWin,
-} from '#/constant/app';
 import { loadTuiConfig } from '#/tui/config';
 import { resolveCommandPath } from '#/utils/process/resolve-command';
 
@@ -68,7 +63,7 @@ function bunCommand(platform: NodeJS.Platform): string {
 export function installCommandFor(
   source: InstallSource,
   version: string,
-  platform: NodeJS.Platform,
+  _platform: NodeJS.Platform,
 ): string {
   switch (source) {
     case 'npm-global':
@@ -80,9 +75,8 @@ export function installCommandFor(
     case 'bun-global':
       return `bun add -g ${NPM_PACKAGE_NAME}@${version}`;
     case 'homebrew':
-      return 'brew upgrade kimi-code';
     case 'native':
-      return platform === 'win32' ? nativeInstallCommandWin() : nativeInstallCommandUnix();
+      return `npm install -g ${NPM_PACKAGE_NAME}@${version}`;
     case 'unsupported':
       return `npm install -g ${NPM_PACKAGE_NAME}@${version}`;
   }
@@ -100,8 +94,7 @@ export function canAutoInstall(source: InstallSource, _platform: NodeJS.Platform
       // behind the CDN release — prompt the user to run `brew upgrade` manually.
       return false;
     case 'native':
-      // Staged-swap self update works on every platform (win32 included).
-      return true;
+      return false;
     case 'unsupported':
       return false;
   }
@@ -127,14 +120,8 @@ export function spawnForSource(
     case 'bun-global':
       return { cmd: bunCommand(platform), args: ['add', '-g', `${NPM_PACKAGE_NAME}@${version}`] };
     case 'homebrew':
-      return { cmd: 'brew', args: ['upgrade', 'kimi-code'] };
     case 'native':
-      // Native installs self-spawn the hidden downloader sub-command, which
-      // stages the binary next to the exe (verified against the release
-      // manifest's sha256); the swap happens on the next startup. This
-      // replaces the old `curl|bash` / `irm|iex` re-install dance — no shell,
-      // no pipeline exit-status loss, no PowerShell dependency on Windows.
-      return { cmd: process.execPath, args: ['__update_download', version] };
+      throw new Error('non-npm install sources cannot be auto-installed');
     case 'unsupported':
       throw new Error('unsupported install source cannot be auto-installed');
   }
@@ -162,34 +149,18 @@ function resolveSpawnCommand(cmd: string, platform: NodeJS.Platform): string | u
 /**
  * Resolve the spawn target for an install. Package managers are resolved from
  * `PATH` to an absolute executable via `resolveSpawnCommand` (workspace-trust
- * safety, see above). The native self-spawn instead uses `process.execPath`
- * verbatim — already absolute — and never goes through a shell. Returns the
- * shell flag alongside, since Windows package-manager shims (.cmd) still
- * need one.
+ * safety, see above). Returns the shell flag alongside, since Windows
+ * package-manager shims (.cmd) still need one.
  */
 function resolveInstallSpawn(
   source: InstallSource,
   version: string,
   platform: NodeJS.Platform,
-  options?: { readonly manual?: boolean },
 ): { readonly resolvedCmd: string; readonly args: readonly string[]; readonly shell: boolean } | undefined {
   const { cmd, args } = spawnForSource(source, version, platform);
-  if (source === 'native') {
-    // A user-confirmed install marks the stage as manual so the startup swap
-    // applies it even when automatic updates are opted out via env.
-    return { resolvedCmd: cmd, args: options?.manual === true ? [...args, '--manual'] : args, shell: false };
-  }
   const resolvedCmd = resolveSpawnCommand(cmd, platform);
   if (resolvedCmd === undefined) return undefined;
   return { resolvedCmd, args, shell: platform === 'win32' };
-}
-
-// Built per call: the official-installer URL follows the current region.
-function thirdPartySourceNote(): string {
-  return (
-    '\nNote: Third-party sources may lag behind the official release.\n' +
-    `For the latest updates, use the official installer: ${kimiCodeOfficialInstallUrl()}\n`
-  );
 }
 
 export function renderManualUpdateMessage(
@@ -220,8 +191,7 @@ export function renderManualUpdateMessage(
     `A newer version of ${NPM_PACKAGE_NAME} is available ` +
     `(${currentVersion} -> ${target.version}).\n` +
     `Detected install source: ${sourceDesc}\n` +
-    `To update manually, run: ${installCommand}\n` +
-    (source === 'homebrew' ? thirdPartySourceNote() : '')
+    `To update manually, run: ${installCommand}\n`
   );
 }
 
@@ -231,7 +201,7 @@ export function renderInstallSuccessMessage(target: UpdateTarget): string {
 
 function renderBackgroundInstallSuccessNotice(version: string): string {
   const displayVersion = version.startsWith('v') ? version : `v${version}`;
-  return `Kimi Code updated to ${displayVersion}\nChangelog: ${CHANGELOG_URL}\n`;
+  return `Tea Code updated to ${displayVersion}\nChangelog: ${CHANGELOG_URL}\n`;
 }
 
 function refreshInBackground(): void {
@@ -584,7 +554,7 @@ export async function installUpdate(
 ): Promise<void> {
   // installUpdate only runs after an explicit user choice (the `upgrade`
   // command or the interactive prompt) — mark the stage as manual.
-  const spawnTarget = resolveInstallSpawn(source, version, platform, { manual: true });
+  const spawnTarget = resolveInstallSpawn(source, version, platform);
   if (spawnTarget === undefined) {
     throw new Error(
       `${spawnForSource(source, version, platform).cmd} was not found in PATH; cannot install the update`,

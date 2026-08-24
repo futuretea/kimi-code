@@ -9,7 +9,7 @@
  *  - `--login` pivots into the shared device-code login flow (the entry point
  *    ACP clients hit via the first-class `AuthMethodTerminal` path, re-invoking
  *    the agent binary with the advertised `args:['--login']`).
- *  - `KIMI_CODE_HOME` (if set) is forwarded into `authMethods[0].env` so the
+ *  - `TEA_CODE_HOME` (if set) is forwarded into `authMethods[0].env` so the
  *    login subprocess writes its token under the same data root the server
  *    reads from, and `process.argv[1]` is advertised as the legacy
  *    `_meta['terminal-auth'].command` fallback.
@@ -30,7 +30,7 @@ import { parseRegionFlag, runLoginFlow } from './login-flow';
 export function registerNativeAcpCommand(parent: Command): void {
   parent
     .command('acp')
-    .description('Run kimi-code as an Agent Client Protocol (ACP) server over stdio.')
+    .description('Run Tea Code as an Agent Client Protocol (ACP) server over stdio.')
     .option(
       '--login',
       'Run the device-code login flow then exit (entry point for ACP terminal-auth).',
@@ -44,7 +44,7 @@ export function registerNativeAcpCommand(parent: Command): void {
         });
         return;
       }
-      // Forward `KIMI_CODE_HOME` (if set) into `authMethods[0].env` so the
+      // Forward `TEA_CODE_HOME` (if set) into `authMethods[0].env` so the
       // login subprocess clients spawn for terminal-auth writes its token
       // under the same data root the ACP server reads from.
       const sandboxHome = process.env[KIMI_CODE_HOME_ENV];
@@ -60,7 +60,7 @@ export function registerNativeAcpCommand(parent: Command): void {
         const { runAcpServer } = await import('@moonshot-ai/acp-server');
         await runAcpServer({
           homeDir: getDataDir(),
-          agentInfo: { name: 'Kimi Code CLI', version: getVersion() },
+          agentInfo: { name: 'Tea Code CLI', version: getVersion() },
           ...(terminalAuthEnv ? { terminalAuthEnv } : {}),
           ...(legacyCommand !== undefined && legacyCommand.length > 0
             ? { terminalAuthLegacyCommand: legacyCommand }

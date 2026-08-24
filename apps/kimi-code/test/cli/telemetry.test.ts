@@ -8,8 +8,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   initializeTelemetry: vi.fn(),
   createKimiDeviceId: vi.fn(() => 'device-123'),
-  resolveKimiHome: vi.fn(() => '/home/.kimi-code'),
-  resolveConfigPath: vi.fn(() => '/home/.kimi-code/config.toml'),
+  resolveKimiHome: vi.fn(() => '/home/.tea-code'),
+  resolveConfigPath: vi.fn(() => '/home/.tea-code/config.toml'),
   loadRuntimeConfigSafe: vi.fn(
     (): {
       config: { defaultModel?: string; telemetry?: boolean };
@@ -65,16 +65,16 @@ describe('initializeServerTelemetry', () => {
 
   it('configures the sink with ui_mode="web" and the CLI product identity', async () => {
     const { initializeServerTelemetry } = await import('#/cli/telemetry');
-    const client = initializeServerTelemetry({ version: '1.2.3' });
+    const client = initializeServerTelemetry();
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith(
       expect.objectContaining({
         appName: 'kimi-code-cli',
-        version: '1.2.3',
+        version: '0.38.0',
         uiMode: 'web',
         model: 'kimi-k2',
         enabled: true,
         deviceId: 'device-123',
-        homeDir: '/home/.kimi-code',
+        homeDir: '/home/.tea-code',
       }),
     );
     // The returned client wraps the module functions so core + the host share
@@ -97,7 +97,7 @@ describe('initializeServerTelemetry', () => {
       fileError: undefined,
     });
     const { initializeServerTelemetry } = await import('#/cli/telemetry');
-    initializeServerTelemetry({ version: '1.2.3' });
+    initializeServerTelemetry();
 
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith(
       expect.objectContaining({ enabled: false }),
@@ -110,7 +110,7 @@ describe('initializeServerTelemetry', () => {
       fileError: new Error('bad toml'),
     });
     const { initializeServerTelemetry } = await import('#/cli/telemetry');
-    initializeServerTelemetry({ version: '1.2.3' });
+    initializeServerTelemetry();
 
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith(
       expect.objectContaining({ enabled: true, model: undefined }),

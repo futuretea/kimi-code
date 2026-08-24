@@ -45,7 +45,7 @@ export function registerAcpCommand(parent: Command): void {
 
   parent
     .command('acp')
-    .description('Run kimi-code as an Agent Client Protocol (ACP) server over stdio.')
+    .description('Run Tea Code as an Agent Client Protocol (ACP) server over stdio.')
     .option(
       '--login',
       'Run the device-code login flow then exit (entry point for ACP terminal-auth).',
@@ -64,10 +64,10 @@ export function registerAcpCommand(parent: Command): void {
         identity,
         uiMode: 'acp',
       });
-      // Forward `KIMI_CODE_HOME` (if set) into `authMethods[0].env` so the
+      // Forward `TEA_CODE_HOME` (if set) into `authMethods[0].env` so the
       // `kimi login` subprocess clients spawn for terminal-auth writes its
       // token under the same data root the ACP server reads from. Used for
-      // sandboxed test setups (Zed's `agent_servers.*.env.KIMI_CODE_HOME =
+      // sandboxed test setups (Zed's `agent_servers.*.env.TEA_CODE_HOME =
       // /tmp/...`). Production runs leave the env unset and the field stays
       // empty.
       const sandboxHome = process.env[KIMI_CODE_HOME_ENV];
@@ -120,7 +120,7 @@ export function registerAcpCommand(parent: Command): void {
       };
       try {
         await runAcpServer(harness, {
-          agentInfo: { name: 'Kimi Code CLI', version: getVersion() },
+          agentInfo: { name: 'Tea Code CLI', version: getVersion() },
           slashCommands: resolveSlashCommands,
           ...(terminalAuthEnv ? { terminalAuthEnv } : {}),
           ...(legacyCommand !== undefined && legacyCommand.length > 0

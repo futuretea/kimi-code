@@ -21,9 +21,9 @@ Kimi Code requires VS Code 1.100.0 or later.
 4. Sign in with a [kimi.com/code](https://www.kimi.com/code) subscription, or use a provider already configured in the shared `config.toml`
 
 The extension runs the Kimi Code Node SDK in the VS Code Extension Host. When
-the extension and the Kimi Code terminal app resolve to the same
-`KIMI_CODE_HOME`, they share `config.toml`, MCP configuration, login state, and
-sessions. The system-level `KIMI_CODE_HOME` environment variable is supported;
+the extension and the Tea Code terminal app resolve to the same
+`TEA_CODE_HOME`, they share `config.toml`, MCP configuration, login state, and
+sessions. The system-level `TEA_CODE_HOME` environment variable is supported;
 there is no separate VS Code setting for it. Do not run the same session from
 both applications at the same time, because cross-process session locking is
 not guaranteed.

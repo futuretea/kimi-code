@@ -34,6 +34,7 @@ import {
 import { resolve } from 'pathe';
 
 import type { CLIOptions } from '#/cli/options';
+import { CLI_COMMAND_NAME } from '#/constant/app';
 import { MigrationScreenComponent, type MigrationScreenResult } from '#/migration/index';
 import { copyTextToClipboard } from '#/utils/clipboard/clipboard-text';
 import { appendInputHistory, loadInputHistory } from '#/utils/history/input-history';
@@ -883,7 +884,7 @@ export class KimiTUI {
               `${currentTheme.fg(
                 'warning',
                 `Session "${startup.sessionFlag}" was created under a different directory.\n` +
-                  `  cd "${target.workDir}" && kimi -r ${startup.sessionFlag}`,
+                  `  cd "${target.workDir}" && ${CLI_COMMAND_NAME} -r ${startup.sessionFlag}`,
               )}\n\n`,
             );
             throw new Error(
@@ -2534,7 +2535,7 @@ export class KimiTUI {
 
   private async showResumeOtherWorkDirHint(session: SessionRow): Promise<void> {
     this.hideSessionPicker();
-    const command = `cd ${quoteShellArg(session.work_dir)} && kimi --resume ${quoteShellArg(session.id)}`;
+    const command = `cd ${quoteShellArg(session.work_dir)} && ${CLI_COMMAND_NAME} --resume ${quoteShellArg(session.id)}`;
     const message = `Current session is in a different working directory.\n  To resume, run: ${command}`;
     try {
       await copyTextToClipboard(command);
@@ -3193,7 +3194,7 @@ export class KimiTUI {
     openUrl(auth.verificationUriComplete);
     this.state.transcriptContainer.addChild(
       new DeviceCodeBoxComponent({
-        title: 'Sign in to Kimi Code',
+        title: 'Sign in to Tea Code',
         url: auth.verificationUriComplete,
         code: auth.userCode,
         hint: 'Press Ctrl-C to cancel',
@@ -3923,7 +3924,7 @@ export class KimiTUI {
   private showApprovalPanel(payload: ApprovalPanelData): void {
     this.patchLivePane({ pendingApproval: { data: payload } });
     notifyTerminalOnce(this.state, `approval:${payload.id}`, {
-      title: 'Kimi Code approval required',
+      title: 'Tea Code approval required',
       body: payload.tool_name,
     });
     const panel = new ApprovalPanelComponent(
@@ -3986,7 +3987,7 @@ export class KimiTUI {
   private showQuestionDialog(payload: QuestionPanelData): void {
     this.patchLivePane({ pendingQuestion: { data: payload } });
     notifyTerminalOnce(this.state, `question:${payload.id}`, {
-      title: 'Kimi Code needs your answer',
+      title: 'Tea Code needs your answer',
       body: payload.questions[0]?.question,
     });
     const dialog = new QuestionDialogComponent(

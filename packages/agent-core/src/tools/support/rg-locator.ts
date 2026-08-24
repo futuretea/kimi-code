@@ -4,8 +4,8 @@
  * Lookup order (first hit wins):
  *   1. System PATH (`which rg`) — fastest, respects developer setup
  *   2. Bundled vendor binary (hook; not wired yet — `getVendorRgPath` is a stub)
- *   3. `<KIMI_CODE_HOME>/bin/rg` — persistent cache for this app.
- *   4. CDN download to <KIMI_CODE_HOME>/bin/ — one-off bootstrap
+ *   3. `<TEA_CODE_HOME>/bin/rg` — persistent cache for this app.
+ *   4. CDN download to <TEA_CODE_HOME>/bin/ — one-off bootstrap
  *
  * If steps 1-4 all fail, callers receive a structured error they can
  * turn into a user-facing "install ripgrep" hint instead of the naked
@@ -132,9 +132,9 @@ function rgBaseUrl(): string {
 }
 
 function getShareDir(): string {
-  const override = process.env['KIMI_CODE_HOME'];
+  const override = process.env['TEA_CODE_HOME'];
   if (override !== undefined && override !== '') return override;
-  return join(homedir(), '.kimi-code');
+  return join(homedir(), '.tea-code');
 }
 
 function getVendorRgPath(_binName: string): string | undefined {

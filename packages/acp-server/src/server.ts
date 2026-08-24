@@ -115,9 +115,9 @@ export interface AcpServerOptions {
    */
   readonly disableAuth?: boolean;
   /**
-   * Env vars to advertise in `authMethods[0].env` so the `kimi login`
+   * Env vars to advertise in `authMethods[0].env` so the `tea-code login`
    * subprocess the client spawns (via terminal-auth) lands its token under the
-   * same data root the server uses (e.g. `{ KIMI_CODE_HOME: '/tmp/...' }` for
+   * same data root the server uses (e.g. `{ TEA_CODE_HOME: '/tmp/...' }` for
    * sandboxed test setups). Leave undefined in production so the advertised
    * env stays empty.
    */

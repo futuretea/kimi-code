@@ -19,8 +19,8 @@ import type { AuthMethod } from '@agentclientprotocol/sdk';
  * Build the `terminal-auth` method advertised to ACP clients.
  *
  * Optional inputs:
- *  - `env`: extra env vars forwarded to the spawned `kimi login`
- *    subprocess (e.g. `{ KIMI_CODE_HOME: '/tmp/sandbox' }` for tests).
+ *  - `env`: extra env vars forwarded to the spawned `tea-code login`
+ *    subprocess (e.g. `{ TEA_CODE_HOME: '/tmp/sandbox' }` for tests).
  *  - `legacyCommand`: absolute path of the agent binary, used to
  *    populate `_meta['terminal-auth'].command` so legacy clients can
  *    spawn `<binary> login` (top-level subcommand). When omitted, the

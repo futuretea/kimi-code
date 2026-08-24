@@ -59,7 +59,7 @@ const features = computed<Feature[]>(() => isZh.value
       {
         icon: '🧩',
         title: 'Agent Skills',
-        desc: '把团队的工作流程封装成 Kimi 随时调用的技能，不必每次都重新解释。',
+        desc: '把团队的工作流程封装成 Tea Code 随时调用的技能，不必每次都重新解释。',
         href: '/zh/customization/skills',
       },
       {
@@ -85,7 +85,7 @@ const features = computed<Feature[]>(() => isZh.value
       {
         icon: '🧩',
         title: 'Agent Skills',
-        desc: "Package your team's workflows into skills Kimi can invoke on demand.",
+        desc: "Package your team's workflows into skills Tea Code can invoke on demand.",
         href: '/en/customization/skills',
       },
       {

@@ -6,7 +6,7 @@
  * temporary, understood gaps are pinned explicitly in `KNOWN_DIFFS` so the
  * list can only shrink deliberately, never grow silently.
  * Wiring: real v1 core and real v2 engine, both in-process on a temp
- * KIMI_CODE_HOME; no provider calls.
+ * TEA_CODE_HOME; no provider calls.
  * Run: pnpm exec vitest run test/v1-v2-parity.test.ts
  */
 import { appendFile, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';

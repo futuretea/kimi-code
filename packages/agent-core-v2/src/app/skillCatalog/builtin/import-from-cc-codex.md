@@ -1,20 +1,20 @@
 ---
 name: import-from-cc-codex
-description: Import Claude Code and Codex instructions, skills, and MCP settings into Kimi Code.
+description: Import Claude Code and Codex instructions, skills, and MCP settings into Tea Code.
 disable-model-invocation: true
 ---
 
 # Import from Claude Code and Codex
 
 The user invoked `/import-from-cc-codex` (or `/skill:import-from-cc-codex`).
-Help them migrate selected local Claude Code and Codex assets into Kimi Code.
+Help them migrate selected local Claude Code and Codex assets into Tea Code.
 This skill is intentionally conservative: it imports only instructions, skills,
 and MCP server declarations from `.claude` / `.codex` surfaces, with a user
 preview before any write.
 
 ## Non-negotiable rules
 
-- Do **not** migrate `.agents` content. Kimi Code already supports `.agents`
+- Do **not** migrate `.agents` content. Tea Code already supports `.agents`
   skills and AGENTS files by default.
 - Do **not** migrate Claude custom commands (`.claude/commands/**`). They are
   out of scope for this importer.
@@ -23,15 +23,15 @@ preview before any write.
 - Do **not** run or install anything from the source directories.
 - Do **not** write anything until the user has chosen what to migrate, reviewed
   the final preview, and explicitly confirmed applying it.
-- Only write under Kimi Code targets:
-  - User-global: `$KIMI_CODE_HOME` if set, otherwise `~/.kimi-code`.
+- Only write under Tea Code targets:
+  - User-global: `$TEA_CODE_HOME` if set, otherwise `~/.tea-code`.
   - Project instructions/skills: `<project root>/.kimi-code`, where the project
     root is the nearest parent directory containing `.git`; if no `.git` exists,
     use the current working directory.
-  - Project-local MCP: `<cwd>/.kimi-code/mcp.json`, because Kimi reads the
-    current working directory's Kimi-specific MCP file, not every project-root
+  - Project-local MCP: `<cwd>/.kimi-code/mcp.json`, because Tea Code reads the
+    current working directory's Tea Code-specific MCP file, not every project-root
     `.kimi-code/mcp.json` from subdirectories.
-- Preserve existing Kimi files. Never overwrite existing skills or replace an
+- Preserve existing Tea Code files. Never overwrite existing skills or replace an
   existing AGENTS.md / mcp.json wholesale.
 
 ## Conversation flow
@@ -54,7 +54,7 @@ If the user dismisses or refuses the question, stop.
 ### 2. Scan only the chosen categories
 
 Resolve paths explicitly; `~` is the real OS home, and Kimi home follows
-`$KIMI_CODE_HOME` before `~/.kimi-code`.
+`$TEA_CODE_HOME` before `~/.tea-code`.
 
 User-level sources:
 
@@ -103,7 +103,7 @@ source and target paths.
 
 Map user-level instruction sources to:
 
-- `$KIMI_CODE_HOME/AGENTS.md`, or `~/.kimi-code/AGENTS.md` if the env var is not
+- `$TEA_CODE_HOME/AGENTS.md`, or `~/.tea-code/AGENTS.md` if the env var is not
   set.
 
 Map project-level instruction sources to:
@@ -132,7 +132,7 @@ and cannot be read as UTF-8 text, stop before writing and report the blocker.
 
 Map user-level skill sources to:
 
-- `$KIMI_CODE_HOME/skills/`, or `~/.kimi-code/skills/` if the env var is not set.
+- `$TEA_CODE_HOME/skills/`, or `~/.tea-code/skills/` if the env var is not set.
 
 Map project-level skill sources to:
 
@@ -218,13 +218,13 @@ Codex MCP:
 - Drop unsupported Codex-only fields and report them, especially `required`,
   `default_tools_approval_mode`, `tools.<tool>.approval_mode`,
   `env_vars`, `env_http_headers`, and `experimental_environment`.
-- Do not import project-root `.mcp.json`; Kimi already reads it.
+- Do not import project-root `.mcp.json`; Tea Code already reads it.
 
 For each MCP candidate, choose the target scope in the preview:
 
-- User-level source -> user-global MCP target (`$KIMI_CODE_HOME/mcp.json` or
-  `~/.kimi-code/mcp.json`).
-- Project-level source -> project-local Kimi MCP target (`<cwd>/.kimi-code/mcp.json`). If `<cwd>` is not the project root, call this out in the preview so the user understands when Kimi will load it.
+- User-level source -> user-global MCP target (`$TEA_CODE_HOME/mcp.json` or
+  `~/.tea-code/mcp.json`).
+- Project-level source -> project-local Tea Code MCP target (`<cwd>/.kimi-code/mcp.json`). If `<cwd>` is not the project root, call this out in the preview so the user understands when Tea Code will load it.
 
 Warn that stdio MCP entries spawn commands at session start, and the user should
 only import MCP servers they trust. Warn if an MCP entry contains apparent
@@ -238,7 +238,7 @@ and show a copy-pasteable manual follow-up for the user, including:
 - the `/mcp-config` command they should run,
 - target scope and target path,
 - the normalized JSON entry or entries to add,
-- collision policy: keep existing Kimi entries on name conflict,
+- collision policy: keep existing Tea Code entries on name conflict,
 - the reminder that unrelated entries must be preserved.
 
 Make it clear that MCP import is pending until the user manually runs
@@ -271,7 +271,7 @@ When the user confirms:
 - Do not write MCP entries. Show the prepared `/mcp-config` follow-up command
   and mark MCP import as pending user action.
 - Report exactly what changed and what was skipped.
-- Tell the user to start a new session (for example `/new`) or restart Kimi Code
+- Tell the user to start a new session (for example `/new`) or restart Tea Code
   for newly imported skills, instructions, and MCP servers to be picked up.
 
 ## Output style

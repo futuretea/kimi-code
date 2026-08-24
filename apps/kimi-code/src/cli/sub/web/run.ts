@@ -204,7 +204,7 @@ function formatReadyLine(
   const notice = dangerousBypassAuth
     ? `${formatDangerNoticeLines().join('\n')}\n`
     : '';
-  return `${notice}Kimi server: ${buildOpenableUrl(origin, token)}\n`;
+  return `${notice}Tea Code server: ${buildOpenableUrl(origin, token)}\n`;
 }
 
 /**
@@ -244,7 +244,7 @@ async function runServerInProcess(
   const version = getVersion();
   // Registers the telemetry provider for `track` / `shutdownTelemetry`; the
   // client itself is not passed into kap-server.
-  initializeServerTelemetry({ version });
+  initializeServerTelemetry();
 
   let running: RoutedServer | undefined;
   let stopping = false;
@@ -288,7 +288,7 @@ async function runServerInProcess(
     // `web` User-Agent suffix distinguishes web-UI traffic from direct CLI
     // runs upstream (same product token, same platform).
     hostIdentity: {
-      ...createKimiCodeHostIdentity(version),
+      ...createKimiCodeHostIdentity(),
       userAgentSuffix: WEB_USER_AGENT_SUFFIX,
     },
     logLevel: options.logLevel,
@@ -389,7 +389,7 @@ export function formatReadyBanner(
   const logo = ['▐█▛█▛█▌', '▐█████▌'] as const;
   const lines: string[] = [
     '',
-    `  ${primary(logo[0])}  ${title('Kimi server ready')}  ${dim(getVersion())}`,
+    `  ${primary(logo[0])}  ${title('Tea Code server ready')}  ${dim(getVersion())}`,
     `  ${primary(logo[1])}  ${dim('Local web UI is available from this machine.')}`,
     '',
   ];

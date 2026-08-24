@@ -55,7 +55,7 @@ export interface MigrationScope {
 
 /**
  * Output of a runMigration() call. Serialized verbatim to
- * `~/.kimi-code/migration-report.json` and surfaced in the terminal summary.
+ * `~/.tea-code/migration-report.json` and surfaced in the terminal summary.
  */
 export interface MigrationReport {
   readonly startedAt: string;

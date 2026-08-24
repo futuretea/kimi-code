@@ -33,7 +33,7 @@ export interface UpdateManifest {
 }
 
 export interface UpdateCache {
-  readonly source: 'cdn';
+  readonly source: 'npm-registry';
   readonly checkedAt: string | null;
   readonly latest: string | null;
   /** Null when the manifest came from the plain-text fallback or a legacy cache file. */
@@ -69,7 +69,7 @@ export type UpdatePreflightResult = 'continue' | 'exit';
 
 export function emptyUpdateCache(): UpdateCache {
   return {
-    source: 'cdn',
+    source: 'npm-registry',
     checkedAt: null,
     latest: null,
     manifest: null,

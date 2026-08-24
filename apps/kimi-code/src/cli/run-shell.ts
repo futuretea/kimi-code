@@ -67,7 +67,7 @@ export async function runShell(
   };
   const harnessOptions: KimiHarnessOptions = {
     homeDir: telemetryBootstrap.homeDir,
-    identity: createKimiCodeHostIdentity(version),
+    identity: createKimiCodeHostIdentity(),
     skillDirs: opts.skillsDirs,
     telemetry: telemetryClient,
     onOAuthRefresh: (outcome) => {
@@ -135,7 +135,6 @@ export async function runShell(
     harness,
     bootstrap: telemetryBootstrap,
     config,
-    version,
     uiMode: CLI_UI_MODE,
   });
   setCrashPhase('runtime');
@@ -237,7 +236,7 @@ export async function runShell(
     process.stdout.write(`${gutter}Bye!\n`);
     const hints: string[] = [];
     if (sessionId !== '' && hasContent) {
-      hints.push(`${gutter}To resume this session: kimi -r ${sessionId}`);
+      hints.push(`${gutter}To resume this session: tea-code -r ${sessionId}`);
     }
     if (tui.exitOpenUrl !== undefined) {
       hints.push(`${gutter}open ${toTerminalHyperlink(tui.exitOpenUrl, tui.exitOpenUrl)}`);

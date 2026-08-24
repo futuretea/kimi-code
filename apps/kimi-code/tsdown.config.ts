@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { defineConfig } from 'tsdown';
@@ -6,6 +7,7 @@ import { rawTextPlugin } from '../../build/raw-text-plugin.mjs';
 import { BUILT_IN_CATALOG_DEFINE, builtInCatalogDefine } from './scripts/built-in-catalog.mjs';
 
 const appRoot = import.meta.dirname;
+const upstreamVersion = readFileSync(resolve(appRoot, 'UPSTREAM_VERSION'), 'utf-8').trim();
 
 export default defineConfig({
   entry: ['./src/main.ts'],
@@ -29,6 +31,7 @@ export default defineConfig({
   },
   define: {
     [BUILT_IN_CATALOG_DEFINE]: builtInCatalogDefine(),
+    __KIMI_CODE_UPSTREAM_VERSION__: JSON.stringify(upstreamVersion),
   },
   deps: {
     onlyBundle: false,

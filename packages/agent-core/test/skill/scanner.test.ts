@@ -28,7 +28,7 @@ describe('skill discovery', () => {
     const { homeDir, repoDir, workDir } = await makeWorkspace();
     await mkdir(path.join(repoDir, '.kimi-code', 'skills'), { recursive: true });
     await mkdir(path.join(repoDir, '.agents', 'skills'), { recursive: true });
-    await mkdir(path.join(homeDir, '.kimi-code', 'skills'), { recursive: true });
+    await mkdir(path.join(homeDir, '.tea-code', 'skills'), { recursive: true });
     await mkdir(path.join(homeDir, '.agents', 'skills'), { recursive: true });
     await mkdir(path.join(repoDir, 'team-skills'), { recursive: true });
     const realRepoDir = await realpath(repoDir);
@@ -41,7 +41,7 @@ describe('skill discovery', () => {
     expect(roots.map((root) => path.relative(realRepoDir, root.path))).toEqual([
       '.kimi-code/skills',
       '.agents/skills',
-      path.relative(realRepoDir, await realpath(path.join(homeDir, '.kimi-code', 'skills'))),
+      path.relative(realRepoDir, await realpath(path.join(homeDir, '.tea-code', 'skills'))),
       path.relative(realRepoDir, await realpath(path.join(homeDir, '.agents', 'skills'))),
       'team-skills',
     ]);
@@ -57,7 +57,7 @@ describe('skill discovery', () => {
   it('uses only the first brand directory when brand merging is disabled', async () => {
     const { homeDir, repoDir, workDir } = await makeWorkspace();
     await mkdir(path.join(repoDir, '.kimi-code', 'skills'), { recursive: true });
-    await mkdir(path.join(homeDir, '.kimi-code', 'skills'), { recursive: true });
+    await mkdir(path.join(homeDir, '.tea-code', 'skills'), { recursive: true });
 
     const roots = await resolveSkillRoots({
       paths: { userHomeDir: homeDir, workDir },
@@ -66,14 +66,14 @@ describe('skill discovery', () => {
 
     expect(roots.map((root) => root.path)).toEqual([
       await realpath(path.join(repoDir, '.kimi-code', 'skills')),
-      await realpath(path.join(homeDir, '.kimi-code', 'skills')),
+      await realpath(path.join(homeDir, '.tea-code', 'skills')),
     ]);
   });
 
   it('lets explicit skill dirs replace automatic project and user discovery', async () => {
     const { homeDir, repoDir, workDir } = await makeWorkspace();
     await mkdir(path.join(repoDir, '.kimi-code', 'skills'), { recursive: true });
-    await mkdir(path.join(homeDir, '.kimi-code', 'skills'), { recursive: true });
+    await mkdir(path.join(homeDir, '.tea-code', 'skills'), { recursive: true });
     await mkdir(path.join(repoDir, 'explicit-skills'), { recursive: true });
     await mkdir(path.join(repoDir, 'extra-skills'), { recursive: true });
 
@@ -93,7 +93,7 @@ describe('skill discovery', () => {
   it('discovers flat markdown skills, keeps directory skills over same-name flat files, and preserves source precedence', async () => {
     const { homeDir, repoDir } = await makeWorkspace();
     const projectRoot = path.join(repoDir, '.kimi-code', 'skills');
-    const userRoot = path.join(homeDir, '.kimi-code', 'skills');
+    const userRoot = path.join(homeDir, '.tea-code', 'skills');
     await writeSkill(projectRoot, 'review.md', ['Project review body first line.', '', 'Details.']);
     await writeSkill(userRoot, path.join('review', 'SKILL.md'), [
       '---',
@@ -642,7 +642,7 @@ describe('resolveSkillRoots ordering and priority', () => {
       'description: generic version',
       '---',
     ]);
-    const brand = path.join(homeDir, '.kimi-code', 'skills');
+    const brand = path.join(homeDir, '.tea-code', 'skills');
     await writeSkill(brand, path.join('greet', 'SKILL.md'), [
       '---',
       'name: greet',
@@ -659,7 +659,7 @@ describe('resolveSkillRoots ordering and priority', () => {
 
   it('returns proj-brand, proj-generic, user-brand, user-generic, builtin in that order without merging', async () => {
     const { homeDir, repoDir, workDir } = await makeWorkspace();
-    const userBrand = path.join(homeDir, '.kimi-code', 'skills');
+    const userBrand = path.join(homeDir, '.tea-code', 'skills');
     const userGeneric = path.join(homeDir, '.agents', 'skills');
     const projBrand = path.join(repoDir, '.kimi-code', 'skills');
     const projGeneric = path.join(repoDir, '.agents', 'skills');
@@ -687,7 +687,7 @@ describe('resolveSkillRoots ordering and priority', () => {
     const { homeDir, workDir } = await makeWorkspace();
     const generic = path.join(homeDir, '.config', 'agents', 'skills');
     await mkdir(generic, { recursive: true });
-    const brand = path.join(homeDir, '.kimi-code', 'skills');
+    const brand = path.join(homeDir, '.tea-code', 'skills');
     await writeSkill(brand, path.join('deploy', 'SKILL.md'), [
       '---',
       'name: deploy',
@@ -703,16 +703,16 @@ describe('resolveSkillRoots ordering and priority', () => {
 
   it('defaults to merging user brand dirs', async () => {
     const { homeDir, workDir } = await makeWorkspace();
-    await mkdir(path.join(homeDir, '.kimi-code', 'skills'), { recursive: true });
+    await mkdir(path.join(homeDir, '.tea-code', 'skills'), { recursive: true });
 
     const roots = await resolveSkillRoots({ paths: { userHomeDir: homeDir, workDir } });
 
     const paths = roots.map((r) => r.path);
-    expect(paths).toContain(await realpath(path.join(homeDir, '.kimi-code', 'skills')));
+    expect(paths).toContain(await realpath(path.join(homeDir, '.tea-code', 'skills')));
   });
 });
 
-describe('resolveSkillRoots brand home (KIMI_CODE_HOME)', () => {
+describe('resolveSkillRoots brand home (TEA_CODE_HOME)', () => {
   it('resolves the user brand skills root under brandHomeDir while keeping generic under the real home', async () => {
     const { homeDir, workDir } = await makeWorkspace();
     const brandHomeDir = path.join(homeDir, '..', 'brand-home');
@@ -731,7 +731,7 @@ describe('resolveSkillRoots brand home (KIMI_CODE_HOME)', () => {
   it('never nests a second .kimi-code under the brand home', async () => {
     const { homeDir, workDir } = await makeWorkspace();
     // Mirrors the default case where brandHomeDir already IS the ~/.kimi-code dir.
-    const brandHomeDir = path.join(homeDir, '.kimi-code');
+    const brandHomeDir = path.join(homeDir, '.tea-code');
     await mkdir(path.join(brandHomeDir, 'skills'), { recursive: true });
     // The doubled-prefix path that must never be selected.
     await mkdir(path.join(brandHomeDir, '.kimi-code', 'skills'), { recursive: true });
@@ -749,14 +749,14 @@ describe('resolveSkillRoots brand home (KIMI_CODE_HOME)', () => {
 
   it('falls back to <userHomeDir>/.kimi-code/skills when brandHomeDir is omitted', async () => {
     const { homeDir, workDir } = await makeWorkspace();
-    await mkdir(path.join(homeDir, '.kimi-code', 'skills'), { recursive: true });
+    await mkdir(path.join(homeDir, '.tea-code', 'skills'), { recursive: true });
 
     const roots = await resolveSkillRoots({
       paths: { userHomeDir: homeDir, workDir },
     });
 
     const userRoots = roots.filter((r) => r.source === 'user').map((r) => r.path);
-    expect(userRoots).toContain(await realpath(path.join(homeDir, '.kimi-code', 'skills')));
+    expect(userRoots).toContain(await realpath(path.join(homeDir, '.tea-code', 'skills')));
   });
 });
 
@@ -935,7 +935,7 @@ describe('resolveSkillRoots extra dirs', () => {
 
   it('combines explicit dirs with extra dirs and suppresses auto-discovery', async () => {
     const { homeDir, repoDir, workDir } = await makeWorkspace();
-    const userBrand = path.join(homeDir, '.kimi-code', 'skills');
+    const userBrand = path.join(homeDir, '.tea-code', 'skills');
     await mkdir(userBrand, { recursive: true });
     const projectBrand = path.join(repoDir, '.kimi-code', 'skills');
     await mkdir(projectBrand, { recursive: true });
@@ -1025,7 +1025,7 @@ describe('resolveSkillRoots extra dirs', () => {
 
   it('keeps the higher-priority scope when an extra dir overlaps with auto-discovered user dirs', async () => {
     const { homeDir, repoDir, workDir } = await makeWorkspace();
-    const userBrand = path.join(homeDir, '.kimi-code', 'skills');
+    const userBrand = path.join(homeDir, '.tea-code', 'skills');
     await writeSkill(userBrand, path.join('foo', 'SKILL.md'), [
       '---',
       'name: foo',
@@ -1056,7 +1056,7 @@ describe('scope priority across resolution and discovery', () => {
       'description: builtin version',
       '---',
     ]);
-    const userBrand = path.join(homeDir, '.kimi-code', 'skills');
+    const userBrand = path.join(homeDir, '.tea-code', 'skills');
     await writeSkill(userBrand, path.join('foo', 'SKILL.md'), [
       '---',
       'name: foo',
@@ -1077,7 +1077,7 @@ describe('scope priority across resolution and discovery', () => {
 
   it('lets a project-scope skill win over a same-named user-scope skill', async () => {
     const { homeDir, repoDir, workDir } = await makeWorkspace();
-    const userBrand = path.join(homeDir, '.kimi-code', 'skills');
+    const userBrand = path.join(homeDir, '.tea-code', 'skills');
     await writeSkill(userBrand, path.join('foo', 'SKILL.md'), [
       '---',
       'name: foo',
@@ -1159,7 +1159,7 @@ describe('scope priority across resolution and discovery', () => {
 
   it('lets a user-scope skill win over a same-named extra-scope skill', async () => {
     const { homeDir, repoDir, workDir } = await makeWorkspace();
-    const userBrand = path.join(homeDir, '.kimi-code', 'skills');
+    const userBrand = path.join(homeDir, '.tea-code', 'skills');
     await writeSkill(userBrand, path.join('foo', 'SKILL.md'), [
       '---',
       'name: foo',
@@ -1187,7 +1187,7 @@ describe('scope priority across resolution and discovery', () => {
 
   it('fully excludes user and project scopes when explicit dirs are supplied', async () => {
     const { homeDir, repoDir, workDir } = await makeWorkspace();
-    const userBrand = path.join(homeDir, '.kimi-code', 'skills');
+    const userBrand = path.join(homeDir, '.tea-code', 'skills');
     await writeSkill(userBrand, path.join('foo', 'SKILL.md'), [
       '---',
       'name: foo',
@@ -1229,7 +1229,7 @@ describe('scope priority across resolution and discovery', () => {
       'description: builtin version',
       '---',
     ]);
-    const userBrand = path.join(homeDir, '.kimi-code', 'skills');
+    const userBrand = path.join(homeDir, '.tea-code', 'skills');
     await writeSkill(userBrand, path.join('foo', 'SKILL.md'), [
       '---',
       'name: foo',
@@ -1289,7 +1289,7 @@ describe('scope priority across resolution and discovery', () => {
 describe('explicit dir override and scope stamping', () => {
   it('suppresses user and project auto-discovery when explicit dirs are present', async () => {
     const { homeDir, repoDir, workDir } = await makeWorkspace();
-    const userBrand = path.join(homeDir, '.kimi-code', 'skills');
+    const userBrand = path.join(homeDir, '.tea-code', 'skills');
     await mkdir(userBrand, { recursive: true });
     const projBrand = path.join(repoDir, '.kimi-code', 'skills');
     await mkdir(projBrand, { recursive: true });
@@ -1318,7 +1318,7 @@ describe('explicit dir override and scope stamping', () => {
     const { homeDir, workDir } = await makeWorkspace();
     const generic = path.join(homeDir, '.agents', 'skills');
     await mkdir(generic, { recursive: true });
-    const brand = path.join(homeDir, '.kimi-code', 'skills');
+    const brand = path.join(homeDir, '.tea-code', 'skills');
     await mkdir(brand, { recursive: true });
 
     const roots = await resolveSkillRoots({ paths: { userHomeDir: homeDir, workDir } });
@@ -1333,7 +1333,7 @@ describe('explicit dir override and scope stamping', () => {
 
   it('stamps each discovered skill with the scope of its root', async () => {
     const { homeDir, repoDir, workDir } = await makeWorkspace();
-    const userBrand = path.join(homeDir, '.kimi-code', 'skills');
+    const userBrand = path.join(homeDir, '.tea-code', 'skills');
     await writeSkill(userBrand, path.join('user-skill', 'SKILL.md'), [
       '---',
       'name: user-skill',
