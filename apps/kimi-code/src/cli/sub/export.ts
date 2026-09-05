@@ -28,7 +28,7 @@ import type { Command } from 'commander';
 import { CLI_SHUTDOWN_TIMEOUT_MS, CLI_UI_MODE } from '#/constant/app';
 import { createCliTelemetryBootstrap, initializeCliTelemetry } from '#/cli/telemetry';
 import { detectInstallSource } from '#/cli/update/source';
-import { createKimiCodeHostIdentity } from '#/cli/version';
+import { createKimiCodeHostIdentity, getVersion } from '#/cli/version';
 import { detectShellEnvironment } from '#/utils/process/shell-env';
 
 import { isKimiV2Enabled } from '../experimental-v2';
@@ -115,7 +115,7 @@ export function registerExportCommand(parent: Command, deps?: Partial<ExportDeps
     .option('-y, --yes', 'Skip previous-session confirmation.')
     .option(
       '--no-include-global-log',
-      'Skip bundling the active global diagnostic log (~/.kimi-code/logs/kimi-code.log, not rotated .1 files). By default the global log is included.',
+      'Skip bundling the active global diagnostic log (~/.tea-code/logs/kimi-code.log, not rotated .1 files). By default the global log is included.',
     )
     .argument('[sessionId]', 'Session id to export. Defaults to the most recent session.')
     .action(
@@ -201,7 +201,7 @@ function createDefaultExportDeps(overrides: Partial<ExportDeps> = {}): ExportDep
           await shutdownDefaultTelemetry();
         }
       }),
-    version: overrides.version ?? identity.version,
+    version: overrides.version ?? getVersion(),
     getInstallSource: overrides.getInstallSource ?? (() => detectInstallSource()),
     getShellEnv: overrides.getShellEnv ?? detectShellEnvironment,
     confirmPreviousSession: overrides.confirmPreviousSession ?? confirmPreviousSession,

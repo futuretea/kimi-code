@@ -18,7 +18,7 @@ const arg = (name: string, def: string) => {
   const i = argv.indexOf(`--${name}`);
   return i === -1 ? def : argv[i + 1]!;
 };
-const DATA = path.resolve(arg('data', path.join(os.homedir(), '.kimi-code')));
+const DATA = path.resolve(arg('data', (process.env['TEA_CODE_HOME'] ?? path.join(os.homedir(), '.tea-code'))));
 const FULL = argv.includes('--full'); // also index full tool results (matches import-kimi-code --full)
 
 const fmt = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 0 });

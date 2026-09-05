@@ -103,7 +103,7 @@ describe('Remote Control output', () => {
     vi.stubEnv('FORCE_HYPERLINK', '1');
     const output = formatRemoteControlOutput(outputOptions);
     const url = outputOptions.url;
-    expect(output).toContain('Use Kimi Code on this machine');
+    expect(output).toContain('Use Tea Code on this machine');
     expect(output).toContain('1.');
     expect(output).toContain('2.');
     expect(output).toContain('3.');
@@ -408,6 +408,9 @@ describe('Remote Control tunnel', () => {
     });
 
     expect(registrations).toHaveLength(1);
+    expect(registrations[0]).toMatchObject({
+      payload: { client_version: 'kimi-code/0.41.0' },
+    });
     expect(handle.url).toContain('/coding-relay/devices/');
     expect(handle.url).toContain('?rc=1&from=kimi_code_cli');
 

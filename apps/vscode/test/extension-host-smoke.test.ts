@@ -72,7 +72,8 @@ describe('installed VSIX Extension Host smoke', () => {
 
     const options = vscodeTest.runTests.mock.calls[0]?.[0];
     const env = options.extensionTestsEnv;
-    expect(env.KIMI_CODE_HOME).not.toBe(env.KIMI_VSCODE_SMOKE_OS_HOME);
+    expect(env.TEA_CODE_HOME).toBeTruthy();
+    expect(env.TEA_CODE_HOME).not.toBe(env.KIMI_VSCODE_SMOKE_OS_HOME);
     expect(env.KIMI_VSCODE_SMOKE_OS_HOME).toContain('os-home');
   });
 

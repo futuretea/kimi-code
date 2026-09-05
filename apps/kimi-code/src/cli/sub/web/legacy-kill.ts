@@ -50,7 +50,7 @@ export const LEGACY_SERVER_MAX_VERSION = '0.28.0';
 
 /** Deprecation notice printed on every `kimi server kill` run. */
 export const DEPRECATED_KILL_NOTICE =
-  '`kimi server kill` is deprecated: it only stops servers started by a version before 0.28.0. Servers started by `kimi web` run in the foreground — stop them with Ctrl+C.\n';
+  '`tea-code server kill` is deprecated: it only stops servers started by a version before 0.28.0. Servers started by `tea-code web` run in the foreground — stop them with Ctrl+C.\n';
 
 /**
  * The fields of the legacy `<home>/server/lock` this command needs. The full
@@ -83,7 +83,7 @@ export function registerLegacyKillCommand(server: Command): void {
   server
     .command('kill')
     .description(
-      'Deprecated — stop a server started by a version before 0.28.0 (recorded in the legacy server lock). Servers started by `kimi web` run in the foreground — stop them with Ctrl+C.',
+      'Deprecated — stop a server started by a version before 0.28.0 (recorded in the legacy server lock). Servers started by `tea-code web` run in the foreground — stop them with Ctrl+C.',
     )
     // Swallow legacy argument shapes (`kimi server kill <serverId>`, flags):
     // the legacy lock records a single server, so they carry no meaning here.
@@ -104,7 +104,7 @@ export async function handleLegacyKillCommand(deps: LegacyKillDeps): Promise<voi
 
   const lock = await deps.readLock();
   if (lock === undefined) {
-    deps.stdout.write('No running legacy Kimi server.\n');
+    deps.stdout.write('No running legacy Tea Code server.\n');
     return;
   }
 
@@ -112,13 +112,13 @@ export async function handleLegacyKillCommand(deps: LegacyKillDeps): Promise<voi
     // Stale lock from a server that died without releasing it; sweep it so the
     // cleanup is done in one run.
     await deps.removeLock().catch(() => {});
-    deps.stdout.write('No running legacy Kimi server.\n');
+    deps.stdout.write('No running legacy Tea Code server.\n');
     return;
   }
 
   const outcome = await killLegacyServer(lock, deps);
   await deps.removeLock().catch(() => {});
-  deps.stdout.write(`Legacy Kimi server (pid ${String(lock.pid)}) ${outcome}.\n`);
+  deps.stdout.write(`Legacy Tea Code server (pid ${String(lock.pid)}) ${outcome}.\n`);
 }
 
 /**
@@ -155,7 +155,7 @@ async function killLegacyServer(
   }
 
   throw new Error(
-    `Failed to stop legacy Kimi server (pid ${String(pid)}); insufficient permissions?`,
+    `Failed to stop legacy Tea Code server (pid ${String(pid)}); insufficient permissions?`,
   );
 }
 

@@ -1,3 +1,7 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 /**
  * Tests for the CLI telemetry bootstrap helpers, focusing on the
  * `kimi web` / `kimi server run` host wiring added in `cli/telemetry.ts`.
@@ -69,7 +73,7 @@ describe('initializeServerTelemetry', () => {
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith(
       expect.objectContaining({
         appName: 'kimi-code-cli',
-        version: '1.2.3',
+        version: '0.41.0',
         uiMode: 'web',
         model: 'kimi-k2',
         enabled: true,
@@ -115,5 +119,56 @@ describe('initializeServerTelemetry', () => {
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith(
       expect.objectContaining({ enabled: true, model: undefined }),
     );
+  });
+});
+
+
+describe('outbound Tea Code telemetry', () => {
+  it.each(['shell', 'web'])('sends upstream version for the %s host', async (uiMode) => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'tea-telemetry-'));
+    const telemetry = await vi.importActual<typeof import('@moonshot-ai/kimi-telemetry')>(
+      '@moonshot-ai/kimi-telemetry',
+    );
+    const payloads: Array<{ events: Array<Record<string, unknown>> }> = [];
+    vi.stubEnv('KIMI_DISABLE_TELEMETRY', '0');
+    vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
+      payloads.push(JSON.parse(init?.body as string));
+      return Response.json({});
+    }));
+    mocks.initializeTelemetry.mockImplementation(telemetry.initializeTelemetry);
+    mocks.resolveKimiHome.mockReturnValue(homeDir);
+    mocks.resolveConfigPath.mockReturnValue(join(homeDir, 'config.toml'));
+    mocks.loadRuntimeConfigSafe.mockReturnValue({ config: { telemetry: true }, fileError: undefined });
+    try {
+      const { initializeCliTelemetry, initializeServerTelemetry } = await import('#/cli/telemetry');
+      if (uiMode === 'web') {
+        initializeServerTelemetry({ version: '0.4.0' });
+      } else {
+        initializeCliTelemetry({
+          harness: {
+            homeDir,
+            auth: { getCachedAccessToken: async () => 'test-token' },
+          } as Parameters<typeof initializeCliTelemetry>[0]['harness'],
+          bootstrap: { homeDir, deviceId: 'device-123', firstLaunch: false },
+          config: { telemetry: true },
+          version: '0.4.0',
+          uiMode,
+        });
+      }
+      telemetry.track('rebrand_identity');
+      await telemetry.shutdownTelemetry();
+      const event = payloads.flatMap((payload) => payload.events)
+        .find((item) => String(item['event']).endsWith('rebrand_identity'));
+      expect(event).toMatchObject({ context_version: '0.41.0', context_ui_mode: uiMode });
+      expect(JSON.stringify(event)).not.toContain('"0.4.0"');
+    } finally {
+      await telemetry.shutdownTelemetry();
+      mocks.initializeTelemetry.mockReset();
+      mocks.resolveKimiHome.mockReturnValue('/home/.kimi-code');
+      mocks.resolveConfigPath.mockReturnValue('/home/.kimi-code/config.toml');
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+      await rm(homeDir, { recursive: true, force: true });
+    }
   });
 });

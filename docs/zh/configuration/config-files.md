@@ -1,16 +1,16 @@
 # 配置文件
 
-Kimi Code CLI 的长期偏好都写在 `~/.kimi-code/` 下的 TOML 文件里：运行时设置放 `config.toml`，终端界面偏好放配套的 `tui.toml`。
+Tea Code CLI 的长期偏好都写在 `~/.tea-code/` 下的 TOML 文件里：运行时设置放 `config.toml`，终端界面偏好放配套的 `tui.toml`。
 
 ## 配置文件位置
 
-CLI 从 `~/.kimi-code/config.toml` 读取配置，首次运行时自动创建。如需把数据目录迁移到别处，可用 `KIMI_CODE_HOME` 环境变量覆盖：
+CLI 从 `~/.tea-code/config.toml` 读取配置，首次运行时自动创建。如需把数据目录迁移到别处，可用 `TEA_CODE_HOME` 环境变量覆盖：
 
 ```sh
-export KIMI_CODE_HOME=/path/to/kimi-home
+export TEA_CODE_HOME=/path/to/kimi-home
 ```
 
-此时配置文件路径变为 `$KIMI_CODE_HOME/config.toml`。无论目录在哪里，文件名固定是 `config.toml`。
+此时配置文件路径变为 `$TEA_CODE_HOME/config.toml`。无论目录在哪里，文件名固定是 `config.toml`。
 
 ::: tip
 TOML 字段名一律用下划线（snake_case），如 `default_model`、`max_context_size`。字段名里若含 `.`，需用引号包住，例如 `[models."gpt-4.1"]`；否则 TOML 会把 `.` 解释为嵌套表分隔符。
@@ -85,7 +85,7 @@ pattern = "Bash(rm -rf*)"
 [[hooks]]
 event = "PreToolUse"
 matcher = "Bash"
-command = "node ~/.kimi-code/hooks/check-bash.mjs"
+command = "node ~/.tea-code/hooks/check-bash.mjs"
 timeout = 5
 ```
 
@@ -121,7 +121,7 @@ timeout = 5
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `type` | `string` | 是 | 供应商类型：`kimi`、`anthropic`、`openai`、`openai_responses`、`google-genai`、`vertexai` |
+| `type` | `string` | 是 | 供应商类型：`tea-code`、`anthropic`、`openai`、`openai_responses`、`google-genai`、`vertexai` |
 | `api_key` | `string` | 否 | API 密钥，明文写在配置文件里 |
 | `base_url` | `string` | 否 | API 基础 URL |
 | `oauth` | `table` | 否 | OAuth 凭据引用（`storage`、`key` 两个字段），由登录流程自动注入，通常无需手写 |
@@ -302,7 +302,7 @@ k3-max = "同一模型的 max Thinking 档位。适合最难的子任务。"
 | --- | --- | --- | --- |
 | `enabled` | `boolean` | `true` | 新会话是否默认开启 Thinking，设为 `false` 可强制关闭 |
 | `effort` | `string` | — | Thinking 强度：`low`/`medium`/`high`/`xhigh`/`max`；不在模型支持列表时回落默认档 |
-| `keep` | `string` | `"all"` | 保留思考透传；`kimi` 以 `thinking.keep` 发送，`anthropic` 以 `clear_thinking_20251015` 编辑发送（走 beta API）；关值可禁用；Thinking 开启时注入，可被同名环境变量覆盖 |
+| `keep` | `string` | `"all"` | 保留思考透传；`tea-code` 以 `thinking.keep` 发送，`anthropic` 以 `clear_thinking_20251015` 编辑发送（走 beta API）；关值可禁用；Thinking 开启时注入，可被同名环境变量覆盖 |
 
 <details><summary>已废弃字段</summary>
 
@@ -356,7 +356,7 @@ k3-max = "同一模型的 max Thinking 档位。适合最难的子任务。"
 
 `keep_alive_on_exit` 可被环境变量 `KIMI_CODE_BACKGROUND_KEEP_ALIVE_ON_EXIT` 覆盖，`max_running_tasks` 可被 `KIMI_CODE_BACKGROUND_MAX_RUNNING_TASKS` 覆盖，优先级均高于配置文件。
 
-在 print 模式（`kimi -p "<prompt>"`）下，只要还有未决的后台任务，Kimi Code 在 main agent 的 turn 结束后不会退出：每个任务完成都会以合成 user 消息回馈给 main agent，steer 出新的 turn（默认 `print_background_mode = "steer"`），直到某 turn 结束时没有任何未决任务才退出。该循环受 `print_wait_ceiling_s` 与 `print_max_turns` 约束，默认值都近似不设限。print 模式下后台工作也不会被墙钟超时杀掉：后台 `Bash` 任务默认无超时（`bash_task_timeout_s = 0`），subagent 默认无超时（`[subagent] timeout_ms` 与 `[swarm] timeout_ms` 未显式设置时均为 `0`），只有模型自己能停止任务。将 `print_background_mode` 设为 `"drain"` 可等待任务结束但不回馈结果，设为 `"exit"` 则在 main agent 结束后立即退出。
+在 print 模式（`tea-code -p "<prompt>"`）下，只要还有未决的后台任务，Kimi Code 在 main agent 的 turn 结束后不会退出：每个任务完成都会以合成 user 消息回馈给 main agent，steer 出新的 turn（默认 `print_background_mode = "steer"`），直到某 turn 结束时没有任何未决任务才退出。该循环受 `print_wait_ceiling_s` 与 `print_max_turns` 约束，默认值都近似不设限。print 模式下后台工作也不会被墙钟超时杀掉：后台 `Bash` 任务默认无超时（`bash_task_timeout_s = 0`），subagent 默认无超时（`[subagent] timeout_ms` 与 `[swarm] timeout_ms` 未显式设置时均为 `0`），只有模型自己能停止任务。将 `print_background_mode` 设为 `"drain"` 可等待任务结束但不回馈结果，设为 `"exit"` 则在 main agent 结束后立即退出。
 
 ## `subagent`
 
@@ -408,7 +408,7 @@ slug = "acme-dev"        # 可选
 
 身份在启动时解析一次，进程生命周期内保持不变：建立连接时它已宣告给 MCP 服务器和 provider，中途无法更换。修改本节配置在下次启动时对新会话生效；resume 的会话保留录制时的系统提示词，因为其历史轮次本就以原身份自称。同理，已完成的 MCP OAuth 授权保留其授予时的客户端注册；重置该服务器的认证即可在新身份下重新注册。
 
-本节由默认的 `agent-core-v2` 引擎读取。设置 `KIMI_CODE_LEGACY_FLAG=1` 后，旧版 `kimi` / `kimi -p` 路径会忽略此配置；`kimi web` 始终使用 `agent-core-v2`。
+本节由默认的 `agent-core-v2` 引擎读取。设置 `KIMI_CODE_LEGACY_FLAG=1` 后，旧版 `tea-code` / `tea-code -p` 路径会忽略此配置；`tea-code web` 始终使用 `agent-core-v2`。
 
 ## `tools`
 
@@ -508,12 +508,12 @@ pattern = "Bash"
 ```
 
 ::: tip
-MCP server 的声明配置写在 `~/.kimi-code/mcp.json` 或项目内 `.kimi-code/mcp.json` 中，不在 `config.toml` 里。交互式配置入口是 `/mcp-config`，详见 [Model Context Protocol](../customization/mcp.md)。
+MCP server 的声明配置写在 `~/.tea-code/mcp.json` 或项目内 `.kimi-code/mcp.json` 中，不在 `config.toml` 里。交互式配置入口是 `/mcp-config`，详见 [Model Context Protocol](../customization/mcp.md)。
 :::
 
 ## `tui.toml`
 
-除了 `config.toml`，CLI 还在同一目录下用一份配套的 `tui.toml` 保存终端界面与客户端偏好（`~/.kimi-code/tui.toml`，或覆盖后的 `$KIMI_CODE_HOME/tui.toml`）。它在首次运行时以默认值创建，交互式命令 `/config`、`/theme`、`/editor` 会自动写入，通常无需手动编辑。文件格式有误时，CLI 会回退到默认值并给出提示，而不是启动失败。
+除了 `config.toml`，CLI 还在同一目录下用一份配套的 `tui.toml` 保存终端界面与客户端偏好（`~/.tea-code/tui.toml`，或覆盖后的 `$TEA_CODE_HOME/tui.toml`）。它在首次运行时以默认值创建，交互式命令 `/config`、`/theme`、`/editor` 会自动写入，通常无需手动编辑。文件格式有误时，CLI 会回退到默认值并给出提示，而不是启动失败。
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
@@ -537,7 +537,7 @@ model、cwd、git 分支、permission 模式、plan 模式、上下文用量、s
 </details>
 
 ```toml
-# ~/.kimi-code/tui.toml
+# ~/.tea-code/tui.toml
 theme = "auto" # "auto" | "dark" | "light" | 自定义主题名
 render_latex = true # false 表示消息中的 LaTeX 公式保留原始源码
 disable_paste_burst = false # true 表示禁用非 bracketed paste 的粘贴突发兜底
@@ -556,14 +556,14 @@ auto_install = true
 
 # [status_line]
 # items = ["mode", "goal", "model", "tasks", "cwd", "git", "tips"]
-# command = "~/.kimi-code/statusline.sh"
+# command = "~/.tea-code/statusline.sh"
 ```
 
 修改在下次启动时生效，或用 `/reload-tui` 立即生效（只重载 `tui.toml`）；`/reload` 会同时重载 `config.toml` 和 `tui.toml`。
 
 ## 项目级本地配置
 
-除了 `~/.kimi-code` 下的用户级文件，Kimi Code 还会读取位于 `<项目根目录>/.kimi-code/local.toml` 的项目级本地配置文件。它保存的是与某一个项目检出相关、通常不应与队友共享的设置。
+除了 `~/.tea-code` 下的用户级文件，Kimi Code 还会读取位于 `<项目根目录>/.kimi-code/local.toml` 的项目级本地配置文件。它保存的是与某一个项目检出相关、通常不应与队友共享的设置。
 
 该文件会在你通过 [`/add-dir`](../reference/slash-commands.md) 添加额外工作目录并选择记入项目时自动创建，通常无需手动编辑。
 
@@ -586,4 +586,4 @@ additional_dir = ["/absolute/path/to/shared"]
 
 - [平台与模型](./providers.md) — 各供应商类型（Kimi、Claude、OpenAI、Gemini）的接入示例
 - [配置覆盖](./overrides.md) — CLI 选项、配置文件、环境变量的优先级规则
-- [环境变量](./env-vars.md) — `KIMI_CODE_HOME` 等运行时变量的完整列表
+- [环境变量](./env-vars.md) — `TEA_CODE_HOME` 等运行时变量的完整列表

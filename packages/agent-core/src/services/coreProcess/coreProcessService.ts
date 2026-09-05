@@ -214,7 +214,7 @@ export class CoreProcessService extends Disposable implements ICoreProcessServic
    * paths KimiCore resolves internally. Mirrors `SDKRpcClient`'s default in
    * `packages/node-sdk/src/sdk-rpc-client.ts` so the daemon and the SDK
    * runtimes share OAuth credentials when both run against the same
-   * `~/.kimi-code`.
+   * `~/.tea-code`.
    *
    * `identity` is forwarded to the managed auth facade so token refreshes
    * carry the same `X-Msh-*` device headers as `_defaultKimiRequestHeaders`.

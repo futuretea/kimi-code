@@ -68,7 +68,7 @@ export async function resolveSkillRoots(
   const roots: SkillRoot[] = [];
   const mergeAllAvailableSkills = options.mergeAllAvailableSkills ?? true;
   const { userHomeDir, workDir } = options.paths;
-  const brandHomeDir = options.paths.brandHomeDir ?? path.join(userHomeDir, '.kimi-code');
+  const brandHomeDir = options.paths.brandHomeDir ?? path.join(userHomeDir, '.tea-code');
   const projectRoot = await findProjectRoot(workDir);
 
   if (options.explicitDirs !== undefined && options.explicitDirs.length > 0) {

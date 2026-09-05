@@ -1,15 +1,15 @@
-# `kimi acp` 子命令
+# `tea-code acp` 子命令
 
-`kimi acp` 把 Kimi Code CLI 切换到 **ACP (Agent Client Protocol)** 模式：在标准输入/输出上以 JSON-RPC 形式与 ACP 客户端（如 Zed、JetBrains AI Chat 等）对话，让 IDE 直接驱动 kimi 的会话、prompt 与工具调用。
+`tea-code acp` 把 Tea Code CLI 切换到 **ACP (Agent Client Protocol)** 模式：在标准输入/输出上以 JSON-RPC 形式与 ACP 客户端（如 Zed、JetBrains AI Chat 等）对话，让 IDE 直接驱动 kimi 的会话、prompt 与工具调用。
 
 ```sh
-kimi acp
+tea-code acp
 ```
 
-启动后命令不会打印任何 banner，立刻等待 ACP 客户端在 stdin 上发出 `initialize` 请求。日志会写到标准错误（以及 `~/.kimi-code/logs/` 下的诊断日志），所以 ACP 通道本身保持干净。
+启动后命令不会打印任何 banner，立刻等待 ACP 客户端在 stdin 上发出 `initialize` 请求。日志会写到标准错误（以及 `~/.tea-code/logs/` 下的诊断日志），所以 ACP 通道本身保持干净。
 
 ::: tip 谁会调用它？
-你通常不需要手动跑 `kimi acp`——这个命令是给 IDE 的子进程入口准备的。IDE 端的配置见[在 IDE 中使用](../guides/ides.md)。
+你通常不需要手动跑 `tea-code acp`——这个命令是给 IDE 的子进程入口准备的。IDE 端的配置见[在 IDE 中使用](../guides/ides.md)。
 :::
 
 ## 能力矩阵
@@ -42,7 +42,7 @@ kimi acp
 
 | 方法 | 状态 | 说明 |
 | --- | --- | --- |
-| `initialize` | 是 | 版本协商；返回 `agentInfo: { name: 'Kimi Code CLI', version }`、能力矩阵、`authMethods`（一等 `type:'terminal'` 加旧式 `_meta['terminal-auth']` 回退） |
+| `initialize` | 是 | 版本协商；返回 `agentInfo: { name: 'Tea Code CLI', version }`、能力矩阵、`authMethods`（一等 `type:'terminal'` 加旧式 `_meta['terminal-auth']` 回退） |
 | `authenticate` | 是 | 校验 `method_id='login'`；token 缺失返回 `authRequired (-32000)`，未知 id 返回 `invalidParams (-32602)` |
 | `logout` | 是 | 丢弃托管供应商的 token；后续受限调用会再次返回 `auth_required` |
 
@@ -94,4 +94,4 @@ ACP 客户端在 `session/new` 或 `session/load` 中提供 `mcpServers` 时，A
 ## 下一步
 
 - [在 IDE 中使用](../guides/ides.md) — Zed / JetBrains 配置步骤和故障排查
-- [kimi 命令参考](./kimi-command.md) — 完整子命令列表
+- [tea-code 命令参考](./kimi-command.md) — 完整子命令列表

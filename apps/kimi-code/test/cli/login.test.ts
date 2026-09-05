@@ -40,7 +40,7 @@ class ExitCalled extends Error {
   }
 }
 
-describe('kimi login', () => {
+describe('tea-code login', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let stderrSpy: ReturnType<typeof vi.spyOn>;
 

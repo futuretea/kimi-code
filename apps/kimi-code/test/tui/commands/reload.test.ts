@@ -20,7 +20,7 @@ import {
 } from '#/tui/utils/markdown-options';
 
 const tempDirs: string[] = [];
-const originalKimiCodeHome = process.env['KIMI_CODE_HOME'];
+const originalKimiCodeHome = process.env['TEA_CODE_HOME'];
 
 afterEach(async () => {
   setExperimentalFeatures([]);
@@ -28,9 +28,9 @@ afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
   }
   if (originalKimiCodeHome === undefined) {
-    delete process.env['KIMI_CODE_HOME'];
+    delete process.env['TEA_CODE_HOME'];
   } else {
-    process.env['KIMI_CODE_HOME'] = originalKimiCodeHome;
+    process.env['TEA_CODE_HOME'] = originalKimiCodeHome;
   }
 });
 
@@ -176,7 +176,7 @@ async function writeTuiConfig(text: string): Promise<void> {
   const dir = join(tmpdir(), `kimi-tui-reload-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   tempDirs.push(dir);
   await mkdir(dir, { recursive: true });
-  process.env['KIMI_CODE_HOME'] = dir;
+  process.env['TEA_CODE_HOME'] = dir;
   await writeFile(join(dir, 'tui.toml'), text, 'utf-8');
 }
 

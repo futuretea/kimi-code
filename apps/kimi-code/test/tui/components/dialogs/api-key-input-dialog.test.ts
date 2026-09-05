@@ -6,7 +6,7 @@ import { ApiKeyInputDialogComponent } from '#/tui/components/dialogs/api-key-inp
 describe('ApiKeyInputDialogComponent', () => {
   it('keeps every line within narrow widths', () => {
     const dialog = new ApiKeyInputDialogComponent(
-      'Kimi Code',
+      'Tea Code',
       ['Paste your API key below.', 'It will be stored locally.'],
       () => {},
     );

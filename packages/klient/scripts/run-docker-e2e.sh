@@ -93,8 +93,8 @@ read -r -d '' container_script <<'EOS' || true
 set -euo pipefail
 
 cd /workspace/kimi-code
-mkdir -p "${KIMI_CODE_HOME}/server" "${KIMI_SERVER_E2E_REPORT_DIR}" "${TMPDIR}" /data/server-e2e-reports/docker
-rm -f "${KIMI_CODE_HOME}/server/lock"
+mkdir -p "${TEA_CODE_HOME}/server" "${KIMI_SERVER_E2E_REPORT_DIR}" "${TMPDIR}" /data/server-e2e-reports/docker
+rm -f "${TEA_CODE_HOME}/server/lock"
 
 if [[ ! -e /workspace/kimi-code/node_modules/.modules.yaml || ! -e /workspace/kimi-code/packages/klient/node_modules/ws ]]; then
   echo "[server-e2e:docker] installing pnpm deps"
@@ -157,7 +157,7 @@ docker_args=(
   --init
   --name "${CONTAINER}"
   --workdir /workspace/kimi-code/packages/klient
-  --env "KIMI_CODE_HOME=${KIMI_HOME_CONTAINER}"
+  --env "TEA_CODE_HOME=${KIMI_HOME_CONTAINER}"
   --env "KIMI_SERVER_E2E_PORT=${PORT}"
   --env "KIMI_SERVER_URL=http://127.0.0.1:${PORT}"
   --env "KIMI_SERVER_E2E_REPORT_DIR=${REPORT_DIR_CONTAINER}"

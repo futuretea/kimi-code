@@ -13,13 +13,13 @@ describe('bootstrap path helpers', () => {
     });
 
     it('falls back to KIMI_CODE_HOME env', () => {
-      const prev = process.env['KIMI_CODE_HOME'];
-      process.env['KIMI_CODE_HOME'] = '/env/kimi';
+      const prev = process.env['TEA_CODE_HOME'];
+      process.env['TEA_CODE_HOME'] = '/env/kimi';
       try {
         expect(resolveKimiHome()).toBe('/env/kimi');
       } finally {
-        if (prev === undefined) delete process.env['KIMI_CODE_HOME'];
-        else process.env['KIMI_CODE_HOME'] = prev;
+        if (prev === undefined) delete process.env['TEA_CODE_HOME'];
+        else process.env['TEA_CODE_HOME'] = prev;
       }
     });
   });

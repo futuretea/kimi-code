@@ -26,7 +26,7 @@ class ExitCalled extends Error {
   }
 }
 
-describe('kimi acp', () => {
+describe('tea-code acp', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let stderrSpy: ReturnType<typeof vi.spyOn>;
 
@@ -64,15 +64,20 @@ describe('kimi acp', () => {
     expect(optsArg).toEqual(
       expect.objectContaining({
         homeDir: getDataDir(),
-        agentInfo: { name: 'Kimi Code CLI', version: expect.any(String) },
+        agentInfo: { name: 'Tea Code CLI', version: '0.4.0' },
+        hostIdentity: {
+          productName: 'kimi-code-cli',
+          version: '0.41.0',
+          platform: 'kimi_code_cli',
+        },
       }),
     );
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
   it('forwards KIMI_CODE_HOME to terminalAuthEnv and homeDir when set', async () => {
-    const previous = process.env['KIMI_CODE_HOME'];
-    process.env['KIMI_CODE_HOME'] = '/tmp/kimi-debug';
+    const previous = process.env['TEA_CODE_HOME'];
+    process.env['TEA_CODE_HOME'] = '/tmp/kimi-debug';
     try {
       const program = new Command('kimi').exitOverride();
       registerAcpCommand(program);
@@ -83,21 +88,21 @@ describe('kimi acp', () => {
       expect(optsArg).toEqual(
         expect.objectContaining({
           homeDir: '/tmp/kimi-debug',
-          terminalAuthEnv: { KIMI_CODE_HOME: '/tmp/kimi-debug' },
+          terminalAuthEnv: { TEA_CODE_HOME: '/tmp/kimi-debug' },
         }),
       );
     } finally {
       if (previous === undefined) {
-        delete process.env['KIMI_CODE_HOME'];
+        delete process.env['TEA_CODE_HOME'];
       } else {
-        process.env['KIMI_CODE_HOME'] = previous;
+        process.env['TEA_CODE_HOME'] = previous;
       }
     }
   });
 
   it('omits terminalAuthEnv when KIMI_CODE_HOME is unset', async () => {
-    const previous = process.env['KIMI_CODE_HOME'];
-    delete process.env['KIMI_CODE_HOME'];
+    const previous = process.env['TEA_CODE_HOME'];
+    delete process.env['TEA_CODE_HOME'];
     try {
       const program = new Command('kimi').exitOverride();
       registerAcpCommand(program);
@@ -110,7 +115,7 @@ describe('kimi acp', () => {
       expect(optsArg.terminalAuthEnv).toBeUndefined();
     } finally {
       if (previous !== undefined) {
-        process.env['KIMI_CODE_HOME'] = previous;
+        process.env['TEA_CODE_HOME'] = previous;
       }
     }
   });

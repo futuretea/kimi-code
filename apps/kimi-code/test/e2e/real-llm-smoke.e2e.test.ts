@@ -42,7 +42,7 @@ describe.skipIf(!ENABLED)('SDK e2e — real LLM smoke', () => {
       );
 
       const harness = createKimiHarness({
-        identity: createKimiCodeHostIdentity(version),
+        identity: createKimiCodeHostIdentity(),
       });
 
       try {

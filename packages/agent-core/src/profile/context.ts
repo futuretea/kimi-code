@@ -77,7 +77,7 @@ async function loadAgentsMdForRoots(
   // The brand dir follows KIMI_CODE_HOME (default ~/.kimi-code); the generic
   // .agents dir stays under the real OS home so it can be shared across tools.
   const realHome = kaos.gethome();
-  const brandDir = brandHome ?? join(realHome, '.kimi-code');
+  const brandDir = brandHome ?? join(realHome, '.tea-code');
   await collect(join(brandDir, 'AGENTS.md'));
 
   // Generic user-level dir (.agents) matches skill discovery.

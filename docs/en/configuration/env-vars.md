@@ -1,6 +1,6 @@
 # Environment variables
 
-Kimi Code CLI uses environment variables to control a small number of runtime behaviors: relocating the data directory, turning off telemetry, and temporarily switching models without touching the config file.
+Tea Code CLI uses environment variables to control a small number of runtime behaviors: relocating the data directory, turning off telemetry, and temporarily switching models without touching the config file.
 
 ::: warning Important: API keys are not configured here
 Credential variables such as `KIMI_API_KEY`, `ANTHROPIC_API_KEY`, and `OPENAI_API_KEY` are **not** read automatically from shell environment variables. Running `export KIMI_API_KEY=xxx` in the terminal does not give any provider its key. They must be written in `config.toml` under `[providers.<name>]` or the `[providers.<name>.env]` sub-table.
@@ -12,15 +12,15 @@ For background, see [Config overrides: provider credentials](./overrides.md#prov
 
 ## Core paths
 
-### `KIMI_CODE_HOME`
+### `TEA_CODE_HOME`
 
-Overrides the data root directory; the default is `~/.kimi-code`. Once set, the config file, sessions, logs, OAuth credentials, and all other data land under the new path:
+Overrides the data root directory; the default is `~/.tea-code`. Once set, the config file, sessions, logs, OAuth credentials, and all other data land under the new path:
 
 ```sh
-export KIMI_CODE_HOME="/path/to/custom/kimi-code"
+export TEA_CODE_HOME="/path/to/custom/kimi-code"
 ```
 
-> Make sure the directory is writable. Multiple `kimi` instances sharing the same `KIMI_CODE_HOME` will share config and credential files.
+> Make sure the directory is writable. Multiple `tea-code` instances sharing the same `TEA_CODE_HOME` will share config and credential files.
 
 For the complete data directory structure, see [Data locations](./data-locations.md).
 
@@ -50,7 +50,7 @@ export KIMI_CODE_CUSTOM_HEADERS=$'X-Gateway-Cluster: my-cluster\nX-Custom-Tag: d
 
 The format mirrors `ANTHROPIC_CUSTOM_HEADERS`: newline-separated `Name: Value` lines. Names and values are trimmed, and lines without a colon are ignored.
 
-> Precedence: the Kimi identity headers (`User-Agent`, `X-Msh-*`) and a provider's `custom_headers` in `config.toml` (see [Config files](./config-files.md#providers)) override same-named entries here. Authentication is protocol-dependent: on the `kimi`, `openai`, and `openai_responses` protocols an exact `Authorization` entry replaces the generated bearer token, while `/models` listing requests keep their own authentication. A case variant such as `authorization` is never treated as the same name. It merges with the real header, which can break requests. Do not use this variable for authentication or other reserved headers. Use `custom_headers` when headers need to differ per provider.
+> Precedence: the Kimi identity headers (`User-Agent`, `X-Msh-*`) and a provider's `custom_headers` in `config.toml` (see [Config files](./config-files.md#providers)) override same-named entries here. Authentication is protocol-dependent: on the `tea-code`, `openai`, and `openai_responses` protocols an exact `Authorization` entry replaces the generated bearer token, while `/models` listing requests keep their own authentication. A case variant such as `authorization` is never treated as the same name. It merges with the real header, which can break requests. Do not use this variable for authentication or other reserved headers. Use `custom_headers` when headers need to differ per provider.
 
 ## Provider credential key names (written in config.toml)
 
@@ -109,7 +109,7 @@ export KIMI_MODEL_API_KEY="YOUR_API_KEY"
 export KIMI_MODEL_BASE_URL="https://api.example.com/v1"
 export KIMI_MODEL_MAX_CONTEXT_SIZE="262144"
 export KIMI_MODEL_CAPABILITIES="image_in,thinking"
-kimi
+tea-code
 ```
 
 Complete variable list:
@@ -118,7 +118,7 @@ Complete variable list:
 | --- | --- | --- | --- |
 | `KIMI_MODEL_NAME` | Yes (also the enable switch) | Model id sent to the API | — |
 | `KIMI_MODEL_API_KEY` | Yes | API key | — |
-| `KIMI_MODEL_PROVIDER_TYPE` | No | Provider type: `kimi`, `anthropic`, `openai` | `kimi` |
+| `KIMI_MODEL_PROVIDER_TYPE` | No | Provider type: `tea-code`, `anthropic`, `openai` | `tea-code` |
 | `KIMI_MODEL_BASE_URL` | No | API base URL | Each type has its own default |
 | `KIMI_MODEL_MAX_CONTEXT_SIZE` | No | Maximum context length (tokens) | `262144` (256 K) |
 | `KIMI_MODEL_CAPABILITIES` | No | Comma-separated capability tags, unioned with auto-detected capabilities | `image_in,thinking` |
@@ -137,7 +137,7 @@ Switches that control the behavior of subsystems such as telemetry, background t
 | Variable | Purpose | Valid values |
 | --- | --- | --- |
 | `KIMI_DISABLE_TELEMETRY` | Disable anonymous telemetry reporting | `1`, `true`, `yes`, `y` (case-insensitive) |
-| `KIMI_CODE_PASSWORD` | Parallel auth credential for `kimi web`, recommended when binding beyond loopback (see [Security notes](../guides/web.md#security-notes)) | Any non-empty string; when unset, only the token is valid |
+| `KIMI_CODE_PASSWORD` | Parallel auth credential for `tea-code web`, recommended when binding beyond loopback (see [Security notes](../guides/web.md#security-notes)) | Any non-empty string; when unset, only the token is valid |
 | `KIMI_CODE_BACKGROUND_KEEP_ALIVE_ON_EXIT` | Keep background tasks when the session closes; higher priority than `config.toml` (default: stop them on exit) | Truthy: `1`/`true`/`yes`/`on`; falsy: `0`/`false`/`no`/`off` |
 | `KIMI_CODE_BACKGROUND_MAX_RUNNING_TASKS` | Cap on concurrently running background tasks; higher priority than `[background] max_running_tasks` (unset = no cap) | Positive integer; invalid values are ignored |
 | `KIMI_IMAGE_MAX_EDGE_PX` | Longest-edge ceiling (px) for image compression; higher priority than `[image] max_edge_px` (default `2000`) | Positive integer; invalid values are ignored |
@@ -163,17 +163,17 @@ Switches that control the behavior of subsystems such as telemetry, background t
 | `KIMI_WEB_FETCH_BASE_URL` | Web fetch (`FetchURL`) service API URL; higher priority than the config file; credentials not forwarded. Without an endpoint, signed-in users get the managed Kimi OAuth fetch service before direct local requests | Non-blank string; blank values are ignored |
 | `KIMI_WEB_FETCH_API_KEY` | Web fetch (`FetchURL`) service API key; replaces both the configured key and the OAuth credential | Non-blank string; blank values are ignored |
 | `KIMI_CODE_EXPERIMENTAL_FLAG` | Enable all registered experimental features for this process; does not select the agent engine | `1`, `true`, `yes`, `on` |
-| `KIMI_CODE_LEGACY_FLAG` | Legacy `agent-core` engine for `kimi`, `kimi -p`, `kimi doctor`, `kimi export`, and `kimi provider` (default: `agent-core-v2`) | `1`, `true`, `yes`, `on` |
+| `KIMI_CODE_LEGACY_FLAG` | Legacy `agent-core` engine for `tea-code`, `tea-code -p`, `tea-code doctor`, `tea-code export`, and `tea-code provider` (default: `agent-core-v2`) | `1`, `true`, `yes`, `on` |
 | `KIMI_SHELL_PATH` | Override the Git Bash path on Windows (used when auto-detection fails) | Absolute path |
-| `KIMI_MODEL_MAX_COMPLETION_TOKENS` | Hard cap on `max_completion_tokens` per LLM step; applies to the `kimi` provider only | Positive integer; `0` or negative disables clamping |
-| `KIMI_MODEL_TEMPERATURE` | Sampling temperature for every request; `kimi` provider only (global, independent of `KIMI_MODEL_NAME`) | Number, e.g. `0.3` |
-| `KIMI_MODEL_TOP_P` | Nucleus-sampling `top_p` for every request; `kimi` provider only (global) | Number, e.g. `0.95` |
-| `KIMI_MODEL_THINKING_EFFORT` | Force a thinking effort (`thinking.effort`), bypassing the model's declared `support_efforts`; `kimi` provider only | An effort value, e.g. `max` |
-| `KIMI_MODEL_THINKING_KEEP` | Preserved-thinking passthrough: `thinking.keep` on `kimi`, a `clear_thinking_20251015` edit on `anthropic`; overrides `[thinking] keep` | A value the API accepts, e.g. `all`; an off-value (`false`/`0`/`no`/`off`/`none`/`null`) disables it |
+| `KIMI_MODEL_MAX_COMPLETION_TOKENS` | Hard cap on `max_completion_tokens` per LLM step; applies to the `tea-code` provider only | Positive integer; `0` or negative disables clamping |
+| `KIMI_MODEL_TEMPERATURE` | Sampling temperature for every request; `tea-code` provider only (global, independent of `KIMI_MODEL_NAME`) | Number, e.g. `0.3` |
+| `KIMI_MODEL_TOP_P` | Nucleus-sampling `top_p` for every request; `tea-code` provider only (global) | Number, e.g. `0.95` |
+| `KIMI_MODEL_THINKING_EFFORT` | Force a thinking effort (`thinking.effort`), bypassing the model's declared `support_efforts`; `tea-code` provider only | An effort value, e.g. `max` |
+| `KIMI_MODEL_THINKING_KEEP` | Preserved-thinking passthrough: `thinking.keep` on `tea-code`, a `clear_thinking_20251015` edit on `anthropic`; overrides `[thinking] keep` | A value the API accepts, e.g. `all`; an off-value (`false`/`0`/`no`/`off`/`none`/`null`) disables it |
 | `KIMI_CODE_NO_AUTO_UPDATE` | Fully disable the update preflight: no check, background install, or prompt. Legacy alias `KIMI_CLI_NO_AUTO_UPDATE` also honored | Truthy: `1`/`true`/`yes`/`on` |
 | `KIMI_DISABLE_CRON` | Disable the scheduled-task tool (`CronCreate` rejects new schedules; existing tasks do not fire) | `1` to disable |
 
-The `KIMI_CODE_INFINITE_RETRY`, `KIMI_CODE_IDENTITY_*`, and `KIMI_CODE_BUILTIN_PRODUCT_SKILLS` variables are read by the default `agent-core-v2` engine. The legacy `kimi` / `kimi -p` path selected with `KIMI_CODE_LEGACY_FLAG=1` ignores them.
+The `KIMI_CODE_INFINITE_RETRY`, `KIMI_CODE_IDENTITY_*`, and `KIMI_CODE_BUILTIN_PRODUCT_SKILLS` variables are read by the default `agent-core-v2` engine. The legacy `tea-code` / `tea-code -p` path selected with `KIMI_CODE_LEGACY_FLAG=1` ignores them.
 
 ## Diagnostic logs
 
@@ -225,5 +225,5 @@ Stdio MCP servers that run as Node child processes honor `HTTP_PROXY` / `HTTPS_P
 ## Next steps
 
 - [Config overrides](./overrides.md) — how environment variables, CLI options, and the config file interact by priority
-- [Data locations](./data-locations.md) — directory structure affected by `KIMI_CODE_HOME`
+- [Data locations](./data-locations.md) — directory structure affected by `TEA_CODE_HOME`
 - [Providers and models](./providers.md) — full connection examples per provider type

@@ -66,13 +66,13 @@ describe('resolveBootstrapOptions', () => {
     expect(
       resolveBootstrapOptions({
         osHomeDir: '/b',
-        env: { KIMI_CODE_HOME: '/c' },
+        env: { TEA_CODE_HOME: '/c' },
         clientIdentity: stubClientIdentity,
       }).homeDir,
     ).toBe('/c');
     expect(
       resolveBootstrapOptions({ osHomeDir: '/b', env: {}, clientIdentity: stubClientIdentity }).homeDir,
-    ).toBe('/b/.kimi-code');
+    ).toBe('/b/.tea-code');
   });
 
   it('passes through an explicit clientIdentity', () => {

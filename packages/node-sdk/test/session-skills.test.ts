@@ -307,7 +307,7 @@ describe('Session skills', () => {
     const processHome = await makeTempDir(tempDirs, 'kimi-sdk-skills-process-home-');
     const workDir = await makeTempDir(tempDirs, 'kimi-sdk-skills-work-');
     vi.stubEnv('HOME', processHome);
-    vi.stubEnv('KIMI_CODE_HOME', homeDir);
+    vi.stubEnv('TEA_CODE_HOME', homeDir);
     await writeLegacyUserSkill(processHome, 'sdk-real-home-only', 'SDK real home skill');
     await writeBrandUserSkill(homeDir, 'sdk-sandbox-only', 'SDK sandbox skill');
     const harness = createKimiHarness({ identity: TEST_IDENTITY });
@@ -462,7 +462,7 @@ async function writeLegacyUserSkill(
   name: string,
   description: string,
 ): Promise<void> {
-  await writeSkillFile(join(userHomeDir, '.kimi-code', 'skills', name), name, description);
+  await writeSkillFile(join(userHomeDir, '.tea-code', 'skills', name), name, description);
 }
 
 async function writeBrandUserSkill(

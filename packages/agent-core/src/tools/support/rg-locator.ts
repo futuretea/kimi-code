@@ -132,9 +132,9 @@ function rgBaseUrl(): string {
 }
 
 function getShareDir(): string {
-  const override = process.env['KIMI_CODE_HOME'];
+  const override = process.env['TEA_CODE_HOME'];
   if (override !== undefined && override !== '') return override;
-  return join(homedir(), '.kimi-code');
+  return join(homedir(), '.tea-code');
 }
 
 function getVendorRgPath(_binName: string): string | undefined {

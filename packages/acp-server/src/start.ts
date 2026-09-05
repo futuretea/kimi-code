@@ -34,12 +34,14 @@ import {
   resolveConfigPath,
   resolveKimiHome,
   resolveLoggingConfig,
+  type BootstrapInput,
   type Scope,
   type ScopeSeed,
   sessionMediaOriginalsDir,
 } from '@moonshot-ai/agent-core-v2';
 import type { Klient } from '@moonshot-ai/klient';
 import { createKlient } from '@moonshot-ai/klient/memory';
+import { createKimiDefaultHeaders } from '@moonshot-ai/kimi-code-oauth';
 
 import { acpClientFromContext } from './acp-client';
 // Importing the `acp-fs` barrel also registers the ACP-backed Session-scope
@@ -51,6 +53,8 @@ import { AcpRuntimeProviderFactory } from './acp-terminal';
 import { AcpServer, type AcpServerOptions, createAcpAgentApp } from './server';
 
 export interface RunAcpServerOptions extends AcpServerOptions {
+  /** Outbound service identity, independent of the editor-facing agentInfo. */
+  readonly hostIdentity?: BootstrapInput['clientIdentity'];
   readonly homeDir?: string;
   readonly configPath?: string;
   readonly input?: NodeJS.ReadableStream;
@@ -105,19 +109,21 @@ export async function runAcpServerWithStream(
   // `bootstrap()` seeds `IFileSystemStorageService` with a `FileStorageService`
   // rooted at `homeDir`, so session metadata, wire records, blobs, and the
   // session index all persist to disk. `clientIdentity` is required by the
-  // engine: reuse the advertised ACP `agentInfo` (the embedding CLI's
-  // name/version) with the CLI platform — the literal matches
-  // `KIMI_CODE_PLATFORM` from `@moonshot-ai/kimi-code-oauth`, which this
-  // package does not depend on.
+  // engine: use the host's outbound identity when supplied, otherwise reuse
+  // the advertised ACP `agentInfo` with the CLI platform — the literal matches
+  // `KIMI_CODE_PLATFORM` from `@moonshot-ai/kimi-code-oauth`.
   const { app: core } = bootstrap(
     {
       homeDir,
       configPath,
-      clientIdentity: {
+      clientIdentity: opts.hostIdentity ?? {
         productName: opts.agentInfo?.name ?? 'kimi-code-acp',
         version: opts.agentInfo?.version ?? '0.0.0',
         platform: 'kimi_code_cli',
       },
+      args: opts.hostIdentity === undefined
+        ? undefined
+        : { requestHeaders: createKimiDefaultHeaders({ homeDir, ...opts.hostIdentity }) },
     },
     [...logSeed(logging), ...(opts.extraSeeds ?? [])],
   );

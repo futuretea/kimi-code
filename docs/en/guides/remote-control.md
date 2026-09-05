@@ -1,6 +1,6 @@
 # Remote Control
 
-Start Kimi Code CLI with remote control enabled by running `kimi rc` in a terminal — it generates a link that can remotely control this machine. Scan the QR code with your phone to open the link, or visit it directly on another device. After opening the link, log in with the same Kimi account as in your local Kimi Code CLI to check on task progress, handle approvals, continue conversations, or start new sessions. Tasks always run on your machine — the web page is just a remote window.
+Start Tea Code CLI with remote control enabled by running `tea-code rc` in a terminal — it generates a link that can remotely control this machine. Scan the QR code with your phone to open the link, or visit it directly on another device. After opening the link, log in with the same Kimi account as in your local Tea Code CLI to check on task progress, handle approvals, continue conversations, or start new sessions. Tasks always run on your machine — the web page is just a remote window.
 
 > Remote Control is currently an experimental feature and requires an environment variable to enable; the interface and behavior are subject to the final release.
 
@@ -10,7 +10,7 @@ Start Kimi Code CLI with remote control enabled by running `kimi rc` in a termin
 
 Before turning on Remote Control, make sure your machine meets the following conditions:
 
-- **Kimi Code CLI installed**: see [Getting started](../guides/getting-started.md)
+- **Tea Code CLI installed**: see [Getting started](../guides/getting-started.md)
 - **Logged in to your Kimi account with a paid membership**: Remote Control requires a paid membership and is not available to free users
 - **Machine stays awake and online**: Remote Control depends on a persistent connection between your machine and the Kimi service; remote sessions are unavailable after shutdown, sleep, or network loss
 - **Experimental flag enabled**: set the environment variable with `export` (or use `KIMI_CODE_EXPERIMENTAL_FLAG=1` to enable all experimental features):
@@ -31,13 +31,13 @@ Before turning on Remote Control, make sure your machine meets the following con
 
 Start it on your machine in any of the following ways — they are equivalent: each starts a foreground process and prints the remote access info.
 
-- **`kimi rc`** (alias `kimi remote`): start Remote Control directly
-- **`kimi web --remote-control`**: equivalent to `kimi rc` — starts the local web interface and exposes it to the public internet at the same time
+- **`tea-code rc`** (alias `tea-code remote`): start Remote Control directly
+- **`tea-code web --remote-control`**: equivalent to `tea-code rc` — starts the local web interface and exposes it to the public internet at the same time
 - **`/remote-control`** (alias `/rc`): use while already in a CLI session to hand the current session over to the remote interface
 
 Once started, the terminal prints the access URL (like `https://code-rc.kimi.com/devices/<device ID>/`), a QR code, and the device name (the machine's hostname), and the default browser opens the URL automatically (use `--no-open` to skip). Besides the terminal rendering, the QR code is also saved as a PNG file (the path is printed in the startup output) — if the QR code doesn't render properly in your terminal, open that file instead.
 
-![Terminal output after starting kimi rc: QR code and connection status](../../media/kimi-rc-banner.jpg)
+![Terminal output after starting tea-code rc: QR code and connection status](../../media/kimi-rc-banner.jpg)
 
 ::: warning Note
 The Remote Control link is a remote control entry point to this machine — anyone who has it may control your sessions and files. Do not share it with others or post it anywhere public.
@@ -65,10 +65,10 @@ Each account currently supports up to about **3 devices**.
 Remote Control is a foreground process; how you stop it depends on whether you can find the terminal that started it:
 
 - **The terminal is still there**: press `Ctrl+C` in that terminal (or just close the window) — the device immediately goes offline from the remote list
-- **Can't find the terminal**: the single-instance lock file `~/.kimi-code/server/rc.json` records the process pid and the link in use (the error from starting a second instance prints both as well) — run `kill <pid>`
+- **Can't find the terminal**: the single-instance lock file `~/.tea-code/server/rc.json` records the process pid and the link in use (the error from starting a second instance prints both as well) — run `kill <pid>`
 - **The process already died** (power loss, crash, …): the stale lock file is cleaned up automatically on the next start — nothing to delete by hand
 
-To start a fresh instance, stop the old one in any of the ways above and run `kimi rc` again — there is no dedicated restart command. The device ID is derived from the machine's data directory, so the device and its access URL stay the same. The web-side device management and revocation UI is subject to the final release.
+To start a fresh instance, stop the old one in any of the ways above and run `tea-code rc` again — there is no dedicated restart command. The device ID is derived from the machine's data directory, so the device and its access URL stay the same. The web-side device management and revocation UI is subject to the final release.
 
 ## What you can do in a remote session
 
@@ -110,7 +110,7 @@ Remote Control is only a remote window — all computation and file operations s
 | | Kimi Code Web | Remote Control |
 | --- | --- | --- |
 | Access scope | `localhost`, or the LAN with `--host` | Any device on the public internet (via the Kimi relay) |
-| How to start | Run `kimi web` in a terminal | `kimi rc`, `kimi web --remote-control`, or `/remote-control` in the CLI |
+| How to start | Run `tea-code web` in a terminal | `tea-code rc`, `tea-code web --remote-control`, or `/remote-control` in the CLI |
 | Authentication | Local token | Log in with the same Kimi account |
 | Where data and execution live | Your machine | Your machine (the web page is just a remote window) |
 | Typical scenario | GUI in a local browser | Following up remotely from a phone, tablet, or another computer |

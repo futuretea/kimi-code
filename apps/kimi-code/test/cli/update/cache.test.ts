@@ -19,7 +19,7 @@ let dir: string;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'kimi-update-cache-'));
-  process.env['KIMI_CODE_HOME'] = dir;
+  process.env['TEA_CODE_HOME'] = dir;
 });
 
 afterEach(() => {
@@ -43,7 +43,7 @@ describe('update cache', () => {
     writeFileSync(
       getUpdateStateFile(),
       JSON.stringify({
-        packageName: '@moonshot-ai/kimi-code',
+        packageName: '@futuretea/tea-code',
         checkedAt: '2026-04-23T08:00:00.000Z',
         distTags: { beta: '0.0.1-beta.1' },
       }),

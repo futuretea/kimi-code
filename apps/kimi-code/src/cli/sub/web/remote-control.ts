@@ -12,7 +12,7 @@ import {
 import { WebSocket, type RawData } from 'ws';
 import chalk from 'chalk';
 
-import { getVersion } from '../../version';
+import { getUpstreamVersion, getVersion } from '../../version';
 import { darkColors } from '../../../tui/theme/colors';
 import { supportsHyperlinks, toTerminalHyperlink } from '../../../utils/terminal-hyperlink';
 import { acquireRemoteControlLock } from './remote-control-lock';
@@ -144,8 +144,8 @@ export function formatRemoteControlOutput(options: RemoteControlOutputOptions): 
   const feedback = toTerminalHyperlink('feedback', 'https://kimi.com/code/feedback');
   return [
     '',
-    `  ${title('Kimi Remote Control ready')}  ${muted(`${getVersion()} (experimental)`)}`,
-    `  ${muted('Use Kimi Code on this machine from your phone or another computer.')}`,
+    `  ${title('Tea Code Remote Control ready')}  ${muted(`${getVersion()} (experimental)`)}`,
+    `  ${muted('Use Tea Code on this machine from your phone or another computer.')}`,
     '',
     `  ${label('1.')} Scan the QR code, or open ${link(options.url)}`,
     `  ${label('2.')} Log in with your Kimi account`,
@@ -298,7 +298,7 @@ export async function startRemoteControl(
     resolveKimiTokenStorageName({ providerName: KIMI_CODE_PROVIDER_NAME }),
   );
   if (token?.refreshToken === undefined || token.refreshToken.length === 0) {
-    throw new Error('Remote Control requires a Kimi login. Run `kimi login` first.');
+    throw new Error('Remote Control requires a Kimi login. Run `tea-code login` first.');
   }
   const relayOrigin = options.relayOrigin ?? resolveRemoteControlRelayOrigin();
   const deviceId = createKimiDeviceId(options.homeDir);
@@ -447,7 +447,7 @@ class RemoteControlClient {
           device_id: this.deviceId,
           alias: hostname(),
           platform: platform(),
-          client_version: `kimi-code/${getVersion()}`,
+          client_version: `kimi-code/${getUpstreamVersion()}`,
           local_base_url: this.localOrigin,
         },
       }),

@@ -31,7 +31,6 @@ import { runPrompt } from './cli/run-prompt';
 import { runShell } from './cli/run-shell';
 import { formatStartupError } from './cli/startup-error';
 import { runPluginNodeEntry } from './cli/sub/plugin-run-node';
-import { runUpdateDownloadCommand } from './cli/sub/update-download';
 import { handleUpgrade } from './cli/sub/upgrade';
 import { createCliTelemetryBootstrap, initializeCliTelemetry } from './cli/telemetry';
 import { runUpdatePreflight } from './cli/update/preflight';
@@ -123,7 +122,7 @@ export async function handleUpgradeCommand(version: string): Promise<void> {
   };
   const harness = createKimiHarness({
     homeDir: telemetryBootstrap.homeDir,
-    identity: createKimiCodeHostIdentity(version),
+    identity: createKimiCodeHostIdentity(),
     telemetry: telemetryClient,
   });
   let exitCode = 1;
@@ -283,17 +282,7 @@ function bootstrap(): void {
         process.exit(1);
       });
     },
-    (targetVersion, manual) => {
-      void runUpdateDownloadCommand(targetVersion, manual).then(
-        (code) => {
-          process.exit(code);
-        },
-        async (error: unknown) => {
-          await logStartupFailure('download update', error);
-          process.exit(1);
-        },
-      );
-    },
+
   );
 
   program.parse(process.argv);

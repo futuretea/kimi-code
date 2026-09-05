@@ -1,6 +1,6 @@
 # Server API
 
-The local server started by `kimi web` exposes two programmatic surfaces: a REST API (`/api/v1`, plus `/api/v2/sessions` and `/api/v2/mcp`) and a WebSocket event stream (`/api/v1/ws`). This page is the protocol reference for both. For how to start the server and its command-line options, see the [kimi command](./kimi-command.md#kimi-web) reference; for an end-to-end walkthrough, see [Drive a session over the API](#drive-a-session-over-the-api) below.
+The local server started by `tea-code web` exposes two programmatic surfaces: a REST API (`/api/v1`, plus `/api/v2/sessions` and `/api/v2/mcp`) and a WebSocket event stream (`/api/v1/ws`). This page is the protocol reference for both. For how to start the server and its command-line options, see the [tea-code command](./kimi-command.md#tea-code-web) reference; for an end-to-end walkthrough, see [Drive a session over the API](#drive-a-session-over-the-api) below.
 
 This page is a curated, human-readable reference: it documents every endpoint's parameters, request bodies, and response shapes below. The precise machine-readable schema of every endpoint is owned by the server's live specification documents: `GET /openapi.json` (OpenAPI) and `GET /asyncapi.json` (AsyncAPI), both generated from the same validation schemas the server enforces at runtime. Both require authentication; when this page and the live spec ever disagree, the live spec wins.
 
@@ -12,7 +12,7 @@ The REST and WebSocket APIs described on this page are experimental: interface s
 
 ### Address
 
-The default address is `http://127.0.0.1:58627`. When the port is taken, the server retries with the next port (up to 100 times); use `--port` / `--host` to change the bind. Multiple instances can coexist under the same home directory; running instances register under `~/.kimi-code/server/instances/`.
+The default address is `http://127.0.0.1:58627`. When the port is taken, the server retries with the next port (up to 100 times); use `--port` / `--host` to change the bind. Multiple instances can coexist under the same home directory; running instances register under `~/.tea-code/server/instances/`.
 
 ### Authentication
 
@@ -385,7 +385,7 @@ On success, `data.items` is an array of:
 | Field | Type | Description |
 | --- | --- | --- |
 | `id` | string | Provider id |
-| `type` | string | Wire protocol: `kimi` / `openai` / `openai_responses` / `anthropic` / `google-genai` / `vertexai` |
+| `type` | string | Wire protocol: `tea-code` / `openai` / `openai_responses` / `anthropic` / `google-genai` / `vertexai` |
 | `base_url` | string | API base URL, when set |
 | `default_model` | string | The provider's default model alias, when set |
 | `has_api_key` | boolean | Whether a credential is stored |
@@ -399,7 +399,7 @@ Creates a provider and its model aliases in one save; the reply is HTTP 201 with
 | Parameter | In | Type | Description |
 | --- | --- | --- | --- |
 | `id` | body | string | **Required.** Provider id — letters, digits, `-`, `_`, and spaces; must start with a letter or digit |
-| `type` | body | string | **Required.** Wire protocol: `kimi` / `openai` / `openai_responses` / `anthropic` / `google-genai` / `vertexai` |
+| `type` | body | string | **Required.** Wire protocol: `tea-code` / `openai` / `openai_responses` / `anthropic` / `google-genai` / `vertexai` |
 | `api_key` | body | string | API key, stored in `config.toml` |
 | `base_url` | body | string | API base URL; must not contain an environment variable placeholder (`${...}`) |
 | `default_model` | body | string | The provider's default model; must be one of `models[].model` |
@@ -441,7 +441,7 @@ Replaces a provider in one save: `type`, `base_url`, and the model list are rewr
 | --- | --- | --- | --- |
 | `provider_id` | path | string | **Required.** Current provider id |
 | `new_id` | body | string | Rename the provider; the providers key, model aliases, `default_provider`, a `default_model` pointing at an old alias, and the subagent secondary-model pool all migrate. Same id rules as `POST /api/v1/providers` |
-| `type` | body | string | **Required.** Wire protocol: `kimi` / `openai` / `openai_responses` / `anthropic` / `google-genai` / `vertexai` |
+| `type` | body | string | **Required.** Wire protocol: `tea-code` / `openai` / `openai_responses` / `anthropic` / `google-genai` / `vertexai` |
 | `api_key` | body | string | Tri-state, see above |
 | `base_url` | body | string | API base URL; must not contain an environment variable placeholder (`${...}`) |
 | `default_model` | body | string | The provider's default model; must be one of `models[].model` |
@@ -2413,4 +2413,4 @@ Error semantics differ as well: `GET /api/v1/files/{file_id}` answers lookup and
 ## Next steps
 
 - [Using Kimi Code in the browser](../guides/web.md) — start the server and use Kimi Code in a browser
-- [kimi command](./kimi-command.md#kimi-web) — all `kimi web` command-line options
+- [tea-code command](./kimi-command.md#tea-code-web) — all `tea-code web` command-line options

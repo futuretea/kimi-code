@@ -68,10 +68,10 @@ const versionOutput = await runKimi(['--version']);
 assertIncludes(versionOutput, expectedVersion, '--version');
 
 const helpOutput = await runKimi(['--help']);
-assertIncludes(helpOutput, 'Usage: kimi', '--help');
+assertIncludes(helpOutput, 'Usage: tea-code', '--help');
 
 const exportHelpOutput = await runKimi(['export', '--help']);
-assertIncludes(exportHelpOutput, 'Usage: kimi export', 'export --help');
+assertIncludes(exportHelpOutput, 'Usage: tea-code export', 'export --help');
 
 const smokeCache = resolve(smokeHome, 'cache');
 await rm(smokeHome, { recursive: true, force: true });
@@ -79,7 +79,7 @@ await mkdir(smokeCache, { recursive: true });
 try {
   const nativeAssetOutput = await runKimiWithEnv(['--version'], {
     KIMI_CODE_CACHE_DIR: smokeCache,
-    KIMI_CODE_HOME: smokeHome,
+    TEA_CODE_HOME: smokeHome,
     KIMI_CODE_NATIVE_ASSET_SMOKE: '1',
   });
   assertIncludes(nativeAssetOutput, `Native asset smoke passed: ${target}`, 'native asset smoke');

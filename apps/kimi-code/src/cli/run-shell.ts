@@ -66,7 +66,7 @@ export async function runShell(
   };
   const harnessOptions: KimiHarnessOptions = {
     homeDir: telemetryBootstrap.homeDir,
-    identity: createKimiCodeHostIdentity(version),
+    identity: createKimiCodeHostIdentity(),
     skillDirs: opts.skillsDirs,
     telemetry: telemetryClient,
     onOAuthRefresh: (outcome) => {
@@ -102,7 +102,7 @@ export async function runShell(
   const sourceIsTarget = sameLegacyPath(legacySource.sourceHome, harness.homeDir);
   if (sourceIsTarget) {
     process.stderr.write(
-      `  KIMI_SHARE_DIR (${legacySource.sourceHome}) points at the Kimi Code home; legacy migration is disabled. Unset it or point it at the kimi-cli data directory to migrate.\n`,
+      `  KIMI_SHARE_DIR (${legacySource.sourceHome}) points at the Tea Code home; legacy migration is disabled. Unset it or point it at the kimi-cli data directory to migrate.\n`,
     );
   }
   const migrationPlan = sourceIsTarget
@@ -249,7 +249,7 @@ export async function runShell(
     process.stdout.write(`${gutter}Bye!\n`);
     const hints: string[] = [];
     if (sessionId !== '' && hasContent) {
-      hints.push(`${gutter}To resume this session: kimi -r ${sessionId}`);
+      hints.push(`${gutter}To resume this session: tea-code -r ${sessionId}`);
     }
     if (tui.exitOpenUrl !== undefined) {
       hints.push(`${gutter}open ${toTerminalHyperlink(tui.exitOpenUrl, tui.exitOpenUrl)}`);

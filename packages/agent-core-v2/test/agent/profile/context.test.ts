@@ -37,8 +37,8 @@ afterEach(async () => {
 
 describe('loadAgentsMd user-level discovery', () => {
   it('loads user-level branded and generic files before project-level', async () => {
-    await mkdir(join(homeDir, '.kimi-code'), { recursive: true });
-    await writeFile(join(homeDir, '.kimi-code', 'AGENTS.md'), 'user branded', 'utf-8');
+    await mkdir(join(homeDir, '.tea-code'), { recursive: true });
+    await writeFile(join(homeDir, '.tea-code', 'AGENTS.md'), 'user branded', 'utf-8');
     await mkdir(join(homeDir, '.agents'), { recursive: true });
     await writeFile(join(homeDir, '.agents', 'AGENTS.md'), 'user generic', 'utf-8');
     await writeFile(join(workDir, 'AGENTS.md'), 'project instructions', 'utf-8');
@@ -71,8 +71,8 @@ describe('loadAgentsMd user-level discovery', () => {
   });
 
   it('does not load the same file twice when the work dir is the home dir', async () => {
-    await mkdir(join(homeDir, '.kimi-code'), { recursive: true });
-    await writeFile(join(homeDir, '.kimi-code', 'AGENTS.md'), 'home branded', 'utf-8');
+    await mkdir(join(homeDir, '.tea-code'), { recursive: true });
+    await writeFile(join(homeDir, '.tea-code', 'AGENTS.md'), 'home branded', 'utf-8');
 
     const result = await loadAgentsMd({ fs, homeDir }, homeDir);
 
@@ -89,8 +89,8 @@ describe('loadAgentsMd symlinked files', () => {
     await writeFile(brandTarget, 'brand via symlink', 'utf-8');
     await writeFile(projectTarget, 'project via symlink', 'utf-8');
 
-    await mkdir(join(homeDir, '.kimi-code'), { recursive: true });
-    await symlink(brandTarget, join(homeDir, '.kimi-code', 'AGENTS.md'));
+    await mkdir(join(homeDir, '.tea-code'), { recursive: true });
+    await symlink(brandTarget, join(homeDir, '.tea-code', 'AGENTS.md'));
     await symlink(projectTarget, join(workDir, 'AGENTS.md'));
 
     const result = await loadAgentsMd({ fs, homeDir }, workDir);
@@ -138,8 +138,8 @@ describe('loadAgentsMd brand home (KIMI_CODE_HOME)', () => {
 
   it('ignores the real-home .kimi-code/AGENTS.md when the brand home is elsewhere', async () => {
     await writeFile(join(brandHome, 'AGENTS.md'), 'brand wins', 'utf-8');
-    await mkdir(join(homeDir, '.kimi-code'), { recursive: true });
-    await writeFile(join(homeDir, '.kimi-code', 'AGENTS.md'), 'stale real-home brand', 'utf-8');
+    await mkdir(join(homeDir, '.tea-code'), { recursive: true });
+    await writeFile(join(homeDir, '.tea-code', 'AGENTS.md'), 'stale real-home brand', 'utf-8');
 
     const result = await loadAgentsMd({ fs, homeDir }, workDir, brandHome);
 
@@ -148,8 +148,8 @@ describe('loadAgentsMd brand home (KIMI_CODE_HOME)', () => {
   });
 
   it('falls back to the real-home .kimi-code/AGENTS.md when no brand home is given', async () => {
-    await mkdir(join(homeDir, '.kimi-code'), { recursive: true });
-    await writeFile(join(homeDir, '.kimi-code', 'AGENTS.md'), 'fallback branded', 'utf-8');
+    await mkdir(join(homeDir, '.tea-code'), { recursive: true });
+    await writeFile(join(homeDir, '.tea-code', 'AGENTS.md'), 'fallback branded', 'utf-8');
 
     const result = await loadAgentsMd({ fs, homeDir }, workDir);
 
@@ -276,8 +276,8 @@ describe('loadAgentsMdDetailed discovered paths', () => {
   });
 
   it('returns the normalized paths of every injected file in collection order', async () => {
-    await mkdir(join(homeDir, '.kimi-code'), { recursive: true });
-    await writeFile(join(homeDir, '.kimi-code', 'AGENTS.md'), 'user branded', 'utf-8');
+    await mkdir(join(homeDir, '.tea-code'), { recursive: true });
+    await writeFile(join(homeDir, '.tea-code', 'AGENTS.md'), 'user branded', 'utf-8');
     await mkdir(join(workDir, '.kimi-code'), { recursive: true });
     await writeFile(join(workDir, '.kimi-code', 'AGENTS.md'), 'dot kimi', 'utf-8');
     await writeFile(join(workDir, 'AGENTS.md'), 'project instructions', 'utf-8');
@@ -285,7 +285,7 @@ describe('loadAgentsMdDetailed discovered paths', () => {
     const result = await loadAgentsMdDetailed({ fs, homeDir }, workDir);
 
     expect(result.paths).toEqual([
-      normalize(join(homeDir, '.kimi-code', 'AGENTS.md')),
+      normalize(join(homeDir, '.tea-code', 'AGENTS.md')),
       normalize(join(workDir, '.kimi-code', 'AGENTS.md')),
       normalize(join(workDir, 'AGENTS.md')),
     ]);

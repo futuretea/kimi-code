@@ -14,7 +14,7 @@ export const SURVEY_CONFIG_REFRESH_INTERVAL_MS = 3_600_000;
 
 export const SURVEY_MIN_OPTIONS_WIDTH = 12;
 
-export const SURVEY_QUESTION = 'How is Kimi doing this session? (optional)';
+export const SURVEY_QUESTION = 'How is Tea Code doing this session? (optional)';
 
 export const SURVEY_OPTION_LABELS = ['1: Bad', '2: Fine', '3: Good', '0: Dismiss'] as const;
 

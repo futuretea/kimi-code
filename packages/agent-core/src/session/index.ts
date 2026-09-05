@@ -330,7 +330,7 @@ export class Session {
       options.agents?.catalog ??
       new SessionAgentProfileCatalog({
         workDir: options.kaos.getcwd(),
-        brandHomeDir: options.kimiHomeDir ?? join(homedir(), '.kimi-code'),
+        brandHomeDir: options.kimiHomeDir ?? join(homedir(), '.tea-code'),
         osHomeDir: options.agents?.userHomeDir ?? homedir(),
         extraDirs: options.agents?.extraDirs ?? options.config?.extraAgentDirs,
         explicitFiles: options.agents?.explicitFiles,

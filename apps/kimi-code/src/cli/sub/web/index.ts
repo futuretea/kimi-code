@@ -21,7 +21,7 @@ export function registerWebCommand(program: Command): void {
   const web = buildWebCommand(
     program
       .command('web')
-      .description('Run the local Kimi server and open the web UI.'),
+      .description('Run the local Tea Code server and open the web UI.'),
   );
   registerRotateTokenCommand(web);
   registerDeprecatedServerCommand(program);
@@ -29,7 +29,7 @@ export function registerWebCommand(program: Command): void {
     program
       .command('rc', { hidden: !isRemoteControlEnabled() })
       .alias('remote')
-      .description('Run the local Kimi server and open the web UI through Remote Control (experimental).'),
+      .description('Run the local Tea Code server and open the web UI through Remote Control (experimental).'),
     { forceRemoteControl: true },
   );
 }

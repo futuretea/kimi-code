@@ -232,7 +232,7 @@ describe('SurveyController gating', () => {
     await harness.flush();
     harness.appear();
 
-    expect(harness.renderSurvey()).toContain('How is Kimi doing this session? (optional)');
+    expect(harness.renderSurvey()).toContain('How is Tea Code doing this session? (optional)');
     expect(harness.renderSurvey()).toContain('1: Bad');
     expect(harness.track).toHaveBeenCalledTimes(1);
     expect(harness.track).toHaveBeenCalledWith('feedback_survey', {
@@ -420,7 +420,7 @@ describe('SurveyController long-context arm', () => {
     harness.controller.notifyTurnEnded();
     harness.elapse(2000);
 
-    expect(harness.renderSurvey()).toContain('How is Kimi doing this session? (optional)');
+    expect(harness.renderSurvey()).toContain('How is Tea Code doing this session? (optional)');
     expect(harness.track).toHaveBeenCalledTimes(1);
     expect(harness.track).toHaveBeenCalledWith('long_context_survey', {
       event_type: 'appeared',
@@ -774,7 +774,7 @@ describe('SurveyController interaction', () => {
     harness.typeDigit('1');
     harness.elapse(400);
     expect(harness.controller.handlePreInput(ESC)).toBe(true);
-    expect(harness.renderSurvey()).toContain('How is Kimi doing this session? (optional)');
+    expect(harness.renderSurvey()).toContain('How is Tea Code doing this session? (optional)');
     harness.elapse(3000);
     expect(harness.track).not.toHaveBeenCalled();
 
@@ -1307,7 +1307,7 @@ describe('SurveyController interaction', () => {
     expect(harness.controller.handlePreInput(ESC)).toBe(true);
     harness.elapse(3000);
     expect(harness.track).not.toHaveBeenCalled();
-    expect(harness.renderSurvey()).toContain('How is Kimi doing this session? (optional)');
+    expect(harness.renderSurvey()).toContain('How is Tea Code doing this session? (optional)');
   });
 
   it('does not open when the terminal is shorter than the survey needs', async () => {

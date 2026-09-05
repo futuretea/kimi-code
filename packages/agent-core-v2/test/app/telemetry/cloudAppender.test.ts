@@ -71,10 +71,10 @@ describe('CloudAppender', () => {
     homeDir = mkdtempSync(join(tmpdir(), 'cloud-appender-'));
     savedOauthHost = process.env['KIMI_CODE_OAUTH_HOST'];
     savedLegacyOauthHost = process.env['KIMI_OAUTH_HOST'];
-    savedKimiHome = process.env['KIMI_CODE_HOME'];
+    savedKimiHome = process.env['TEA_CODE_HOME'];
     delete process.env['KIMI_CODE_OAUTH_HOST'];
     delete process.env['KIMI_OAUTH_HOST'];
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
   });
 
   afterEach(() => {
@@ -83,8 +83,8 @@ describe('CloudAppender', () => {
     else process.env['KIMI_CODE_OAUTH_HOST'] = savedOauthHost;
     if (savedLegacyOauthHost === undefined) delete process.env['KIMI_OAUTH_HOST'];
     else process.env['KIMI_OAUTH_HOST'] = savedLegacyOauthHost;
-    if (savedKimiHome === undefined) delete process.env['KIMI_CODE_HOME'];
-    else process.env['KIMI_CODE_HOME'] = savedKimiHome;
+    if (savedKimiHome === undefined) delete process.env['TEA_CODE_HOME'];
+    else process.env['TEA_CODE_HOME'] = savedKimiHome;
   });
 
   it('sends a flattened, prefixed payload with user_id and context', async () => {

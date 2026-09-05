@@ -153,7 +153,7 @@ describe('McpServerRegistry', () => {
     });
     const env = (finance?.config as { env?: Record<string, string> }).env;
     expect(env).toMatchObject({
-      KIMI_CODE_HOME: home,
+      TEA_CODE_HOME: home,
       KIMI_PLUGIN_ROOT: managedRoot,
       KIMI_CODE_BASE_URL: 'https://managed.example.com',
     });

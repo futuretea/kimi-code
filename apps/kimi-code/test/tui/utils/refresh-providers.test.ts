@@ -56,7 +56,7 @@ describe('refreshAllProviderModels', () => {
     vi.unstubAllGlobals();
   });
 
-  it('refreshes managed Kimi Code against environment endpoints over persisted config', async () => {
+  it('refreshes managed Tea Code against environment endpoints over persisted config', async () => {
     const configuredBaseUrl = 'https://api.configured.example.test/coding/v1';
     const envBaseUrl = 'https://api.env.example.test/coding/v1';
     const envOauthHost = 'https://auth.env.example.test';

@@ -11,6 +11,7 @@ import { createKimiUserAgent, KIMI_CODE_PLATFORM, type KimiHostIdentity } from '
 
 import { CLI_USER_AGENT_PRODUCT } from '#/constant/app';
 
+import upstreamVersion from '../../UPSTREAM_VERSION?raw';
 import { KIMI_BUILD_INFO } from './build-info';
 
 const MODULE_DIR = import.meta.dirname;
@@ -47,10 +48,14 @@ export function getVersion(): string {
   return pkg.version;
 }
 
-export function createKimiCodeHostIdentity(version = getVersion()): KimiHostIdentity {
+export function getUpstreamVersion(): string {
+  return upstreamVersion.trim();
+}
+
+export function createKimiCodeHostIdentity(): KimiHostIdentity {
   return {
     productName: CLI_USER_AGENT_PRODUCT,
-    version,
+    version: getUpstreamVersion(),
     platform: KIMI_CODE_PLATFORM,
   };
 }
@@ -59,6 +64,6 @@ export function createKimiCodeHostIdentity(version = getVersion()): KimiHostIden
  * Product User-Agent (`kimi-code-cli/<version>`) for ad-hoc outbound fetches
  * that don't go through the provider pipeline (registry / catalog imports).
  */
-export function createKimiCodeUserAgent(version = getVersion()): string {
-  return createKimiUserAgent(createKimiCodeHostIdentity(version));
+export function createKimiCodeUserAgent(): string {
+  return createKimiUserAgent(createKimiCodeHostIdentity());
 }

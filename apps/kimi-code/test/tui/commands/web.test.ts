@@ -138,7 +138,7 @@ describe('handleWebCommand', () => {
       'http://127.0.0.1:58627/sessions/ses-1#token=tok-1',
     );
     const written = writeSpy.mock.calls.map((call) => String(call[0])).join('');
-    expect(written).toContain('Kimi server ready');
+    expect(written).toContain('Tea Code server ready');
     expect(written).toContain('Ctrl+C');
     expect(written).toContain('/sessions/ses-1');
     writeSpy.mockRestore();
@@ -235,7 +235,7 @@ describe('handleRemoteControlCommand', () => {
       );
       expect(mocks.openUrl).toHaveBeenCalledWith(sessionUrl);
       const written = writeSpy.mock.calls.map((call) => String(call[0])).join('');
-      expect(written).toContain('Kimi Remote Control ready');
+      expect(written).toContain('Tea Code Remote Control ready');
       expect(written).toContain(indentedQr(sessionUrl));
       expect(written).not.toContain(indentedQr(entryUrl));
       expect(isAbsolute(pngPath)).toBe(true);

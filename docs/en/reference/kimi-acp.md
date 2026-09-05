@@ -1,15 +1,15 @@
-# `kimi acp` Subcommand
+# `tea-code acp` Subcommand
 
-`kimi acp` switches Kimi Code CLI to **ACP (Agent Client Protocol)** mode: it communicates with an ACP client (such as Zed, JetBrains AI Chat, etc.) via JSON-RPC over stdin/stdout, letting the IDE directly drive kimi's sessions, prompts, and tool calls.
+`tea-code acp` switches Tea Code CLI to **ACP (Agent Client Protocol)** mode: it communicates with an ACP client (such as Zed, JetBrains AI Chat, etc.) via JSON-RPC over stdin/stdout, letting the IDE directly drive kimi's sessions, prompts, and tool calls.
 
 ```sh
-kimi acp
+tea-code acp
 ```
 
-Once started, the command prints no banner and immediately waits for the ACP client to send an `initialize` request on stdin. Logs are written to stderr (as well as the diagnostic log under `~/.kimi-code/logs/`), so the ACP channel itself stays clean.
+Once started, the command prints no banner and immediately waits for the ACP client to send an `initialize` request on stdin. Logs are written to stderr (as well as the diagnostic log under `~/.tea-code/logs/`), so the ACP channel itself stays clean.
 
 ::: tip Who calls this?
-You typically do not need to run `kimi acp` manually — this command is the subprocess entry point for IDEs. For IDE-side configuration, see [Using in IDEs](../guides/ides.md).
+You typically do not need to run `tea-code acp` manually — this command is the subprocess entry point for IDEs. For IDE-side configuration, see [Using in IDEs](../guides/ides.md).
 :::
 
 ## Capability matrix
@@ -42,7 +42,7 @@ With `@agentclientprotocol/sdk@1.x`, the ACP method set is organized by namespac
 
 | Method | Implemented | Description |
 | --- | --- | --- |
-| `initialize` | Yes | Version negotiation; returns `agentInfo: { name: 'Kimi Code CLI', version }`, capability matrix, and `authMethods` (first-class `type:'terminal'` plus the legacy `_meta['terminal-auth']` fallback) |
+| `initialize` | Yes | Version negotiation; returns `agentInfo: { name: 'Tea Code CLI', version }`, capability matrix, and `authMethods` (first-class `type:'terminal'` plus the legacy `_meta['terminal-auth']` fallback) |
 | `authenticate` | Yes | Validates `method_id='login'`; returns `authRequired (-32000)` if the token is missing, `invalidParams (-32602)` for an unknown ID |
 | `logout` | Yes | Drops the managed provider's token; subsequent gated calls return `auth_required` again |
 
@@ -94,4 +94,4 @@ When an ACP client provides `mcpServers` in `session/new` or `session/load`, the
 ## Next steps
 
 - [Using in IDEs](../guides/ides.md) — Zed / JetBrains configuration steps and troubleshooting
-- [`kimi` Command Reference](./kimi-command.md) — Complete subcommand list
+- [`tea-code` Command Reference](./kimi-command.md) — Complete subcommand list

@@ -458,7 +458,7 @@ describe('PluginManager', () => {
         'plugin-demo:finance': expect.objectContaining({
           command: 'finance-mcp',
           cwd: managedRoot,
-          env: expect.objectContaining({ KIMI_CODE_HOME: home, KIMI_PLUGIN_ROOT: managedRoot }),
+          env: expect.objectContaining({ TEA_CODE_HOME: home, KIMI_PLUGIN_ROOT: managedRoot }),
         }),
         'plugin-demo:docs': expect.objectContaining({
           url: 'https://example.com/mcp',
@@ -966,7 +966,7 @@ describe('PluginManager', () => {
         command: './hooks/guard.sh',
         timeout: 10,
         cwd: installedRoot,
-        env: { KIMI_CODE_HOME: home, KIMI_PLUGIN_ROOT: installedRoot },
+        env: { TEA_CODE_HOME: home, KIMI_PLUGIN_ROOT: installedRoot },
       },
     ]);
   });

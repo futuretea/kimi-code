@@ -57,9 +57,9 @@ describe('ModelSelectorComponent', () => {
 
     const out = text(picker);
     // Model name on the left, provider on the right, with the current marker.
-    expect(out).toMatch(/❯ Kimi K2\s+Kimi Code ← current/);
+    expect(out).toMatch(/❯ Kimi K2\s+Tea Code ← current/);
     // Provider is no longer inlined in parentheses next to the name.
-    expect(out).not.toContain('Kimi K2 (Kimi Code)');
+    expect(out).not.toContain('Kimi K2 (Tea Code)');
   });
 
   it('toggles thinking with Left/Right (not with "/")', () => {

@@ -81,7 +81,7 @@ function makeIo(): {
   };
 }
 
-describe('kimi web', () => {
+describe('tea-code web', () => {
   it('registers the `web` command with only the rotate-token subcommand', () => {
     const program = makeProgram();
     const web = program.commands.find((c) => c.name() === 'web');
@@ -118,7 +118,7 @@ describe('kimi web', () => {
     expect(longs).not.toContain('--allow-remote-terminals');
   });
 
-  it('routes `kimi server` and any legacy subcommand to a deprecation notice', async () => {
+  it('routes `tea-code server` and any legacy subcommand to a deprecation notice', async () => {
     for (const argv of [
       ['node', 'kimi', 'server'],
       ['node', 'kimi', 'server', 'run', '--port', '1'],
@@ -142,16 +142,16 @@ describe('kimi web', () => {
       exitSpy.mockRestore();
 
       expect(exitCalls).toEqual([1]);
-      expect(stderr).toContain('`kimi server` has been deprecated and no longer works.');
-      expect(stderr).toContain('kimi web');
-      expect(stderr).toContain('kimi server kill');
+      expect(stderr).toContain('`tea-code server` has been deprecated and no longer works.');
+      expect(stderr).toContain('tea-code web');
+      expect(stderr).toContain('tea-code server kill');
       expect(stderr).toContain('0.28.0');
       expect(stderr).toContain('next major version');
     }
   });
 });
 
-describe('`kimi web` ready banner', () => {
+describe('`tea-code web` ready banner', () => {
   it('prints the TUI-style ready panel once listening', async () => {
     const { handleWebCommand } = await import('#/cli/sub/web/run');
     // The runner reports the actual bound origin — the banner must take the
@@ -171,7 +171,7 @@ describe('`kimi web` ready banner', () => {
     );
 
     const plain = stripAnsi(readStdout());
-    expect(plain).toContain('Kimi server ready');
+    expect(plain).toContain('Tea Code server ready');
     expect(plain).toContain('Local:');
     expect(plain).toContain('http://127.0.0.1:58628/#token=tok');
     expect(plain).toContain('Token:');
@@ -188,10 +188,10 @@ describe('`kimi web` ready banner', () => {
     expect(plain).not.toContain('╰');
     expect(plain).toContain('▐█▛█▛█▌');
     expect(plain).toContain('▐█████▌');
-    expect(plain).not.toContain('Kimi server:');
+    expect(plain).not.toContain('Tea Code server:');
 
     // Title is above the URLs; Logs/Stop are at the bottom.
-    expect(plain.indexOf('Kimi server ready')).toBeLessThan(plain.indexOf('Local:'));
+    expect(plain.indexOf('Tea Code server ready')).toBeLessThan(plain.indexOf('Local:'));
     expect(plain.indexOf('Logs:')).toBeLessThan(plain.indexOf('Stop:'));
   });
 
@@ -214,7 +214,7 @@ describe('`kimi web` ready banner', () => {
     const out = readStdout();
     const color = new Chalk({ level: 3 });
     expect(out).toContain(color.hex(darkColors.primary)('▐█▛█▛█▌'));
-    expect(out).toContain(color.bold.hex(darkColors.primary)('Kimi server ready'));
+    expect(out).toContain(color.bold.hex(darkColors.primary)('Tea Code server ready'));
     expect(out).toContain(color.hex(darkColors.accent)('http://127.0.0.1:58627/'));
     expect(out).toContain(color.bold.hex(darkColors.textDim)('Local:    '));
     expect(out).toContain(color.hex(darkColors.textMuted)('off'));
@@ -297,7 +297,7 @@ describe('ready banner reflects the bind class', () => {
     );
 
     const raw = stripAnsi(readStdout());
-    expect(raw).toContain('Kimi server ready');
+    expect(raw).toContain('Tea Code server ready');
     expect(raw).toContain('Local:');
     expect(raw).toContain('Network:');
     // Full token-bearing URLs are printed plainly (no box, no truncation) so
@@ -329,7 +329,7 @@ describe('ready banner reflects the bind class', () => {
     );
 
     const raw = stripAnsi(readStdout());
-    expect(raw).toContain('Kimi server ready');
+    expect(raw).toContain('Tea Code server ready');
     expect(raw).toContain('Local:');
     expect(raw).toContain('http://127.0.0.1:58627/#token=tok-loop');
     expect(raw).toContain('Token:');
@@ -342,7 +342,7 @@ describe('ready banner reflects the bind class', () => {
   });
 });
 
-describe('`kimi web` opens the browser', () => {
+describe('`tea-code web` opens the browser', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     resetCapabilitiesCache();
@@ -505,7 +505,7 @@ describe('kimi rc', () => {
   });
 });
 
-describe('`kimi web` option threading', () => {
+describe('`tea-code web` option threading', () => {
   it('threads the CLI flags into the foreground runner options', async () => {
     const { handleWebCommand } = await import('#/cli/sub/web/run');
     const { runner, calls } = makeRunner();
@@ -637,8 +637,8 @@ describe('`kimi web` option threading', () => {
     );
 
     const plain = stripAnsi(readStdout());
-    expect(plain).toContain('Kimi server: http://127.0.0.1:58627/#token=tok');
-    expect(plain).not.toContain('Kimi server ready');
+    expect(plain).toContain('Tea Code server: http://127.0.0.1:58627/#token=tok');
+    expect(plain).not.toContain('Tea Code server ready');
     expect(plain).not.toContain('Local:');
   });
 
@@ -760,7 +760,7 @@ function makeLegacyKillDeps(overrides: Partial<LegacyKillDeps> = {}): {
   return { deps, writes, errors, signals, state, clock };
 }
 
-describe('`kimi server kill` (deprecated, legacy servers only)', () => {
+describe('`tea-code server kill` (deprecated, legacy servers only)', () => {
   const legacyLock = { pid: 1234, host: '127.0.0.1', port: 58627 };
 
   it('is registered as the only working subcommand of the deprecated `server` command', () => {
@@ -782,13 +782,13 @@ describe('`kimi server kill` (deprecated, legacy servers only)', () => {
     expect(notice).toContain('Ctrl+C');
   });
 
-  it('prints "No running legacy Kimi server." and sends no signal when no lock exists', async () => {
+  it('prints "No running legacy Tea Code server." and sends no signal when no lock exists', async () => {
     const { handleLegacyKillCommand } = await import('#/cli/sub/web/legacy-kill');
     const { deps, writes, signals } = makeLegacyKillDeps({ readLock: async () => undefined });
 
     await handleLegacyKillCommand(deps);
 
-    expect(writes.join('')).toContain('No running legacy Kimi server.');
+    expect(writes.join('')).toContain('No running legacy Tea Code server.');
     expect(signals).toEqual([]);
   });
 
@@ -801,7 +801,7 @@ describe('`kimi server kill` (deprecated, legacy servers only)', () => {
 
     await handleLegacyKillCommand(deps);
 
-    expect(writes.join('')).toContain('No running legacy Kimi server.');
+    expect(writes.join('')).toContain('No running legacy Tea Code server.');
     expect(signals).toEqual([]);
     expect(state.shutdownCalls).toBe(0);
     expect(state.removeCalls).toBe(1);
@@ -1030,22 +1030,22 @@ describe('accessUrlLines', () => {
   });
 });
 
-describe('`kimi web rotate-token`', () => {
+describe('`tea-code web rotate-token`', () => {
   let dir: string;
   let prevHome: string | undefined;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'kimi-rotate-'));
-    prevHome = process.env['KIMI_CODE_HOME'];
-    process.env['KIMI_CODE_HOME'] = dir;
+    prevHome = process.env['TEA_CODE_HOME'];
+    process.env['TEA_CODE_HOME'] = dir;
     vi.resetModules();
   });
 
   afterEach(() => {
     if (prevHome === undefined) {
-      delete process.env['KIMI_CODE_HOME'];
+      delete process.env['TEA_CODE_HOME'];
     } else {
-      process.env['KIMI_CODE_HOME'] = prevHome;
+      process.env['TEA_CODE_HOME'] = prevHome;
     }
     rmSync(dir, { recursive: true, force: true });
   });

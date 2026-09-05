@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { handleUpgrade } from '#/cli/sub/upgrade';
+import { detectInstallSource } from '#/cli/update/source';
 import type { InstallPromptChoiceValue } from '#/cli/update/prompt';
 import type { InstallSource, UpdateCache } from '#/cli/update/types';
 
@@ -73,6 +74,18 @@ function createDeps(overrides: {
 }
 
 describe('handleUpgrade', () => {
+  it('directs a local SEA build to Tea npm without starting an installer', async () => {
+    const { stdout, writable } = captureOutput();
+    const deps = createDeps();
+    deps.detectInstallSource.mockImplementation(() => detectInstallSource({ detectNative: () => true }));
+
+    await expect(handleUpgrade('0.4.0', { ...deps, ...writable })).resolves.toBe(0);
+
+    expect(stdout.join('')).toContain('npm install -g @futuretea/tea-code@0.5.0');
+    expect(deps.installUpdate).not.toHaveBeenCalled();
+    expect(deps.promptForInstallChoice).not.toHaveBeenCalled();
+  });
+
   it('prompts before installing the latest version when the install source supports it', async () => {
     const { stdout, stderr, writable } = captureOutput();
     const deps = createDeps({ latest: '0.5.0', source: 'npm-global' });
@@ -84,7 +97,7 @@ describe('handleUpgrade', () => {
     expect(deps.promptForInstallChoice).toHaveBeenCalledWith({
       currentVersion: '0.4.0',
       target: { version: '0.5.0' },
-      installCommand: 'npm install -g @moonshot-ai/kimi-code@0.5.0',
+      installCommand: 'npm install -g @futuretea/tea-code@0.5.0',
       installSource: 'npm-global',
     });
     expect(deps.installUpdate).toHaveBeenCalledWith('npm-global', '0.5.0', 'darwin');
@@ -105,7 +118,7 @@ describe('handleUpgrade', () => {
       targetVersion: '0.5.0',
       source: 'npm-global',
     }));
-    expect(stdout.join('')).toContain('Updated @moonshot-ai/kimi-code to 0.5.0');
+    expect(stdout.join('')).toContain('Updated @futuretea/tea-code to 0.5.0');
     expect(stderr.join('')).toBe('');
   });
 
@@ -139,7 +152,7 @@ describe('handleUpgrade', () => {
     expect(deps.track).toHaveBeenCalledWith('upgrade_command_no_update', expect.objectContaining({
       current_version: '0.4.0',
     }));
-    expect(stdout.join('')).toContain('Kimi Code is already up to date (v0.4.0).');
+    expect(stdout.join('')).toContain('Tea Code is already up to date (v0.4.0).');
   });
 
   it('prints the manual update command when the install source cannot be auto-installed', async () => {
@@ -154,7 +167,7 @@ describe('handleUpgrade', () => {
       target_version: '0.5.0',
       source: 'unsupported',
     }));
-    expect(stdout.join('')).toContain('To update manually, run: npm install -g @moonshot-ai/kimi-code@0.5.0');
+    expect(stdout.join('')).toContain('To update manually, run: npm install -g @futuretea/tea-code@0.5.0');
   });
 
   it('prints the manual update command without prompting when not interactive', async () => {
@@ -169,7 +182,7 @@ describe('handleUpgrade', () => {
       target_version: '0.5.0',
       source: 'npm-global',
     }));
-    expect(stdout.join('')).toContain('To update manually, run: npm install -g @moonshot-ai/kimi-code@0.5.0');
+    expect(stdout.join('')).toContain('To update manually, run: npm install -g @futuretea/tea-code@0.5.0');
   });
 
   it('returns a failing exit code when the foreground install fails', async () => {
@@ -183,7 +196,7 @@ describe('handleUpgrade', () => {
     await expect(handleUpgrade('0.4.0', { ...deps, ...writable })).resolves.toBe(1);
 
     expect(stderr.join('')).toContain(
-      'warning: failed to install @moonshot-ai/kimi-code@0.5.0: npm exited with code 1',
+      'warning: failed to install @futuretea/tea-code@0.5.0: npm exited with code 1',
     );
     expect(deps.track).toHaveBeenCalledWith('upgrade_command_failed', expect.objectContaining({
       target_version: '0.5.0',
@@ -230,6 +243,6 @@ describe('handleUpgrade', () => {
     await expect(handleUpgrade('0.4.0', { ...deps, ...writable })).resolves.toBe(0);
 
     expect(deps.installUpdate).toHaveBeenCalledWith('npm-global', '0.5.0', 'darwin');
-    expect(stdout.join('')).toContain('Updated @moonshot-ai/kimi-code to 0.5.0');
+    expect(stdout.join('')).toContain('Updated @futuretea/tea-code to 0.5.0');
   });
 });

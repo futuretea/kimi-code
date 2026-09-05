@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { fetchLatestFromCdn, fetchLatestVersionFromCdn } from '#/cli/update/cdn';
+import { fetchLatestFromCdn, fetchLatestVersionFromCdn, fetchLatestFromNpm } from '#/cli/update/cdn';
 import { kimiCodeCdnLatestJsonUrl, kimiCodeCdnLatestUrl } from '#/constant/app';
 
 function mockFetchOk(body: string): typeof fetch {
@@ -257,5 +257,31 @@ describe('fetchLatestFromCdn', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+
+describe('Tea Code npm updates', () => {
+  it('queries the Tea Code release when the registry returns a valid version', async () => {
+    const fetchImpl = vi.fn(async () => Response.json({ version: '0.4.0' }));
+    await expect(fetchLatestFromNpm(fetchImpl)).resolves.toEqual({
+      latest: '0.4.0',
+      manifest: null,
+    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://registry.npmjs.org/%40futuretea%2Ftea-code/latest',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it('rejects malformed registry versions instead of selecting an update', async () => {
+    await expect(fetchLatestFromNpm(async () => Response.json({ version: 'invalid' })))
+      .rejects.toThrow('invalid version');
+  });
+
+  it('rejects registry failures without querying upstream', async () => {
+    const fetchImpl = vi.fn(async () => new Response('', { status: 503 }));
+    await expect(fetchLatestFromNpm(fetchImpl)).rejects.toThrow('HTTP 503');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

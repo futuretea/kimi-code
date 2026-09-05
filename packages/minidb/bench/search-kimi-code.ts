@@ -19,7 +19,7 @@ if (!query) {
   process.exit(1);
 }
 
-const DATA = path.join(os.homedir(), '.kimi-code');
+const DATA = (process.env['TEA_CODE_HOME'] ?? path.join(os.homedir(), '.tea-code'));
 const ARG_FIELDS = ['command', 'pattern', 'path', 'description', 'query', 'prompt', 'file_path'];
 
 function extractWireText(wirePath, full) {

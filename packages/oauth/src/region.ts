@@ -122,7 +122,7 @@ export interface ResolveKimiRegionOptions {
    * install-channel marker.
    */
   readonly configuredOAuthKey?: string;
-  /** Kimi home dir; defaults to `KIMI_CODE_HOME` or `~/.kimi-code`. */
+  /** Kimi home dir; defaults to `KIMI_CODE_HOME` or `~/.tea-code`. */
   readonly homeDir?: string;
   /**
    * Set false to skip the install-channel marker (e.g. the desktop app's
@@ -158,9 +158,9 @@ function readRegionMarker(homeDir: string): KimiRegion | undefined {
 // Mirrors `defaultKimiHome` in ./toolkit; keep the two in sync so the marker
 // always lands next to the credentials dir it describes.
 function defaultHomeDir(env: NodeJS.ProcessEnv): string {
-  const override = env['KIMI_CODE_HOME'];
+  const override = env['TEA_CODE_HOME'];
   if (override !== undefined && override.length > 0) return override;
-  return join(homedir(), '.kimi-code');
+  return join(homedir(), '.tea-code');
 }
 
 export function resolveKimiRegion(options: ResolveKimiRegionOptions = {}): KimiRegion {

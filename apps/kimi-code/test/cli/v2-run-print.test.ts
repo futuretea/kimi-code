@@ -325,7 +325,7 @@ describe('runV2Print', () => {
       },
     });
     // Version banner is first, then the rendered assistant output.
-    expect(stderr.write).toHaveBeenNthCalledWith(1, 'kimi version 1.2.3-test\n');
+    expect(stderr.write).toHaveBeenNthCalledWith(1, 'tea-code version 1.2.3-test\n');
     expect(stdout.text()).toContain('hello world');
     expect(app.dispose).toHaveBeenCalled();
   });
@@ -579,7 +579,7 @@ describe('runV2Print', () => {
       homeDir: resolveKimiHome(),
       deviceId: 'device-1',
       appName: CLI_USER_AGENT_PRODUCT,
-      version: '1.2.3-test',
+      version: '0.41.0',
       uiMode: 'print',
       model: 'k2',
       endpoint: expect.any(Function),

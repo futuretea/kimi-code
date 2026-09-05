@@ -34,7 +34,7 @@ export function formatRemoteControlAlreadyRunning(holder: RemoteControlLockInfo)
   return [
     `Remote Control is already running on this machine (pid ${holder.pid}, ${holder.localOrigin}, since ${new Date(holder.startedAt).toLocaleString()}).`,
     `Use the existing link: ${holder.url}`,
-    'To start a new one here, stop the other `kimi web --remote-control` process first.',
+    'To start a new one here, stop the other `tea-code web --remote-control` process first.',
   ].join('\n');
 }
 

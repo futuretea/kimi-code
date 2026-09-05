@@ -25,18 +25,18 @@ beforeEach(async () => {
   await __resetRootLoggerForTest();
   homeDir = await mkdtemp(join(tmpdir(), 'kimi-cli-log-home-'));
   workDir = await mkdtemp(join(tmpdir(), 'kimi-cli-log-work-'));
-  oldHome = process.env['KIMI_CODE_HOME'];
+  oldHome = process.env['TEA_CODE_HOME'];
   oldLogLevel = process.env['KIMI_LOG_LEVEL'];
-  process.env['KIMI_CODE_HOME'] = homeDir;
+  process.env['TEA_CODE_HOME'] = homeDir;
   process.env['KIMI_LOG_LEVEL'] = 'info';
 });
 
 afterEach(async () => {
   await __resetRootLoggerForTest();
   if (oldHome === undefined) {
-    delete process.env['KIMI_CODE_HOME'];
+    delete process.env['TEA_CODE_HOME'];
   } else {
-    process.env['KIMI_CODE_HOME'] = oldHome;
+    process.env['TEA_CODE_HOME'] = oldHome;
   }
   if (oldLogLevel === undefined) {
     delete process.env['KIMI_LOG_LEVEL'];
@@ -51,7 +51,7 @@ describe.skipIf(!ENABLED)('local logging export e2e', () => {
   it('exports session log and global log by default, and allows skipping global log', async () => {
     const harness = createKimiHarness({
       homeDir,
-      identity: createKimiCodeHostIdentity('0.1.1'),
+      identity: createKimiCodeHostIdentity(),
     });
     try {
       const session = await harness.createSession({

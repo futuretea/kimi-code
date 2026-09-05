@@ -1,6 +1,6 @@
 # Interaction and input
 
-Kimi Code CLI runs as an interactive TUI (terminal user interface) built around three components: the input box, the conversation view, and the status bar. This page covers how to enter text, paste media, navigate the approval flow, and switch between modes.
+Tea Code CLI runs as an interactive TUI (terminal user interface) built around three components: the input box, the conversation view, and the status bar. This page covers how to enter text, paste media, navigate the approval flow, and switch between modes.
 
 ## Input box basics
 
@@ -10,7 +10,7 @@ The input box accepts free-form text. Press `Enter` to send, or `Shift-Enter` / 
 
 ## Pasting images and video
 
-Kimi Code CLI supports pasting images and video directly into the input box, so you can discuss screenshots, UI mockups, architecture diagrams, or code demos without uploading or converting files first.
+Tea Code CLI supports pasting images and video directly into the input box, so you can discuss screenshots, UI mockups, architecture diagrams, or code demos without uploading or converting files first.
 
 **Video input is a distinctive Kimi Code capability** — you can paste a video clip and have the model analyze its content, UI flow, or code walkthrough.
 
@@ -116,7 +116,7 @@ Common management commands:
 
 A goal stops in three ways: **complete** — achieved, cleared, and summarized; **paused** — you paused it, interrupted a turn, or an error occurred; **blocked** — the agent can't continue as stated and writes a short message explaining why. In the web UI, the goal bar below the conversation lets you pause, resume, or cancel the goal directly.
 
-> Tip: in `manual` permission mode a goal may stop at tool approvals; non-interactive mode only supports creating goals (`kimi -p "/goal ..."`) — exit code `0` on complete, `3` on blocked, `6` on paused.
+> Tip: in `manual` permission mode a goal may stop at tool approvals; non-interactive mode only supports creating goals (`tea-code -p "/goal ..."`) — exit code `0` on complete, `3` on blocked, `6` on paused.
 
 ## During streaming output
 

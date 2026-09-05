@@ -1,6 +1,6 @@
 # Providers and models
 
-Kimi Code CLI supports connecting to multiple LLM platforms simultaneously: one-click login via the Kimi Code managed service, connecting Claude with an Anthropic API key, or connecting third-party inference services via the OpenAI-compatible protocol. Each provider corresponds to a specific API protocol; models are declared on top of providers with their own name, context length, and capabilities. This page explains how to configure each type of provider in `config.toml`.
+Tea Code CLI supports connecting to multiple LLM platforms simultaneously: one-click login via the Kimi Code managed service, connecting Claude with an Anthropic API key, or connecting third-party inference services via the OpenAI-compatible protocol. Each provider corresponds to a specific API protocol; models are declared on top of providers with their own name, context length, and capabilities. This page explains how to configure each type of provider in `config.toml`.
 
 ## Supported provider types
 
@@ -8,7 +8,7 @@ The `type` field in the `providers` table determines which protocol implementati
 
 | Type | Protocol | Typical use |
 | --- | --- | --- |
-| [`kimi`](#kimi) | OpenAI-compatible | Kimi Code managed service, Kimi Platform API key |
+| [`tea-code`](#kimi) | OpenAI-compatible | Kimi Code managed service, Kimi Platform API key |
 | [`anthropic`](#anthropic) | Anthropic Messages | Claude model family |
 | [`openai`](#openai) | OpenAI Chat Completions | OpenAI and compatible services, DeepSeek, Qwen, etc. |
 | [`openai_responses`](#openai_responses) | OpenAI Responses API | OpenAI's newer Responses interface |
@@ -40,9 +40,9 @@ Two paths when adding:
 Kimi Code OAuth managed accounts logged in via `/login` do not appear in `/provider`. Use `/login` and `/logout` to manage them.
 :::
 
-The same operations are also available in non-interactive environments via the shell command: [`kimi provider`](../reference/kimi-command.md#kimi-provider).
+The same operations are also available in non-interactive environments via the shell command: [`tea-code provider`](../reference/kimi-command.md#tea-code-provider).
 
-## `kimi`
+## `tea-code`
 
 For connecting to Moonshot AI's OpenAI-compatible interface, including the Kimi Code managed service and Kimi Platform API keys.
 
@@ -149,7 +149,7 @@ GOOGLE_CLOUD_LOCATION = "us-central1"
 
 ```sh
 gcloud auth application-default login   # one-time authentication
-kimi
+tea-code
 ```
 
 To route Vertex requests through a custom (e.g. proxied) endpoint, set `base_url` (or the `GOOGLE_VERTEX_BASE_URL` env var); when omitted, the SDK default regional `*-aiplatform.googleapis.com` host is used. As with `google-genai`, give the host root only. The SDK appends `/v1beta1/publishers/google/models/…` itself.

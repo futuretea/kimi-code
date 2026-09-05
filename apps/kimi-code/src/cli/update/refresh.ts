@@ -1,5 +1,5 @@
 import { writeUpdateCache } from './cache';
-import { fetchLatestFromCdn, type FetchLatestResult } from './cdn';
+import { fetchLatestFromNpm, type FetchLatestResult } from './cdn';
 import { type UpdateCache } from './types';
 
 export interface RefreshUpdateCacheDeps {
@@ -19,7 +19,7 @@ export async function refreshUpdateCache(
 ): Promise<UpdateCache> {
   const resolved: RefreshUpdateCacheDeps = {
     fetchLatest:
-      overrides.fetchLatest ?? (() => fetchLatestFromCdn(undefined, overrides.timeoutMs)),
+      overrides.fetchLatest ?? (() => fetchLatestFromNpm(undefined, overrides.timeoutMs)),
     writeCache: overrides.writeCache ?? writeUpdateCache,
     now: overrides.now ?? (() => new Date()),
   };

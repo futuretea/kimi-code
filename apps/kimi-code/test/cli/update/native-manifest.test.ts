@@ -24,7 +24,7 @@ function mockFetch(response: {
 
 const MANIFEST_BODY = JSON.stringify({
   version: VERSION,
-  tag: `@moonshot-ai/kimi-code@${VERSION}`,
+  tag: `@futuretea/tea-code@${VERSION}`,
   platforms: {
     'win32-x64': {
       filename: `kimi-code-win32-x64.zip`,

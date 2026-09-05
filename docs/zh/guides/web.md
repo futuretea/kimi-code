@@ -1,19 +1,19 @@
 # 在网页中使用
 
-Kimi Code Web 是 Kimi Code CLI 内置的浏览器图形界面：在终端运行 `kimi web`，就能在浏览器里新建会话、对话、处理审批、查看文件改动——界面更易读，会话和数据仍全部保存在你的本机。
+Kimi Code Web 是 Tea Code CLI 内置的浏览器图形界面：在终端运行 `tea-code web`，就能在浏览器里新建会话、对话、处理审批、查看文件改动——界面更易读，会话和数据仍全部保存在你的本机。
 
 ![Kimi Code Web 界面](../../media/kimi-web-ui.jpg)
 
 ## 开始使用
 
 <div class="step">
-<span class="step-num">1</span> <strong>安装并登录 Kimi Code CLI</strong>
+<span class="step-num">1</span> <strong>安装并登录 Tea Code CLI</strong>
 
-`kimi web` 是 CLI 的内置命令，未安装 CLI 时不可用。安装与登录见 [开始使用](./getting-started.md)。
+`tea-code web` 是 CLI 的内置命令，未安装 CLI 时不可用。安装与登录见 [开始使用](./getting-started.md)。
 </div>
 
 <div class="step">
-<span class="step-num">2</span> <strong>在终端运行 <code>kimi web</code></strong>
+<span class="step-num">2</span> <strong>在终端运行 <code>tea-code web</code></strong>
 
 如果你已经在 CLI 里，也可以输入 `/web`，把当前会话交接到浏览器。
 </div>
@@ -70,14 +70,14 @@ Web 里的斜杠命令与 CLI 不完全一致，支持常用指令 `/new`、`/go
 ## 安全注意
 
 - **建议设置并列凭证**：绑定局域网地址后，额外设置 `KIMI_CODE_PASSWORD` 环境变量，服务端会对鉴权失败自动限流。
-- **不要彻底关闭鉴权**：`--dangerous-bypass-auth` 会关闭所有鉴权，任何能访问该端口的人都能控制你的会话、文件系统和 shell。仅在可信网络或自有鉴权代理之后使用，详见 [kimi 命令参考](../reference/kimi-command.md#kimi-web)。
+- **不要彻底关闭鉴权**：`--dangerous-bypass-auth` 会关闭所有鉴权，任何能访问该端口的人都能控制你的会话、文件系统和 shell。仅在可信网络或自有鉴权代理之后使用，详见 [tea-code 命令参考](../reference/kimi-command.md#tea-code-web)。
 
 
 ## 常见问题
 
 ### 端口被占用了怎么办
 
-不用处理。`kimi web` 会自动用下一个端口重试（58628、58629……），以启动横幅里实际打印的地址为准。
+不用处理。`tea-code web` 会自动用下一个端口重试（58628、58629……），以启动横幅里实际打印的地址为准。
 
 ### 浏览器打不开地址
 
@@ -85,7 +85,7 @@ Web 里的斜杠命令与 CLI 不完全一致，支持常用指令 `/new`、`/go
 
 ### token 失效了怎么恢复
 
-运行 `kimi web rotate-token` 生成新 token，然后用启动横幅里的新地址重新打开。所有运行中的实例会自动换用新 token，无需重启。
+运行 `tea-code web rotate-token` 生成新 token，然后用启动横幅里的新地址重新打开。所有运行中的实例会自动换用新 token，无需重启。
 
 ### 同一 WiFi 下其他设备访问不到
 
@@ -94,5 +94,5 @@ Web 里的斜杠命令与 CLI 不完全一致，支持常用指令 `/new`、`/go
 ## 下一步
 
 - [服务 API](../reference/server-api.md) — 面向脚本与第三方集成的 REST / WebSocket 接口（实验性）
-- [kimi 命令](../reference/kimi-command.md#kimi-web) — `kimi web` 的全部命令行选项
+- [tea-code 命令](../reference/kimi-command.md#tea-code-web) — `tea-code web` 的全部命令行选项
 - [远程控制](./remote-control.md) — 从公网任意设备远程查看和接管本机会话

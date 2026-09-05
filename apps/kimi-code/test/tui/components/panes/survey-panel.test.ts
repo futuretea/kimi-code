@@ -30,13 +30,13 @@ describe('SurveyPanelComponent', () => {
     const lines = render({ phase: 'open' }, 80);
     expect(lines).toHaveLength(2);
     expect(lines[0]).toContain('●');
-    expect(lines[0]).toContain('How is Kimi doing this session? (optional)');
+    expect(lines[0]).toContain('How is Tea Code doing this session? (optional)');
     expect(lines[1]).toBe('  1: Bad  2: Fine  3: Good  0: Dismiss');
   });
 
   it('folds the options onto their own lines when narrow', () => {
     const lines = render({ phase: 'open' }, 30);
-    expect(lines[0]).toContain('How is Kimi doing this');
+    expect(lines[0]).toContain('How is Tea Code doing this');
     expect(lines[1]).toContain('session? (optional)');
     expect(lines.slice(2)).toEqual(['  1: Bad', '  2: Fine', '  3: Good', '  0: Dismiss']);
   });

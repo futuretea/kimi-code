@@ -1,6 +1,6 @@
 # Plugins
 
-Plugins 把可复用的 Kimi Code CLI 能力打包成可安装单元：可以添加 [Agent Skills](./skills.md)、自定义 [Agent](./agents.md)，可以指定会话启动时自动加载的 Skill、提供系统提示词指令，也可以声明 MCP servers 提供真实工具能力。适合把工作流共享给团队、连接外部服务，或从 [官方插件](#官方插件)安装扩展。
+Plugins 把可复用的 Tea Code CLI 能力打包成可安装单元：可以添加 [Agent Skills](./skills.md)、自定义 [Agent](./agents.md)，可以指定会话启动时自动加载的 Skill、提供系统提示词指令，也可以声明 MCP servers 提供真实工具能力。适合把工作流共享给团队、连接外部服务，或从 [官方插件](#官方插件)安装扩展。
 
 ## 安装与管理
 
@@ -54,7 +54,7 @@ Plugins 把可复用的 Kimi Code CLI 能力打包成可安装单元：可以添
 ### 注意事项
 
 - 安装、启用/禁用、移除 plugin 后，当前会话不会更新，运行 `/reload` 或 `/new` 后生效。
-- 本地安装会被拷贝到 `$KIMI_CODE_HOME/plugins/managed/<id>/`，CLI 始终从这份托管副本运行。安装后编辑原始源目录不会生效，需重新安装。
+- 本地安装会被拷贝到 `$TEA_CODE_HOME/plugins/managed/<id>/`，CLI 始终从这份托管副本运行。安装后编辑原始源目录不会生效，需重新安装。
 - 移除 plugin 只会删除安装记录，托管副本和原始源文件仍保留在磁盘上。
 - Plugin 目前按用户安装，对所有项目生效，暂不支持项目级安装范围。
 
@@ -80,7 +80,7 @@ Plugins 把可复用的 Kimi Code CLI 能力打包成可安装单元：可以添
 官方插件是 Kimi 官方维护的 plugin 和内置产品能力，目前有以下三种：
 
 - **[Kimi Datasource](#kimi-datasource)**：用自然语言查询金融行情、财经资讯、宏观经济、企业工商、学术文献、法律法规和国际组织官方数据
-- **[Kimi WebBridge](#kimi-webbridge)**：让 AI 直接操控你自己的浏览器，完成各类网页操作
+- **[Kimi WebBridge](#tea-code-webbridge)**：让 AI 直接操控你自己的浏览器，完成各类网页操作
 - **[Kimi Computer Use](#kimi-computer-use)**：让 AI 操作你的桌面应用（macOS 和 Windows）
 
 ### 安装与升级
@@ -255,7 +255,7 @@ Plugin 是一个带 manifest 的目录或 zip 文件。Manifest 可以放在以�
 {
   "name": "kimi-finance",
   "version": "1.0.0",
-  "description": "Finance data and analysis workflows for Kimi Code CLI",
+  "description": "Finance data and analysis workflows for Tea Code CLI",
   "skills": "./skills/",
   "systemPromptPath": "./SYSTEM.md",
   "sessionStart": {
@@ -310,7 +310,7 @@ Plugin 通过 `systemPrompt` 和 `systemPromptPath` 两个字段向 Agent 的系
 
 ### 两个引擎的差异
 
-系统提示词贡献在两个 Agent 引擎上都生效。交互式 TUI、`kimi -p` 和 `kimi web` 默认使用 v2 引擎；设置 `KIMI_CODE_LEGACY_FLAG=1` 后，本地 CLI 界面会改用旧版引擎。
+系统提示词贡献在两个 Agent 引擎上都生效。交互式 TUI、`tea-code -p` 和 `tea-code web` 默认使用 v2 引擎；设置 `KIMI_CODE_LEGACY_FLAG=1` 后，本地 CLI 界面会改用旧版引擎。
 
 新会话和新建 Agent 会读取当前已启用 plugin 的指令，正在进行的请求继续使用已有的系统提示词。`/plugins reload` 会刷新 plugin Skill 列表，并请求重建活跃 Agent 的提示词；需要让变更在下一轮前明确收敛时使用该命令。切换 plugin 的 MCP server 不会改变系统提示词指令。
 
@@ -397,7 +397,7 @@ my-plugin/
       SKILL.md
 ```
 
-`sessionStart.skill` 在会话启动时把一个 plugin Skill 加载到 main agent，适合放置初始化说明、工作流规则，或把其他工具中的术语映射到 Kimi Code CLI。它只注入文本，不执行代码。
+`sessionStart.skill` 在会话启动时把一个 plugin Skill 加载到 main agent，适合放置初始化说明、工作流规则，或把其他工具中的术语映射到 Tea Code CLI。它只注入文本，不执行代码。
 
 无论 Skill 通过哪种方式加载（`sessionStart.skill`、`/skill:<name>` 或模型自动调用），`skillInstructions` 都会随该 plugin 的 Skill 一起出现。
 
@@ -476,7 +476,7 @@ plugin hooks 复用与全局 hooks 相同的机制。事件列表、stdin JSON �
 
 - plugin 的 hooks 仅在 plugin **启用**期间生效；禁用 plugin 后其 hooks 停止运行。
 - 每条 hook 的工作目录为 plugin 根目录，`command` 可以使用 plugin 内的 `./` 路径。
-- hook 进程会额外收到两个环境变量：`KIMI_CODE_HOME` 和 `KIMI_PLUGIN_ROOT`（plugin 根目录）。
+- hook 进程会额外收到两个环境变量：`TEA_CODE_HOME` 和 `KIMI_PLUGIN_ROOT`（plugin 根目录）。
 
 仅安装 plugin 本身不会运行其 hooks；它们只在 plugin 启用期间、匹配的事件触发时运行。
 

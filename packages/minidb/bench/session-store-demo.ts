@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { SessionStore } from './session-store.js';
 
-const HOME = path.join(os.homedir(), '.kimi-code');
+const HOME = (process.env['TEA_CODE_HOME'] ?? path.join(os.homedir(), '.tea-code'));
 const OUT = path.join(os.tmpdir(), 'minidb-session-store-' + Date.now());
 
 const ms = (t: number) => t.toFixed(2) + 'ms';

@@ -505,7 +505,7 @@ describe('OAuthService', () => {
     try {
       await mkdir(bootstrapHome, { recursive: true });
       await writeFile(join(bootstrapHome, 'region'), 'global\n', 'utf-8');
-      vi.stubEnv('KIMI_CODE_HOME', envHome);
+      vi.stubEnv('TEA_CODE_HOME', envHome);
       vi.stubEnv('KIMI_CODE_OAUTH_HOST', '');
       providers[OAUTH_PROVIDER] = { type: 'kimi' };
       expect(createService().getRegion()).toBe('global');

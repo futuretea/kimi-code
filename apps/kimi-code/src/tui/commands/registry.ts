@@ -369,7 +369,7 @@ export const BUILTIN_SLASH_COMMANDS = [
   {
     name: 'feedback',
     aliases: ['bug'],
-    description: 'Send feedback to make Kimi Code better',
+    description: 'Send feedback to make Tea Code better',
     priority: 60,
     availability: 'always',
   },

@@ -24,6 +24,7 @@ import {
 import { DEFAULT_OAUTH_PROVIDER_NAME, isManagedUsageProvider } from '../constant/kimi-tui';
 import { submitFeedbackWithAttachments } from '../../feedback/feedback-attachments';
 import { formatErrorMessage } from '../utils/event-payload';
+import { getUpstreamVersion } from '#/cli/version';
 import { openUrl } from '#/utils/open-url';
 import { promptFeedbackAttachment, promptFeedbackInput } from './prompts';
 import type { SlashCommandHost } from './dispatch';
@@ -75,7 +76,7 @@ export async function handleFeedbackCommand(host: SlashCommandHost): Promise<voi
     return;
   }
 
-  const version = withFeedbackVersionPrefix(host.state.appState.version);
+  const version = withFeedbackVersionPrefix(getUpstreamVersion());
   const spinner = host.showLoginProgressSpinner(FEEDBACK_STATUS_SUBMITTING);
   // Guarantee the spinner's underlying setInterval is always cleared, even when
   // submitFeedback throws — otherwise the interval (and its per-frame

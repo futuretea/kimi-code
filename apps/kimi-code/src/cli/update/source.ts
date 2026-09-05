@@ -157,11 +157,11 @@ export async function detectInstallSource(
     platform,
   };
 
-  if (resolved.detectNative()) return 'native';
+  if (resolved.detectNative()) return 'unsupported';
 
   const packageRoot = resolved.getPackageRoot();
   const heuristic = classifyByPathHeuristic(packageRoot);
-  if (heuristic !== null) return heuristic;
+  if (heuristic !== null) return heuristic === 'homebrew' ? 'unsupported' : heuristic;
 
   try {
     const globalPrefix = await resolved.getGlobalPrefix();

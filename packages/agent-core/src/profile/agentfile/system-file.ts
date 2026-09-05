@@ -1,7 +1,7 @@
 /**
  * `SYSTEM.md` global main-agent prompt override.
  *
- * `<brandHome>/SYSTEM.md` (default `~/.kimi-code/SYSTEM.md`, moves with
+ * `<brandHome>/SYSTEM.md` (default `~/.tea-code/SYSTEM.md`, moves with
  * `KIMI_CODE_HOME`) permanently replaces the builtin default profile's system
  * prompt while the file exists and is non-empty. Only the prompt is replaced
  * — every other profile capability comes from the builtin default — and

@@ -17,7 +17,6 @@ export type MainCommandHandler = (opts: CLIOptions) => void;
 export type MigrateCommandHandler = (options: MigrateCommandOptions) => void;
 export type PluginNodeRunnerHandler = (entry: string, args: readonly string[]) => void;
 export type UpgradeCommandHandler = () => void | Promise<void>;
-export type UpdateDownloadHandler = (version: string, manual: boolean) => void;
 
 export function createProgram(
   version: string,
@@ -25,7 +24,6 @@ export function createProgram(
   onMigrate: MigrateCommandHandler,
   onPluginNodeRunner: PluginNodeRunnerHandler = () => {},
   onUpgrade: UpgradeCommandHandler = () => {},
-  onUpdateDownload: UpdateDownloadHandler = () => {},
 ): Command {
   const program = new Command(CLI_COMMAND_NAME)
     .description('The Starting Point for Next-Gen Agents')
@@ -130,7 +128,7 @@ export function createProgram(
   program
     .command('upgrade')
     .alias('update')
-    .description('Upgrade Kimi Code to the latest version.')
+    .description('Upgrade Tea Code to the latest version.')
     .action(async () => {
       await onUpgrade();
     });
@@ -142,17 +140,6 @@ export function createProgram(
     .allowUnknownOption(true)
     .action((entry: string, args: string[]) => {
       onPluginNodeRunner(entry, args);
-    });
-
-  // Self-spawned worker for native staged updates (detached background
-  // download, or foreground from `kimi upgrade` — `--manual` marks the
-  // latter's stage as user-requested). Hidden: not user-facing.
-  program
-    .command('__update_download', { hidden: true })
-    .argument('<version>')
-    .option('--manual', 'the stage answers an explicit user-initiated upgrade')
-    .action((targetVersion: string, options: { manual?: boolean }) => {
-      onUpdateDownload(targetVersion, options.manual === true);
     });
 
   program.argument('[args...]').action((args: string[]) => {

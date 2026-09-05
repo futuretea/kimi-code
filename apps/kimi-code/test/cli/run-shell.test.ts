@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => {
     readonly fallback: TuiConfigFallback;
 
     constructor(fallback: TuiConfigFallback) {
-      super('Invalid TUI config in ~/.kimi-code/tui.toml; using defaults.');
+      super('Invalid TUI config in ~/.tea-code/tui.toml; using defaults.');
       this.fallback = fallback;
     }
   }
@@ -305,7 +305,7 @@ describe('runShell', () => {
       expect.objectContaining({
         identity: expect.objectContaining({
           productName: 'kimi-code-cli',
-          version: '1.2.3-test',
+          version: '0.41.0',
         }),
         sessionStartedProperties: { yolo: true, auto: false, plan: true, afk: false },
       }),
@@ -334,7 +334,7 @@ describe('runShell', () => {
       deviceId: 'device-1',
       enabled: true,
       appName: 'kimi-code-cli',
-      version: '1.2.3-test',
+      version: '0.41.0',
       uiMode: 'shell',
       model: 'k2',
       sessionId: undefined,
@@ -676,7 +676,7 @@ describe('runShell', () => {
     expect(mocks.detectTerminalTheme).toHaveBeenCalledOnce();
     const [, , startupInput] = mocks.kimiTuiConstructor.mock.calls[0]!;
     expect(startupInput).toMatchObject({
-      startupNotice: 'Invalid TUI config in ~/.kimi-code/tui.toml; using defaults.',
+      startupNotice: 'Invalid TUI config in ~/.tea-code/tui.toml; using defaults.',
       tuiConfig: {
         theme: 'auto',
         editorCommand: 'vim',
@@ -906,7 +906,7 @@ describe('runShell', () => {
       expect(mocks.harnessTrack).not.toHaveBeenCalledWith('exit', expect.anything());
       expect(mocks.shutdownTelemetry).toHaveBeenCalledOnce();
       expect(stdout.text()).toBe(' Bye!\n');
-      expect(stderr.text()).toContain(' To resume this session: kimi -r ses-1');
+      expect(stderr.text()).toContain(' To resume this session: tea-code -r ses-1');
     } finally {
       exitSpy.mockRestore();
       stdout.restore();
@@ -953,7 +953,7 @@ describe('runShell', () => {
         ExitCalled,
       );
 
-      expect(stderr.text()).toContain(' To resume this session: kimi -r ses-1');
+      expect(stderr.text()).toContain(' To resume this session: tea-code -r ses-1');
       expect(stderr.text()).toContain('open ');
       expect(stderr.text()).toContain(openedUrl);
     } finally {
@@ -963,7 +963,7 @@ describe('runShell', () => {
     }
   });
 
-  it('surfaces an invalid target config as an error for kimi migrate, not silently', async () => {
+  it('surfaces an invalid target config as an error for tea-code migrate, not silently', async () => {
     mocks.loadTuiConfig.mockResolvedValue({
       theme: 'dark',
       editorCommand: null,
@@ -971,7 +971,7 @@ describe('runShell', () => {
     });
     mocks.detectPendingMigration.mockResolvedValue({ totalSessions: 1 });
     mocks.harnessGetConfig.mockRejectedValue(
-      new Error('Invalid configuration in ~/.kimi-code/config.toml'),
+      new Error('Invalid configuration in ~/.tea-code/config.toml'),
     );
 
     // A broken config.toml must fail loudly — `kimi migrate` must not swallow
@@ -998,7 +998,7 @@ describe('runShell', () => {
     expect(mocks.tuiStart).not.toHaveBeenCalled();
   });
 
-  it('refuses migration when KIMI_SHARE_DIR resolves to the Kimi Code home', async () => {
+  it('refuses migration when KIMI_SHARE_DIR resolves to the Tea Code home', async () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       await withEnv({ KIMI_SHARE_DIR: '/tmp/kimi-code-test-home' }, async () => {

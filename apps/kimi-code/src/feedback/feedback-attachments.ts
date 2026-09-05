@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { appendFile, mkdir, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { getUpstreamVersion } from '#/cli/version';
 import { detectInstallSource } from '#/cli/update/source';
 import type { SlashCommandHost } from '#/tui/commands/dispatch';
 import type { FeedbackAttachmentLevel } from '#/tui/commands/prompts';
@@ -68,7 +69,7 @@ async function prepareAndUploadSessionArchive(
       id: host.state.appState.sessionId,
       outputPath: archivePath,
       includeGlobalLog: true,
-      version: host.state.appState.version,
+      version: getUpstreamVersion(),
       installSource: await detectInstallSource(),
       shellEnv: detectShellEnvironment(),
     });

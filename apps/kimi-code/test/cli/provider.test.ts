@@ -251,7 +251,7 @@ const CATALOG_BODY = {
   },
 };
 
-describe('kimi provider add', () => {
+describe('tea-code provider add', () => {
   it('imports providers and models from a custom registry, persisting source on each provider', async () => {
     const fetchMock = mockRegistryFetch();
     const { harness, current, setConfigCalls } = makeHarness({ providers: {} } as KimiConfig);
@@ -266,7 +266,10 @@ describe('kimi provider add', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       REGISTRY_URL,
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer sk-test-token' }),
+        headers: expect.objectContaining({
+          Authorization: 'Bearer sk-test-token',
+          'User-Agent': 'kimi-code-cli/0.41.0',
+        }),
       }),
     );
 
@@ -426,7 +429,7 @@ describe('kimi provider add', () => {
   });
 });
 
-describe('kimi provider remove', () => {
+describe('tea-code provider remove', () => {
   it('removes a provider and reports success', async () => {
     const initial: KimiConfig = {
       providers: {
@@ -463,7 +466,7 @@ describe('kimi provider remove', () => {
   });
 });
 
-describe('kimi provider list', () => {
+describe('tea-code provider list', () => {
   const config: KimiConfig = {
     providers: {
       kohub: {
@@ -598,7 +601,7 @@ describe('registerProviderCommand', () => {
   });
 });
 
-describe('kimi provider catalog list', () => {
+describe('tea-code provider catalog list', () => {
   it('lists catalog providers with wire/model counts, sorted by id', async () => {
     mockRegistryFetch(CATALOG_BODY);
     const { harness } = makeHarness({ providers: {} } as KimiConfig);
@@ -678,7 +681,7 @@ describe('kimi provider catalog list', () => {
   });
 });
 
-describe('kimi provider catalog add', () => {
+describe('tea-code provider catalog add', () => {
   it('imports a provider from the catalog without changing the default model', async () => {
     mockRegistryFetch(CATALOG_BODY);
     const initial: KimiConfig = {
@@ -759,7 +762,7 @@ describe('kimi provider catalog add', () => {
     expect(exitCodes).toEqual([1]);
     const err = stderr.join('');
     expect(err).toContain('"does-not-exist" is not in provider "anthropic"');
-    expect(err).toContain('kimi provider catalog list anthropic');
+    expect(err).toContain('tea-code provider catalog list anthropic');
   });
 
   it('preserves an existing default_model when re-importing the same provider without --default-model', async () => {
@@ -1120,7 +1123,7 @@ describe('kimi provider catalog add', () => {
   });
 });
 
-describe('kimi provider engine routing', () => {
+describe('tea-code provider engine routing', () => {
   beforeEach(() => {
     harnessRouting.kimiHarnessConstructor.mockClear();
     harnessRouting.kimiHarnessV2Constructor.mockClear();

@@ -37,6 +37,12 @@ function parse(argv: string[]): CLIOptions {
 }
 
 describe('CLI options parsing', () => {
+  it('rejects the upstream native updater command', () => {
+    expect(() => parse(['__update_download', '0.4.0'])).toThrow(
+      "unknown command '__update_download'",
+    );
+  });
+
   describe('defaults', () => {
     it('returns defaults when no arguments are given', () => {
       const opts = parse([]);

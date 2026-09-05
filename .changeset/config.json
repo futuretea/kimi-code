@@ -1,10 +1,15 @@
 {
-  "changelog": ["@changesets/changelog-github", { "repo": "MoonshotAI/kimi-code" }],
+  "changelog": [
+    "@changesets/changelog-github",
+    {
+      "repo": "futuretea/kimi-code"
+    }
+  ],
   "commit": false,
   "fixed": [],
   "linked": [],
   "access": "public",
-  "baseBranch": "main",
+  "baseBranch": "tea/moonshot-038",
   "updateInternalDependencies": "patch",
   "ignore": [
     "@moonshot-ai/vis",

@@ -1279,7 +1279,7 @@ describe('KimiTUI startup', () => {
 
     expect(resumeSession).not.toHaveBeenCalled();
     expect(driver.state.activeDialog).toBeNull();
-    const expectedResumeCmd = `cd ${quoteShellArg('/tmp/proj-b')} && kimi --resume ${quoteShellArg('ses-other-cwd')}`;
+    const expectedResumeCmd = `cd ${quoteShellArg('/tmp/proj-b')} && tea-code --resume ${quoteShellArg('ses-other-cwd')}`;
     expect(copyTextToClipboardMock).toHaveBeenCalledWith(expectedResumeCmd);
     const transcript = driver.state.transcriptContainer.render(160).join('\n');
     expect(transcript).toContain('Current session is in a different working directory.');
@@ -1317,7 +1317,7 @@ describe('KimiTUI startup', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(resumeSession).not.toHaveBeenCalled();
-    const expectedResumeCmd = `cd ${quoteShellArg('/tmp/proj$(touch /tmp/pwned)')} && kimi --resume ${quoteShellArg('ses-other-cwd')}`;
+    const expectedResumeCmd = `cd ${quoteShellArg('/tmp/proj$(touch /tmp/pwned)')} && tea-code --resume ${quoteShellArg('ses-other-cwd')}`;
     expect(copyTextToClipboardMock).toHaveBeenCalledWith(expectedResumeCmd);
     const transcript = driver.state.transcriptContainer.render(160).join('\n');
     expect(transcript).toContain(`To resume, run: ${expectedResumeCmd}`);
@@ -1354,7 +1354,7 @@ describe('KimiTUI startup', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(resumeSession).not.toHaveBeenCalled();
-    const expectedResumeCmd = `cd ${quoteShellArg('/tmp/proj-b')} && kimi --resume ${quoteShellArg('ses-other-cwd')}`;
+    const expectedResumeCmd = `cd ${quoteShellArg('/tmp/proj-b')} && tea-code --resume ${quoteShellArg('ses-other-cwd')}`;
     expect(copyTextToClipboardMock).toHaveBeenCalledWith(expectedResumeCmd);
     expect(stop).toHaveBeenCalledOnce();
     expect(stop).toHaveBeenCalledWith(0);
@@ -1847,7 +1847,7 @@ describe('KimiTUI startup', () => {
   it('logs login failures with session context', async () => {
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
     const session = makeSession();
-    const loginError = new Error('Failed to list Kimi Code models (HTTP 402).');
+    const loginError = new Error('Failed to list Tea Code models (HTTP 402).');
     const harness = makeHarness(session, {
       auth: {
         status: vi.fn(async () => ({ providers: [] })),
@@ -1880,7 +1880,7 @@ describe('KimiTUI startup', () => {
           alreadyLoggedIn: false,
           sessionId: 'ses-1',
           error: expect.objectContaining({
-            message: 'Failed to list Kimi Code models (HTTP 402).',
+            message: 'Failed to list Tea Code models (HTTP 402).',
           }),
         }),
       );
@@ -2098,7 +2098,7 @@ describe('KimiTUI startup', () => {
     expect(driver.state.appState.sessionId).toBe('');
   });
 
-  it('disposes terminal focus/theme tracking on the kimi migrate exit', async () => {
+  it('disposes terminal focus/theme tracking on the tea-code migrate exit', async () => {
     const harness = makeHarness();
     const driver = makeDriver(harness, {
       ...makeStartupInput(),
@@ -2288,7 +2288,7 @@ describe('KimiTUI startup', () => {
   it('writes display state after rendering a once banner', async () => {
     const originalEnv = { ...process.env };
     const dir = mkdtempSync(join(tmpdir(), 'kimi-startup-banner-'));
-    process.env['KIMI_CODE_HOME'] = dir;
+    process.env['TEA_CODE_HOME'] = dir;
 
     try {
       const banner = {
@@ -2342,7 +2342,7 @@ describe('KimiTUI startup', () => {
   it('does not write display state for an always banner', async () => {
     const originalEnv = { ...process.env };
     const dir = mkdtempSync(join(tmpdir(), 'kimi-startup-banner-'));
-    process.env['KIMI_CODE_HOME'] = dir;
+    process.env['TEA_CODE_HOME'] = dir;
 
     try {
       const banner = {
