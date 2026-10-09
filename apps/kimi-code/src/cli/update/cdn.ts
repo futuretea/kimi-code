@@ -1,7 +1,7 @@
 import { valid } from 'semver';
 import { z } from 'zod';
 
-import { kimiCodeCdnLatestJsonUrl, kimiCodeCdnLatestUrl } from '#/constant/app';
+import { kimiCodeCdnLatestJsonUrl, kimiCodeCdnLatestUrl, NPM_PACKAGE_NAME } from '#/constant/app';
 
 import type { UpdateManifest } from './types';
 
@@ -103,4 +103,22 @@ export async function fetchLatestFromCdn(
   }
   const latest = await fetchLatestVersionFromCdn(fetchImpl, timeoutMs);
   return { latest, manifest: null };
+}
+
+export async function fetchLatestFromNpmRegistry(
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs: number = CDN_FETCH_TIMEOUT_MS,
+): Promise<FetchLatestResult> {
+  const response = await fetchWithTimeout(
+    fetchImpl,
+    `https://registry.npmjs.org/${encodeURIComponent(NPM_PACKAGE_NAME)}/latest`,
+    timeoutMs,
+  );
+  if (!response.ok) {
+    throw new Error(`npm registry returned HTTP ${response.status}`);
+  }
+  const { version } = z.object({
+    version: z.string().refine((value) => valid(value) !== null, { error: 'invalid semver' }),
+  }).parse(await response.json());
+  return { latest: version, manifest: null };
 }

@@ -355,9 +355,33 @@ describe('runV2Print', () => {
       meta: { origin: { kind: 'user' }, tracked: true },
     });
     // Version banner is first, then the rendered assistant output.
-    expect(stderr.write).toHaveBeenNthCalledWith(1, 'kimi version 1.2.3-test\n');
+    expect(stderr.write).toHaveBeenNthCalledWith(1, 'tea-code version 1.2.3-test\n');
+    expect(stderr.text()).toContain('To resume this session: tea-code -r ses_v2');
     expect(stdout.text()).toContain('hello world');
     expect(app.dispose).toHaveBeenCalled();
+  });
+
+  it('emits the Tea Code recovery command in stream-json output', async () => {
+    const stdout = writer();
+    const stderr = writer();
+    const { app, agentServices } = makeFakeHarness();
+    const goal = agentServices.get(IAgentGoalService) as { getGoal: ReturnType<typeof vi.fn> };
+    goal.getGoal.mockReturnValue({ goal: undefined });
+    mocks.bootstrap.mockReturnValue({ app });
+    mocks.ensureMainAgent.mockResolvedValue({ agentId: 'main', generation: 1 });
+
+    await runV2Print(opts({ outputFormat: 'stream-json' }) as never, '2.1.1', { stdout, stderr });
+
+    const messages = stdout.text().trim().split('\n').map((line) => JSON.parse(line) as unknown);
+    expect(messages[0]).toEqual({ role: 'meta', type: 'system.version', version: '2.1.1' });
+    expect(messages).toContainEqual({
+      role: 'meta',
+      type: 'session.resume_hint',
+      session_id: 'ses_v2',
+      command: 'tea-code -r ses_v2',
+      content: 'To resume this session: tea-code -r ses_v2',
+    });
+    expect(stderr.text()).toBe('');
   });
 
   it('passes explicit skill dirs from --skillsDir into bootstrap args', async () => {
@@ -921,6 +945,7 @@ describe('runV2Print', () => {
         'api (http: https://example.com/mcp), fs (stdio: node server.js).',
     );
     expect(stderr.text()).toContain('"Trust this folder"');
+    expect(stderr.text()).toContain('Run `tea-code` here');
     // The warning is advisory only — the run itself is unaffected.
     expect(stdout.text()).toContain('hello world');
   });

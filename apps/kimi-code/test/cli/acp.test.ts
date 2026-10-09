@@ -8,6 +8,9 @@
  * import.
  */
 
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -64,15 +67,21 @@ describe('kimi acp', () => {
     expect(optsArg).toEqual(
       expect.objectContaining({
         homeDir: getDataDir(),
-        agentInfo: { name: 'Kimi Code CLI', version: expect.any(String) },
+        agentInfo: { name: 'Tea Code CLI', version: expect.any(String) },
+        clientIdentity: {
+          productName: 'Kimi Code CLI',
+          version: expect.any(String),
+          platform: 'kimi_code_cli',
+        },
       }),
     );
+    expect(optsArg?.clientIdentity?.version).toBe(optsArg?.agentInfo?.version);
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
-  it('forwards KIMI_CODE_HOME to terminalAuthEnv and homeDir when set', async () => {
-    const previous = process.env['KIMI_CODE_HOME'];
-    process.env['KIMI_CODE_HOME'] = '/tmp/kimi-debug';
+  it('forwards TEA_CODE_HOME to terminalAuthEnv and homeDir when set', async () => {
+    const previous = process.env['TEA_CODE_HOME'];
+    process.env['TEA_CODE_HOME'] = '/tmp/kimi-debug';
     try {
       const program = new Command('kimi').exitOverride();
       registerAcpCommand(program);
@@ -83,21 +92,21 @@ describe('kimi acp', () => {
       expect(optsArg).toEqual(
         expect.objectContaining({
           homeDir: '/tmp/kimi-debug',
-          terminalAuthEnv: { KIMI_CODE_HOME: '/tmp/kimi-debug' },
+          terminalAuthEnv: { TEA_CODE_HOME: '/tmp/kimi-debug' },
         }),
       );
     } finally {
       if (previous === undefined) {
-        delete process.env['KIMI_CODE_HOME'];
+        delete process.env['TEA_CODE_HOME'];
       } else {
-        process.env['KIMI_CODE_HOME'] = previous;
+        process.env['TEA_CODE_HOME'] = previous;
       }
     }
   });
 
-  it('omits terminalAuthEnv when KIMI_CODE_HOME is unset', async () => {
-    const previous = process.env['KIMI_CODE_HOME'];
-    delete process.env['KIMI_CODE_HOME'];
+  it('omits terminalAuthEnv when TEA_CODE_HOME is unset', async () => {
+    const previous = process.env['TEA_CODE_HOME'];
+    delete process.env['TEA_CODE_HOME'];
     try {
       const program = new Command('kimi').exitOverride();
       registerAcpCommand(program);
@@ -110,7 +119,7 @@ describe('kimi acp', () => {
       expect(optsArg.terminalAuthEnv).toBeUndefined();
     } finally {
       if (previous !== undefined) {
-        process.env['KIMI_CODE_HOME'] = previous;
+        process.env['TEA_CODE_HOME'] = previous;
       }
     }
   });
@@ -130,6 +139,36 @@ describe('kimi acp', () => {
     expect((optsArg.terminalAuthLegacyCommand ?? '').length).toBeGreaterThan(0);
     expect(optsArg.terminalAuthLegacyCommand).toBe(process.argv[1]);
   });
+
+  it.each([
+    { teaHome: undefined, expectedHome: join(homedir(), '.tea-code'), expectedEnv: undefined },
+    {
+      teaHome: '/tmp/tea-acp-home',
+      expectedHome: '/tmp/tea-acp-home',
+      expectedEnv: { TEA_CODE_HOME: '/tmp/tea-acp-home' },
+    },
+  ])(
+    'ignores upstream home during ACP startup with Tea home $teaHome',
+    async ({ teaHome, expectedHome, expectedEnv }) => {
+      vi.stubEnv('TEA_CODE_HOME', teaHome);
+      vi.stubEnv('KIMI_CODE_HOME', '/tmp/upstream-acp-home');
+      const program = new Command('tea-code').exitOverride();
+      registerAcpCommand(program);
+
+      await expect(program.parseAsync(['node', 'tea-code', 'acp'])).rejects.toThrow(ExitCalled);
+
+      const options = vi.mocked(runAcpServer).mock.calls[0]?.[0];
+      expect(options?.homeDir).toBe(expectedHome);
+      expect(options?.terminalAuthEnv).toEqual(expectedEnv);
+      expect(Object.keys(options?.terminalAuthEnv ?? {})).not.toContain('KIMI_CODE_HOME');
+      expect(options?.agentInfo).toEqual({ name: 'Tea Code CLI', version: '2.1.1' });
+      expect(options?.clientIdentity).toEqual({
+        productName: 'Kimi Code CLI',
+        version: '2.1.1',
+        platform: 'kimi_code_cli',
+      });
+    },
+  );
 
   it('exits without starting the ACP server when --login is passed', async () => {
     // Stub the SDK harness so runLoginFlow doesn't hit a real OAuth endpoint:

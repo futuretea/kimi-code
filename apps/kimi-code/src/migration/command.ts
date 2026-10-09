@@ -11,7 +11,7 @@ export function registerMigrateCommand(
 ): void {
   parent
     .command('migrate')
-    .description('Migrate data from a legacy kimi-cli installation into kimi-code.')
+    .description('Migrate data from a legacy kimi-cli installation into Tea Code.')
     .option(
       '--run',
       'Run the migration non-interactively and print step-by-step logs. Migrates everything unless --config-only is also given.',

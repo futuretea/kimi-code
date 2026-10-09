@@ -75,6 +75,14 @@ describe('WelcomeComponent', () => {
     setRainbowDance(undefined);
   });
 
+  it('renders Tea Code branding in the regular, narrow, and rainbow welcome panels', () => {
+    const plain = (lines: string[]): string => lines.join('\n').replaceAll(/\u001B\[[0-9;]*m/g, '');
+    expect(plain(new WelcomeComponent(appState).render(80))).toContain('Welcome to Tea Code!');
+    expect(plain(new WelcomeComponent(appState).render(23))).toContain('Welcome to Tea Code!');
+    setDanceView(true, 2);
+    expect(plain(new WelcomeComponent(appState).render(80))).toContain('Welcome to Tea Code!');
+  });
+
   it('renders the banner in a single brand color by default', () => {
     const codes = truecolorCodes(headerOf(new WelcomeComponent(appState).render(80)));
 

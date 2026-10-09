@@ -37,6 +37,27 @@ function parse(argv: string[]): CLIOptions {
 }
 
 describe('CLI options parsing', () => {
+  it('prints Tea Code help and recovery commands through the real parser', () => {
+    let help = '';
+    let error = '';
+    const program = createProgram('2.1.1', () => {}, () => {}).exitOverride();
+    program.configureOutput({
+      writeOut: (value) => {
+        help += value;
+      },
+      writeErr: (value) => {
+        error += value;
+      },
+    });
+
+    expect(() => program.parse(['node', 'tea-code', '--help'])).toThrow();
+    expect(help).toContain('Usage: tea-code [options] [command]');
+    expect(help).toContain('Upgrade Tea Code to the latest version.');
+    expect(help).not.toContain('Upgrade Kimi Code');
+    expect(() => program.parse(['node', 'tea-code', 'unknown-command'])).toThrow();
+    expect(error).toContain("See 'tea-code --help'.");
+  });
+
   describe('defaults', () => {
     it('returns defaults when no arguments are given', () => {
       const opts = parse([]);

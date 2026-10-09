@@ -2,12 +2,13 @@ import { ErrorCodes, type HostUiCapability } from '@moonshot-ai/kimi-code-sdk';
 
 import { currentKimiProfile } from '#/utils/region';
 
-export const PRODUCT_NAME = 'Kimi Code';
-export const CLI_COMMAND_NAME = 'kimi';
+export const PRODUCT_NAME = 'Tea Code';
+export const CLI_COMMAND_NAME = 'tea-code';
 export const PROCESS_NAME = 'kimi-code';
 
 // Used in telemetry app names and HTTP User-Agent headers.
 export const CLI_USER_AGENT_PRODUCT = 'kimi-code-cli';
+export const ACP_NETWORK_PRODUCT = 'Kimi Code CLI';
 export const CLI_UI_MODE = 'shell';
 // UI surfaces the TUI renders; declared to the engine at bootstrap so features that need a
 // host-side surface (the NotifyUser update panel) are offered to this process only.
@@ -44,11 +45,11 @@ export const HEADLESS_FORCE_EXIT_GRACE_MS = 2000;
 export const HEADLESS_STDIO_DRAIN_TIMEOUT_MS = 10000;
 
 // Published npm package name; this can differ from the executable command.
-export const NPM_PACKAGE_NAME = '@moonshot-ai/kimi-code';
+export const NPM_PACKAGE_NAME = '@futuretea/tea-code';
 
 // App-owned data paths. SDK/core runtime config is intentionally not routed here.
-export const KIMI_CODE_HOME_ENV = 'KIMI_CODE_HOME';
-export const KIMI_CODE_DATA_DIR_NAME = '.kimi-code';
+export const KIMI_CODE_HOME_ENV = 'TEA_CODE_HOME';
+export const KIMI_CODE_DATA_DIR_NAME = '.tea-code';
 export const KIMI_CODE_LOG_DIR_NAME = 'logs';
 export const KIMI_CODE_CACHE_DIR_NAME = 'cache';
 export const KIMI_CODE_UPDATE_DIR_NAME = 'updates';

@@ -581,7 +581,7 @@ export class StreamingUIController {
     this.host.setAppState({ streamingPhase: 'idle' });
     this.host.resetLivePane();
     notifyTerminalOnce(state, `turn-complete:${completedTurnKey}`, {
-      title: 'Kimi Code task complete',
+      title: 'Tea Code task complete',
       body: state.appState.sessionTitle ?? undefined,
     });
   }

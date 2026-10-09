@@ -34,7 +34,7 @@ describe('TUI config', () => {
 
     expect(result).toEqual(DEFAULT_TUI_CONFIG);
     const text = readFileSync(filePath, 'utf-8');
-    expect(text).toContain('Client preferences for kimi-code.');
+    expect(text).toContain('Client preferences for tea-code.');
     expect(text).toContain('theme = "auto"');
     expect(text).toContain('cache_expiry_hint = true');
     expect(text).toContain('disable_feedback_survey = false');

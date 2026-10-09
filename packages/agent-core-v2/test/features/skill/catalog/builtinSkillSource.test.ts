@@ -5,6 +5,7 @@ import { IConfigService } from '#/app/config/config';
 import { IFlagService } from '#/app/flag/flag';
 import { BUILTIN_SKILLS, visibleBuiltinSkills } from '#/features/skill/catalog/builtin/builtin';
 import { BuiltinSkillSource } from '#/features/skill/catalog/builtinSkillSource';
+import { InMemorySkillCatalog } from '#/features/skill/catalog/registry';
 import { BUILTIN_PRODUCT_SKILLS_SECTION } from '#/features/skill/catalog/configSection';
 
 import { stubFlag } from '../../../app/flag/stubs';
@@ -49,6 +50,25 @@ describe('BuiltinSkillSource product-skill switch', () => {
   it('offers every builtin skill when explicitly enabled', async () => {
     const names = await loadNames(true);
     expect(names).toEqual(BUILTIN_SKILLS.map((s) => s.name));
+  });
+
+  it('renders Tea commands from the built-in operational skills', async () => {
+    const ix = new TestInstantiationService();
+    ix.set(IConfigService, new StubConfigService({}));
+    ix.set(IFlagService, stubFlag(true));
+    const source = ix.createInstance(BuiltinSkillSource);
+    const { skills } = await source.load();
+    const update = skills.find((skill) => skill.name === 'update-config')!;
+    const mcp = skills.find((skill) => skill.name === 'mcp-config')!;
+    const catalog = new InMemorySkillCatalog();
+    const updatePrompt = catalog.renderSkillPrompt(update, '');
+    const mcpPrompt = catalog.renderSkillPrompt(mcp, '');
+
+    expect(updatePrompt).toContain('tea-code doctor config');
+    expect(updatePrompt).toContain('tea-code doctor tui');
+    expect(updatePrompt).not.toContain('`kimi doctor');
+    expect(mcpPrompt).toContain('restart `tea-code`');
+    expect(mcpPrompt).toContain('.kimi-code/mcp.json');
   });
 
   it('drops product-documentation skills when explicitly disabled', async () => {

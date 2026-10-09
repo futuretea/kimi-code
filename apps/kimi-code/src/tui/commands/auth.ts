@@ -13,7 +13,7 @@ import {
 import { log } from '@moonshot-ai/kimi-code-sdk';
 
 import type { ChoiceOption } from '../components/dialogs/choice-picker';
-import { DEFAULT_OAUTH_PROVIDER_NAME, PRODUCT_NAME } from '../constant/kimi-tui';
+import { DEFAULT_OAUTH_PROVIDER_NAME } from '../constant/kimi-tui';
 import { formatErrorMessage } from '../utils/event-payload';
 import {
   KIMI_CODE_GLOBAL_PLATFORM_VALUE,
@@ -127,7 +127,7 @@ async function handleOpenPlatformLogin(
   const platformName = consoleHost.length > 0 ? `Kimi Platform (${consoleHost})` : 'Kimi Platform';
   const subtitleLines = [
     `${'base_url'.padEnd(12)}${platform.baseUrl}`,
-    `${'saved to'.padEnd(12)}~/.kimi-code/config.toml`,
+    `${'saved to'.padEnd(12)}${host.harness.configPath}`,
   ];
   const apiKey = await promptApiKey(host, platformName, subtitleLines);
   if (apiKey === undefined) return;
@@ -215,7 +215,7 @@ export async function handleLogoutCommand(host: SlashCommandHost): Promise<void>
   if (hasManagedRemnant) {
     options.push({
       value: DEFAULT_OAUTH_PROVIDER_NAME,
-      label: PRODUCT_NAME,
+      label: 'Kimi Code',
       description: 'OAuth login',
     });
   }
@@ -257,6 +257,6 @@ export async function handleLogoutCommand(host: SlashCommandHost): Promise<void>
   refreshKimiRegion();
 
   host.track('logout', { provider: target });
-  const label = target === DEFAULT_OAUTH_PROVIDER_NAME ? PRODUCT_NAME : target;
+  const label = target === DEFAULT_OAUTH_PROVIDER_NAME ? 'Kimi Code' : target;
   host.showStatus(`Logged out from ${label}.`);
 }

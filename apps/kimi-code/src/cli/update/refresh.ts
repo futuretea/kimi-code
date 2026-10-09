@@ -1,12 +1,12 @@
 import { writeUpdateCache } from './cache';
-import { fetchLatestFromCdn, type FetchLatestResult } from './cdn';
+import { fetchLatestFromNpmRegistry, type FetchLatestResult } from './cdn';
 import { type UpdateCache } from './types';
 
 export interface RefreshUpdateCacheDeps {
   /** Resolves with the latest version + rollout manifest. **Throws** on any
    * failure — callers (including the default background invocation in
    * preflight) must catch. Errors intentionally skip `writeCache` so a
-   * transient CDN blip does not overwrite a previously known `latest` with
+   * transient registry blip does not overwrite a previously known `latest` with
    * `null`. */
   readonly fetchLatest: () => Promise<FetchLatestResult>;
   readonly writeCache: (cache: UpdateCache) => Promise<void>;
@@ -19,14 +19,14 @@ export async function refreshUpdateCache(
 ): Promise<UpdateCache> {
   const resolved: RefreshUpdateCacheDeps = {
     fetchLatest:
-      overrides.fetchLatest ?? (() => fetchLatestFromCdn(undefined, overrides.timeoutMs)),
+      overrides.fetchLatest ?? (() => fetchLatestFromNpmRegistry(undefined, overrides.timeoutMs)),
     writeCache: overrides.writeCache ?? writeUpdateCache,
     now: overrides.now ?? (() => new Date()),
   };
 
   const { latest, manifest } = await resolved.fetchLatest();
   const cache: UpdateCache = {
-    source: 'cdn',
+    source: 'npm-registry',
     checkedAt: resolved.now().toISOString(),
     latest,
     manifest,

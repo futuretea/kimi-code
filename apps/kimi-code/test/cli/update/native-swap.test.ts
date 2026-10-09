@@ -179,7 +179,7 @@ describe('maybeRelaunchWithStagedNativeUpdate', () => {
     exePath = join(workDir, 'bin', 'kimi');
     await mkdir(join(workDir, 'bin'), { recursive: true });
     await writeFile(exePath, 'old-binary');
-    vi.stubEnv('KIMI_CODE_HOME', homeDir);
+    vi.stubEnv('TEA_CODE_HOME', homeDir);
     fsMocks.renameBlocker = null;
     fsMocks.linkError = null;
   });

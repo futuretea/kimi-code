@@ -599,6 +599,7 @@ describe('formatTrustGatedMcpWarning', () => {
     const text = formatTrustGatedMcpWarning([{ name: 'fs', target: 'stdio: node server.js' }]);
     expect(text).toContain('skipped 1 project-level MCP server: fs (stdio: node server.js).');
     expect(text).toContain('"Trust this folder"');
+    expect(text).toContain('Run `tea-code` here');
   });
 
   it('pluralizes and joins multiple skipped servers', () => {

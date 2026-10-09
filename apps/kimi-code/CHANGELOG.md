@@ -1,8 +1,10 @@
-# @moonshot-ai/kimi-code
+# @futuretea/tea-code
 
 ## 2.1.1
 
 ### Patch Changes
+
+- Ship `tea-code` with isolated `TEA_CODE_HOME` data; replace native update downloads with npm update commands and stop automatic legacy detection and shim takeover, retaining explicit migration through `tea-code migrate`.
 
 - [#4013](https://github.com/MoonshotAI/kimi-code/pull/4013) [`929403b`](https://github.com/MoonshotAI/kimi-code/commit/929403b6db219eae6099dd23eae2f0efa2bb2823) Thanks [@7Sageer](https://github.com/7Sageer)! - Roll back some of the overly defensive changes in 2.1.0
 

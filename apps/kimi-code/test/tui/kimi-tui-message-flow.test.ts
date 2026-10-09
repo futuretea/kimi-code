@@ -459,7 +459,7 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 const tempDirs: string[] = [];
-const originalKimiCodeHome = process.env['KIMI_CODE_HOME'];
+const originalKimiCodeHome = process.env['TEA_CODE_HOME'];
 const originalPluginMarketplaceUrl = process.env['KIMI_CODE_PLUGIN_MARKETPLACE_URL'];
 const originalVisual = process.env['VISUAL'];
 const originalEditor = process.env['EDITOR'];
@@ -504,9 +504,9 @@ afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
   }
   if (originalKimiCodeHome === undefined) {
-    delete process.env['KIMI_CODE_HOME'];
+    delete process.env['TEA_CODE_HOME'];
   } else {
-    process.env['KIMI_CODE_HOME'] = originalKimiCodeHome;
+    process.env['TEA_CODE_HOME'] = originalKimiCodeHome;
   }
   if (originalVisual === undefined) {
     delete process.env['VISUAL'];
@@ -1875,7 +1875,7 @@ describe('KimiTUI message flow', () => {
 
   it('hydrates lazy config defaults on a sessionless /reload (v2 engine)', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     const session = makeSession({ id: 'ses-lazy' });
     const getConfig = vi.fn(
       async (): Promise<{ models: Record<string, unknown>; defaultModel?: string }> => ({
@@ -1903,7 +1903,7 @@ describe('KimiTUI message flow', () => {
 
   it('clears stale lazy defaults when the default model is removed (v2 engine)', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     const session = makeSession({ id: 'ses-lazy' });
     const getConfig = vi.fn(
       async (): Promise<{ models: Record<string, unknown>; defaultModel?: string }> => ({
@@ -1970,7 +1970,7 @@ describe('KimiTUI message flow', () => {
 
   it('clears the stale permission default when it is removed from config (v2 engine)', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     const session = makeSession({ id: 'ses-lazy' });
     const getConfig = vi.fn(
       async (): Promise<{
@@ -2163,7 +2163,7 @@ describe('KimiTUI message flow', () => {
   });
 
   it('tracks theme changes from slash commands', async () => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     const { driver, harness } = await makeDriver();
     harness.track.mockClear();
 
@@ -2178,7 +2178,7 @@ describe('KimiTUI message flow', () => {
 
   it('dispatches /reload-tui without reloading the active session', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     await writeFile(
       join(homeDir, 'tui.toml'),
       `
@@ -2205,7 +2205,7 @@ command = "vim"
 
   it('dispatches /reload through session reload and applies tui.toml', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     await writeFile(join(homeDir, 'tui.toml'), 'theme = "light"\n', 'utf-8');
     const { driver, session, harness } = await makeDriver();
     harness.track.mockClear();
@@ -3523,7 +3523,7 @@ command = "vim"
   });
 
   it('releases every queued use of shared media when the queue is discarded', async () => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     const { driver, harness } = await makeDriver();
     const imageStore = (driver as unknown as { imageStore: ImageAttachmentStore }).imageStore;
     const attachment = stagedImage(imageStore, 'file-queued');
@@ -6843,7 +6843,7 @@ command = "vim"
       expect(getStatus).toHaveBeenCalledTimes(previousStatusCalls + 1);
       const output = stripSgr(driver.state.transcriptContainer.render(120).join('\n'));
       expect(output).toContain(' Status ');
-      expect(output).toContain('>_ Kimi Code');
+      expect(output).toContain('>_ Tea Code');
       expect(output).toContain('Model');
       expect(output).toContain('thinking high');
       expect(output).toContain('Permissions  Never Ask');
@@ -8139,11 +8139,11 @@ command = "vim"
         );
       });
       expect(copyTextToClipboard).toHaveBeenCalledWith(
-        "cd '/tmp/proj-a' && kimi --resume 'ses-fork'",
+        "cd '/tmp/proj-a' && tea-code --resume 'ses-fork'",
       );
       const transcript = driver.state.transcriptContainer.render(120).join('\n');
       expect(transcript).toContain(
-        "To enter the fork in a new process, run: cd '/tmp/proj-a' && kimi --resume 'ses-fork'",
+        "To enter the fork in a new process, run: cd '/tmp/proj-a' && tea-code --resume 'ses-fork'",
       );
       expect(transcript).toContain('Command copied to clipboard');
       expect(driver.getCurrentSessionId()).toBe('ses-source');
@@ -8170,7 +8170,7 @@ command = "vim"
     await vi.waitFor(() => {
       const transcript = driver.state.transcriptContainer.render(120).join('\n');
       expect(transcript).toContain(
-        "To enter the fork in a new process, run: cd '/tmp/proj-a' && kimi --resume 'ses-fork'",
+        "To enter the fork in a new process, run: cd '/tmp/proj-a' && tea-code --resume 'ses-fork'",
       );
       expect(transcript).toContain('Failed to copy command to clipboard');
     });
@@ -8212,7 +8212,7 @@ command = "vim"
 
       await vi.waitFor(() => {
         expect(copyTextToClipboard).toHaveBeenCalledWith(
-          'pushd "D:\\proj" && kimi --resume "ses-fork"',
+          'pushd "D:\\proj" && tea-code --resume "ses-fork"',
         );
       });
       expect(driver.getCurrentSessionId()).toBe('ses-source');
@@ -8900,7 +8900,7 @@ describe('KimiTUI session rating survey', () => {
   it('runs the end-to-end rating flow after five user turns', async () => {
     vi.useFakeTimers();
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     vi.spyOn(Math, 'random').mockReturnValue(0);
     try {
       const { driver, harness } = await makeDriver();
@@ -9042,7 +9042,7 @@ describe('KimiTUI session rating survey', () => {
   it('shows the long-context survey once the context window crosses the threshold', async () => {
     vi.useFakeTimers();
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     vi.spyOn(Math, 'random').mockReturnValue(0);
     try {
       const { driver, harness } = await makeDriver();
@@ -9106,7 +9106,7 @@ describe('KimiTUI session rating survey', () => {
 
   it('ignores non-user turns for the survey warmup', async () => {
     vi.useFakeTimers();
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     vi.spyOn(Math, 'random').mockReturnValue(0);
     try {
       const { driver } = await makeDriver();
@@ -9141,7 +9141,7 @@ describe('KimiTUI session rating survey', () => {
 
       vi.useRealTimers();
       await vi.waitFor(() => {
-        expect(existsSync(join(process.env['KIMI_CODE_HOME']!, 'feedback-survey-state.json'))).toBe(
+        expect(existsSync(join(process.env['TEA_CODE_HOME']!, 'feedback-survey-state.json'))).toBe(
           true,
         );
       });
@@ -9153,7 +9153,7 @@ describe('KimiTUI session rating survey', () => {
 
   it('counts user-slash skill and plugin command turns toward the survey warmup', async () => {
     vi.useFakeTimers();
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     vi.spyOn(Math, 'random').mockReturnValue(0);
     try {
       const { driver } = await makeDriver();
@@ -9218,7 +9218,7 @@ describe('KimiTUI session rating survey', () => {
 
       vi.useRealTimers();
       await vi.waitFor(() => {
-        expect(existsSync(join(process.env['KIMI_CODE_HOME']!, 'feedback-survey-state.json'))).toBe(
+        expect(existsSync(join(process.env['TEA_CODE_HOME']!, 'feedback-survey-state.json'))).toBe(
           true,
         );
       });

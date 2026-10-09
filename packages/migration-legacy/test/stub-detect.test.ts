@@ -1,8 +1,14 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isConfigStubOrMissing, isTuiStubOrMissing } from '../src/stub-detect.js';
+import { ensureConfigFile } from '../../node-sdk/src/config/toml.js';
+import { DEFAULT_TUI_CONFIG, renderTuiConfig } from '../../../apps/kimi-code/src/tui/config.js';
+import {
+  DEFAULT_CONFIG_FILE_TEXT,
+  isConfigStubOrMissing,
+  isTuiStubOrMissing,
+} from '../src/stub-detect.js';
 
 let dir: string;
 beforeEach(async () => {
@@ -18,19 +24,15 @@ describe('isConfigStubOrMissing', () => {
   });
 
   it('returns true when content matches DEFAULT_CONFIG_FILE_TEXT exactly', async () => {
-    // From packages/kimi-core/src/harness/configs/toml.ts:42
-    const stub =
-      '# ~/.kimi-code/config.toml\n' +
-      '# Runtime settings for Kimi Code.\n' +
-      '# This file starts empty so built-in defaults can apply.\n' +
-      '# Login will populate managed Kimi provider and model entries.\n';
-    await writeFile(join(dir, 'config.toml'), stub, 'utf-8');
-    expect(await isConfigStubOrMissing(join(dir, 'config.toml'))).toBe(true);
+    const path = join(dir, 'config.toml');
+    await ensureConfigFile(path);
+    expect(await readFile(path, 'utf-8')).toBe(DEFAULT_CONFIG_FILE_TEXT);
+    expect(await isConfigStubOrMissing(path)).toBe(true);
   });
 
   it('returns false when user added a single non-comment line', async () => {
     const modified =
-      '# ~/.kimi-code/config.toml\n' +
+      '# ~/.tea-code/config.toml\n' +
       '# Runtime settings for Kimi Code.\n' +
       '# This file starts empty so built-in defaults can apply.\n' +
       '# Login will populate managed Kimi provider and model entries.\n' +
@@ -41,7 +43,7 @@ describe('isConfigStubOrMissing', () => {
 
   it('returns false on any byte difference, even trailing whitespace', async () => {
     const stubPlusSpace =
-      '# ~/.kimi-code/config.toml\n' +
+      '# ~/.tea-code/config.toml\n' +
       '# Runtime settings for Kimi Code.\n' +
       '# This file starts empty so built-in defaults can apply.\n' +
       '# Login will populate managed Kimi provider and model entries.\n' +
@@ -56,20 +58,8 @@ describe('isTuiStubOrMissing', () => {
     expect(await isTuiStubOrMissing(join(dir, 'tui.toml'))).toBe(true);
   });
 
-  it('returns true when content is byte-equal to default render', async () => {
-    const defaultRender =
-      '# ~/.kimi-code/tui.toml\n' +
-      '# Terminal UI preferences for kimi-code.\n' +
-      '# Agent/runtime settings stay in ~/.kimi-code/config.toml.\n' +
-      '\n' +
-      'theme = "auto" # "auto" | "dark" | "light"\n' +
-      '\n' +
-      '[editor]\n' +
-      'command = "" # Empty uses $VISUAL / $EDITOR\n' +
-      '\n' +
-      '[notifications]\n' +
-      'enabled = true # true | false\n' +
-      'notification_condition = "unfocused" # "unfocused" | "always"\n';
+  it('returns true for the current CLI default render', async () => {
+    const defaultRender = renderTuiConfig(DEFAULT_TUI_CONFIG);
     await writeFile(join(dir, 'tui.toml'), defaultRender, 'utf-8');
     expect(await isTuiStubOrMissing(join(dir, 'tui.toml'))).toBe(true);
   });

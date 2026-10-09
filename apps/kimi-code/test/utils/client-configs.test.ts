@@ -409,7 +409,7 @@ describe('getClientConfig disk cache', () => {
 
   it('writes paths that sanitize alike to distinct cache files', async () => {
     const home = await mkdtemp(join(tmpdir(), 'client-configs-home-'));
-    vi.stubEnv('KIMI_CODE_HOME', home);
+    vi.stubEnv('TEA_CODE_HOME', home);
     try {
       const fetchImpl = vi.fn(async () => jsonResponse(ENVELOPE));
       const now = Date.now();

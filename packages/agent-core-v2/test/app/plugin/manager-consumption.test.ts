@@ -492,7 +492,7 @@ describe('PluginManager consumption plane', () => {
         'plugin-demo:finance': expect.objectContaining({
           command: 'finance-mcp',
           cwd: managedRoot,
-          env: expect.objectContaining({ KIMI_CODE_HOME: home, KIMI_PLUGIN_ROOT: managedRoot }),
+          env: expect.objectContaining({ TEA_CODE_HOME: home, KIMI_PLUGIN_ROOT: managedRoot }),
         }),
         'plugin-demo:docs': expect.objectContaining({ url: 'https://example.com/mcp' }),
         'plugin-demo:events': expect.objectContaining({
@@ -633,7 +633,7 @@ describe('PluginManager consumption plane', () => {
         cwd: managedRoot,
         env: expect.objectContaining({
           CUSTOM: '1',
-          KIMI_CODE_HOME: home,
+          TEA_CODE_HOME: home,
           KIMI_PLUGIN_ROOT: managedRoot,
         }),
       }),
@@ -721,7 +721,7 @@ describe('PluginManager consumption plane', () => {
         command: './hooks/guard.sh',
         timeout: 10,
         cwd: installedRoot,
-        env: { KIMI_CODE_HOME: home, KIMI_PLUGIN_ROOT: installedRoot },
+        env: { TEA_CODE_HOME: home, KIMI_PLUGIN_ROOT: installedRoot },
       },
     ]);
   });
@@ -905,7 +905,7 @@ describe('PluginManager consumption plane', () => {
           args: ['./bin/data.mjs'],
           cwd: managedRoot,
           env: expect.objectContaining({
-            KIMI_CODE_HOME: home,
+            TEA_CODE_HOME: home,
             KIMI_PLUGIN_ROOT: managedRoot,
             ELECTRON_RUN_AS_NODE: '1',
           }),

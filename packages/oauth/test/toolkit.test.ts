@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   applyManagedKimiCodeConfig,
+  FileTokenStorage,
   KIMI_CODE_PROVIDER_NAME,
   KimiOAuthToolkit,
   resolveKimiCodeOAuthKey,
@@ -12,6 +15,14 @@ import {
   type TokenInfo,
   type TokenStorage,
 } from '../src';
+import { createTempWorkDir } from './helpers';
+
+vi.mock('node:fs', async (importOriginal) => {
+  const fs = await importOriginal<typeof import('node:fs')>();
+  return { ...fs, readFileSync: vi.fn(fs.readFileSync) };
+});
+
+const read = vi.mocked(readFileSync);
 
 class MemoryTokenStorage implements TokenStorage {
   readonly tokens = new Map<string, TokenInfo>();
@@ -53,6 +64,7 @@ const TEST_IDENTITY = {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 function managedModelsResponse(): Response {
@@ -109,6 +121,43 @@ describe('resolveKimiTokenStorageName', () => {
 });
 
 describe('KimiOAuthToolkit', () => {
+  it.each([
+    { tea: false, kimi: false },
+    { tea: true, kimi: false },
+    { tea: false, kimi: true },
+    { tea: true, kimi: true },
+  ])('isolates stored credentials for tea=$tea and kimi=$kimi', async ({ tea, kimi }) => {
+    const root = await createTempWorkDir();
+    try {
+      vi.stubEnv('HOME', root.path);
+      vi.stubEnv('USERPROFILE', root.path);
+      const homes = [
+        join(root.path, '.tea-code'),
+        join(root.path, 'custom-tea'),
+        join(root.path, '.kimi-code'),
+        join(root.path, 'custom-kimi'),
+      ];
+      vi.stubEnv('TEA_CODE_HOME', tea ? homes[1] : undefined);
+      vi.stubEnv('KIMI_CODE_HOME', kimi ? homes[3] : undefined);
+      for (const [index, home] of homes.entries()) {
+        await new FileTokenStorage(join(home, 'credentials')).save('kimi-code', token(`access-${index}`));
+      }
+      const upstreamPaths = homes.slice(2).map((home) => join(home, 'credentials', 'kimi-code.json'));
+      const upstreamBytes = await Promise.all(upstreamPaths.map((path) => readFile(path)));
+      read.mockClear();
+      const toolkit = new KimiOAuthToolkit({ now: () => 100 });
+
+      await expect(toolkit.tokenProvider().getAccessToken()).resolves.toBe(tea ? 'access-1' : 'access-0');
+
+      expect(read.mock.calls.map(([path]) => path)).toEqual([
+        join(homes[tea ? 1 : 0]!, 'credentials', 'kimi-code.json'),
+      ]);
+      expect(await Promise.all(upstreamPaths.map((path) => readFile(path)))).toEqual(upstreamBytes);
+    } finally {
+      await root.cleanup();
+    }
+  });
+
   it('can be constructed without host identity', async () => {
     const storage = new MemoryTokenStorage();
     storage.tokens.set('kimi-code', token('access-1'));

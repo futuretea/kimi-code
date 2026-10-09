@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
@@ -194,14 +194,26 @@ describe('Session skills', () => {
     }
   });
 
-  it('resolves user brand skills from KIMI_CODE_HOME, not the OS home', async () => {
+  it.each([
+    { tea: false, kimi: false },
+    { tea: true, kimi: false },
+    { tea: false, kimi: true },
+    { tea: true, kimi: true },
+  ])('isolates user skill discovery for tea=$tea and kimi=$kimi', async ({ tea, kimi }) => {
     const homeDir = await makeTempDir(tempDirs, 'kimi-sdk-skills-home-');
     const processHome = await makeTempDir(tempDirs, 'kimi-sdk-skills-process-home-');
+    const upstreamHome = await makeTempDir(tempDirs, 'kimi-sdk-skills-upstream-home-');
     const workDir = await makeTempDir(tempDirs, 'kimi-sdk-skills-work-');
     vi.stubEnv('HOME', processHome);
-    vi.stubEnv('KIMI_CODE_HOME', homeDir);
+    vi.stubEnv('USERPROFILE', processHome);
+    vi.stubEnv('TEA_CODE_HOME', tea ? homeDir : undefined);
+    vi.stubEnv('KIMI_CODE_HOME', kimi ? upstreamHome : undefined);
     await writeLegacyUserSkill(processHome, 'sdk-real-home-only', 'SDK real home skill');
+    await writeBrandUserSkill(upstreamHome, 'sdk-upstream-only', 'SDK upstream home skill');
+    await writeBrandUserSkill(join(processHome, '.tea-code'), 'sdk-default-only', 'SDK default home skill');
     await writeBrandUserSkill(homeDir, 'sdk-sandbox-only', 'SDK sandbox skill');
+    const upstreamPath = join(upstreamHome, 'skills', 'sdk-upstream-only', 'SKILL.md');
+    const upstreamBytes = await readFile(upstreamPath);
     const harness = createKimiHarness({ identity: TEST_IDENTITY });
 
     try {
@@ -209,7 +221,10 @@ describe('Session skills', () => {
       const names = new Set((await session.listSkills()).map((skill) => skill.name));
 
       expect(names.has('sdk-real-home-only')).toBe(false);
-      expect(names.has('sdk-sandbox-only')).toBe(true);
+      expect(names.has('sdk-upstream-only')).toBe(false);
+      expect(names.has('sdk-sandbox-only')).toBe(tea);
+      expect(names.has('sdk-default-only')).toBe(!tea);
+      expect(await readFile(upstreamPath)).toEqual(upstreamBytes);
     } finally {
       await harness.close();
     }

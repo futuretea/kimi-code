@@ -18,7 +18,7 @@
  *
  * Security: dev/preview only, bound to loopback by Vite defaults. It hands
  * out the same token the user would otherwise paste from
- * `~/.kimi-code/server.token` by hand — no new exposure beyond the local dev
+ * `~/.tea-code/server.token` by hand — no new exposure beyond the local dev
  * session.
  */
 
@@ -66,11 +66,11 @@ interface ServerLockDisk {
   host_version?: string;
 }
 
-/** home resolution per request: `KIMI_CODE_HOME` env, else `~/.kimi-code`. */
+/** home resolution per request: `TEA_CODE_HOME` env, else `~/.tea-code`. */
 export function resolveKimiHomeDir(env: NodeJS.ProcessEnv = process.env): string {
-  const fromEnv = env['KIMI_CODE_HOME'];
+  const fromEnv = env['TEA_CODE_HOME'];
   if (fromEnv !== undefined && fromEnv.length > 0) return fromEnv;
-  return join(homedir(), '.kimi-code');
+  return join(homedir(), '.tea-code');
 }
 
 /** `process.kill(pid, 0)` probe — same semantics as the server's registry:

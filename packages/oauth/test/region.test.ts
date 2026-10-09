@@ -1,7 +1,8 @@
-import { writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_KIMI_CODE_OAUTH_HOST } from '#/constants';
 import { KIMI_CODE_OAUTH_KEY } from '#/managed-kimi-code';
@@ -17,6 +18,13 @@ import {
 } from '#/region';
 
 import { createTempWorkDir, type TempDirHandle } from './helpers';
+
+vi.mock('node:fs', async (importOriginal) => {
+  const fs = await importOriginal<typeof import('node:fs')>();
+  return { ...fs, readFileSync: vi.fn(fs.readFileSync) };
+});
+
+const read = vi.mocked(readFileSync);
 
 describe('KIMI_REGION_PROFILES', () => {
   it('keeps the mainland-cn profile aligned with the shared defaults', () => {
@@ -40,6 +48,7 @@ describe('resolveKimiRegion', () => {
   let workDir: TempDirHandle | undefined;
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await workDir?.cleanup();
     workDir = undefined;
   });
@@ -118,9 +127,44 @@ describe('resolveKimiRegion', () => {
     ).toBe('mainland-cn');
   });
 
-  it('honors KIMI_CODE_HOME when homeDir is not passed explicitly', async () => {
+  it('honors TEA_CODE_HOME when homeDir is not passed explicitly', async () => {
     const dir = await markerDir('global');
-    expect(resolveKimiRegion({ env: { KIMI_CODE_HOME: dir } })).toBe('global');
+    expect(resolveKimiRegion({ env: { TEA_CODE_HOME: dir } })).toBe('global');
+  });
+
+  it.each([
+    { tea: false, kimi: false },
+    { tea: true, kimi: false },
+    { tea: false, kimi: true },
+    { tea: true, kimi: true },
+  ])('isolates marker reads for tea=$tea and kimi=$kimi', async ({ tea, kimi }) => {
+    workDir = await createTempWorkDir();
+    vi.stubEnv('HOME', workDir.path);
+    vi.stubEnv('USERPROFILE', workDir.path);
+    const teaHome = join(workDir.path, '.tea-code');
+    const customTeaHome = join(workDir.path, 'custom-tea');
+    const upstreamHomes = [join(workDir.path, '.kimi-code'), join(workDir.path, 'custom-kimi')];
+    for (const home of [teaHome, customTeaHome, ...upstreamHomes]) {
+      await mkdir(home, { recursive: true });
+      await writeFile(
+        join(home, KIMI_REGION_MARKER_FILENAME),
+        upstreamHomes.includes(home) ? 'global' : 'mainland-cn',
+      );
+    }
+    read.mockClear();
+
+    expect(resolveKimiRegion({ env: {
+      TEA_CODE_HOME: tea ? customTeaHome : undefined,
+      KIMI_CODE_HOME: kimi ? upstreamHomes[1] : undefined,
+    } })).toBe('mainland-cn');
+
+    const expectedHome = tea ? customTeaHome : teaHome;
+    expect(read.mock.calls.map(([path]) => path)).toEqual([
+      join(expectedHome, KIMI_REGION_MARKER_FILENAME),
+    ]);
+    for (const home of upstreamHomes) {
+      expect(await readFile(join(home, KIMI_REGION_MARKER_FILENAME), 'utf8')).toBe('global');
+    }
   });
 
   it('env beats persisted login beats marker', async () => {

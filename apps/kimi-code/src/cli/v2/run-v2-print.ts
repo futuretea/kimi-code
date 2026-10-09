@@ -425,7 +425,7 @@ async function resolveNativeSession(
     if (target.cwd !== undefined && resolve(target.cwd) !== resolve(workDir)) {
       stderr.write(
         `Session "${opts.session}" was created under a different directory.\n` +
-          `  cd "${target.cwd}" && kimi -r ${opts.session}\n\n`,
+          `  cd "${target.cwd}" && tea-code -r ${opts.session}\n\n`,
       );
       throw new Error(`Session "${opts.session}" was created under a different directory.`);
     }
@@ -525,7 +525,7 @@ export function formatTrustGatedMcpWarning(servers: readonly TrustGatedMcpServer
   const list = servers.map((server) => `${server.name} (${server.target})`).join(', ');
   return (
     `Warning: this folder is not trusted; skipped ${servers.length} project-level MCP ${noun}: ${list}.\n` +
-    '  Run `kimi` here and choose "Trust this folder" to enable them.\n\n'
+    '  Run `tea-code` here and choose "Trust this folder" to enable them.\n\n'
   );
 }
 

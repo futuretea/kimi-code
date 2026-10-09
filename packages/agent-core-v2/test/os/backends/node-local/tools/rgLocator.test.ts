@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 
 import { extract as extractTar } from 'tar';
 import { ZipFile } from 'yazl';
@@ -12,12 +12,32 @@ import {
   ensureRgPath,
   extractRgFromZip,
   findExistingRg,
+  getShareBinRgPath,
   rgUnavailableMessage,
   verifyArchiveChecksum,
   type RgProbe,
 } from '#/os/backends/node-local/tools/rgLocator';
+import { getShareBinRgPath as getWorkspaceShareBinRgPath } from '#/workspace/workspaceFs/internal/rgLocator';
 
 vi.mock('tar', () => ({ extract: vi.fn() }));
+
+describe('ripgrep user-home paths', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each([
+    { tea: undefined, kimi: undefined },
+    { tea: '/tmp/tea-rg', kimi: undefined },
+    { tea: undefined, kimi: '/tmp/kimi-rg' },
+    { tea: '/tmp/tea-rg', kimi: '/tmp/kimi-rg' },
+  ])('isolates both cache resolvers for $tea and $kimi', ({ tea, kimi }) => {
+    vi.stubEnv('TEA_CODE_HOME', tea);
+    vi.stubEnv('KIMI_CODE_HOME', kimi);
+    const home = tea ?? join(homedir(), '.tea-code');
+    const expected = join(home, 'bin', process.platform === 'win32' ? 'rg.exe' : 'rg');
+    expect(getShareBinRgPath()).toBe(expected);
+    expect(getWorkspaceShareBinRgPath()).toBe(expected);
+  });
+});
 
 function probeWith(
   resolveExitCode: (args: readonly string[]) => number,
@@ -344,10 +364,10 @@ describe('ensureRgPath download branch', () => {
   it('downloads from the cn CDN by default (no env override, no install marker)', async () => {
     const savedHost = process.env['KIMI_CODE_OAUTH_HOST'];
     const savedLegacyHost = process.env['KIMI_OAUTH_HOST'];
-    const savedHome = process.env['KIMI_CODE_HOME'];
+    const savedHome = process.env['TEA_CODE_HOME'];
     delete process.env['KIMI_CODE_OAUTH_HOST'];
     delete process.env['KIMI_OAUTH_HOST'];
-    process.env['KIMI_CODE_HOME'] = fakeShare;
+    process.env['TEA_CODE_HOME'] = fakeShare;
     try {
       const body = bodyFromBuffer(Buffer.from('not a real archive', 'utf8'));
       const fetchMock = vi.fn().mockResolvedValue({
@@ -369,8 +389,8 @@ describe('ensureRgPath download branch', () => {
       else process.env['KIMI_CODE_OAUTH_HOST'] = savedHost;
       if (savedLegacyHost === undefined) delete process.env['KIMI_OAUTH_HOST'];
       else process.env['KIMI_OAUTH_HOST'] = savedLegacyHost;
-      if (savedHome === undefined) delete process.env['KIMI_CODE_HOME'];
-      else process.env['KIMI_CODE_HOME'] = savedHome;
+      if (savedHome === undefined) delete process.env['TEA_CODE_HOME'];
+      else process.env['TEA_CODE_HOME'] = savedHome;
     }
   });
 
