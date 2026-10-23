@@ -1,5 +1,11 @@
 # @futuretea/tea-code
 
+## 2.3.1
+
+### Patch Changes
+
+- [`281445a`](https://github.com/futuretea/kimi-code/commit/281445ae10ffacc8a5474d45433dd90c7ae989bd) Thanks [@futuretea](https://github.com/futuretea)! - Sync Tea Code with Kimi Code 2.3.1.
+
 ## 2.3.1 (upstream)
 
 ### Patch Changes
