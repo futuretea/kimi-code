@@ -166,8 +166,8 @@ async function runTool(params) {
     const text = extractText(response);
     const formatted = (handler.format?.(text, built) ?? text).trim();
     return { content: [{ type: 'text', text: appendTrace(appendWarnings(formatted, fileWarnings), trace) }] };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     return {
       content: [{ type: 'text', text: appendTrace(message, trace) }],
       isError: true,
@@ -316,16 +316,16 @@ async function loadAccessToken() {
   let parsed;
   try {
     parsed = JSON.parse(await readFile(credentialsFile, 'utf8'));
-  } catch (error) {
-    if (isNotFound(error)) {
+  } catch (err) {
+    if (isNotFound(err)) {
       throw new Error(
         `Kimi Code credentials file not found: ${credentialsFile}\nRun /login in Kimi Code first.`,
       );
     }
-    if (error instanceof SyntaxError) {
-      throw new Error(`Failed to parse Kimi Code credentials file: ${error.message}`);
+    if (err instanceof SyntaxError) {
+      throw new Error(`Failed to parse Kimi Code credentials file: ${err.message}`);
     }
-    throw error;
+    throw err;
   }
 
   if (!isRecord(parsed)) {
@@ -378,11 +378,11 @@ async function callKimiTool(method, params, trace = {}) {
     } catch {
       return text;
     }
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
       throw new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds.`);
     }
-    throw error;
+    throw err;
   } finally {
     clearTimeout(timeout);
   }
@@ -527,14 +527,14 @@ async function dispatch(message) {
   try {
     const result = await handleRequest(message);
     sendResult(id, result ?? {});
-  } catch (error) {
-    if (error && typeof error === 'object' && error.jsonRpc !== undefined) {
-      sendError(id, error.jsonRpc);
+  } catch (err) {
+    if (err && typeof err === 'object' && err.jsonRpc !== undefined) {
+      sendError(id, err.jsonRpc);
       return;
     }
     sendError(id, {
       code: -32603,
-      message: error instanceof Error ? error.message : String(error),
+      message: err instanceof Error ? err.message : String(err),
     });
   }
 }
@@ -547,10 +547,10 @@ function start() {
     let message;
     try {
       message = JSON.parse(trimmed);
-    } catch (error) {
+    } catch (err) {
       sendError(null, {
         code: -32700,
-        message: `Parse error: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Parse error: ${err instanceof Error ? err.message : String(err)}`,
       });
       return;
     }
