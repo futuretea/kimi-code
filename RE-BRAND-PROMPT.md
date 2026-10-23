@@ -10,6 +10,12 @@
 - 现有发行身份是 npm 包 `@futuretea/tea-code`、可执行命令 `tea-code`，运行目录是 `TEA_CODE_HOME` 或默认的 `~/.tea-code`。
 - Tea Code 自 `2.1.1` 起与对应 Kimi Code 使用相同版本号，以减少变基时的发行元数据差异。当前沿用上游 `getVersion()` 和身份传递，不维护 `UPSTREAM_VERSION`、`getUpstreamVersion()` 或独立版本映射机制。
 
+## 本轮新增发行：Tea Code 2.3.1
+
+- 本轮目标为新增 `@futuretea/tea-code@2.3.1`，同步官方 `@moonshot-ai/kimi-code@2.3.1` tag；该 tag 解引用后的 commit 为 `684bae9ea6a437f3bae98bba1dcb797a917d500b`。以此为功能基线重新计算最小 re-brand 差异，保留本文既有范围与边界。
+- 计划实现与正式 npm 发布分支为 `tea/moonshot-231`，执行时创建或确认该分支，并将 `.github/workflows/release.yml` 的 push 分支与 `.changeset/config.json` 的 `baseBranch` 同步指向它。本轮沿用上游 `2.3.1` 的发布授权流程：合并对应版本更新 PR，且该合并提交的 CI 通过后才允许 npm 发布；普通推送不发布。上述 `2.1.1` 发行和 `tea/moonshot-211` 分支及其推送发布流程只作为历史对照。
+- 本轮 Tea Code 发行版本、`tea-code --version`、npm 更新目标和默认 Kimi 网络身份版本均为 `2.3.1`；ACP 编辑器显示名称为 `Tea Code CLI/2.3.1`，Kimi OAuth 身份为 `Kimi Code CLI/2.3.1`。沿用后文的产品 token、协议前缀、Web 后缀和 SDK 自定义身份保留规则。
+
 ## 产品意图
 
 这是一个独立安装、独立运行状态的 Tea Code 发行版，但功能上尽量等同于指定上游版本。严格最小化是硬约束：不能因为某个名称含有 `Kimi` 就替换它；每一项差异都必须直接支撑独立安装、用户级运行目录隔离、直接 CLI 入口，或发往 Kimi 服务端的客户端身份。它只应在以下边界与上游不同：
@@ -25,7 +31,7 @@ Tea Code 发行版本用于 `tea-code --version`、npm 更新和本地发行管�
 
 以下是严格最小化的保留规则：
 
-- 除 `KIMI_CODE_HOME` 被 `TEA_CODE_HOME` 替代以隔离用户级运行目录外，保留其他既有环境变量、Kimi 服务协议 token、模型/认证语义、公共 API 元数据和公共 skill ID。
+- 父 CLI 的用户级运行目录只由 `TEA_CODE_HOME` 或默认 `~/.tea-code` 决定，忽略父环境的 `KIMI_CODE_HOME`。插件 MCP 与 hook 子进程保留上游 `KIMI_CODE_HOME` 输入契约，同时提供 `TEA_CODE_HOME`；两者必须强制指向已经解析的 Tea home，不得继承指向上游目录的值。默认市场实际下载的上游插件也必须满足此隔离，不能只验证工作树中的插件源码。保留其他既有环境变量、Kimi 服务协议 token、模型/认证语义、公共 API 元数据和公共 skill ID。
 - 仅因产品名而改动日志名、导出 archive 名、临时目录、缓存 basename、内部变量/函数名或测试 fixture 名，不能提高隔离或网络身份正确性，必须保持上游名称。
 - 运行目录已经隔离时，不再通过改日志或导出文件 basename 做第二层隔离；例如 Tea Code home 内的 `kimi-code.log` 与 `kimi-debug-*.zip` 仍是允许且预期的上游兼容文件名。
 - GitHub Actions 正式 release 与 Changesets 配置仅可作最小适配，使 `futuretea/kimi-code` 能以 npm-only 方式发布 `@futuretea/tea-code`；不得新增发布机制或改变非 release 路径。正式 release 不联动部署文档，不恢复自动原生构建、Apple 签名/公证或 GitHub Release 原生资产上传；保留手动和本地原生构建能力及其上游名称。Nix packaging、PR 预览发布和其他发布自动化不属于本 goal，除非目标提出者另行明确要求。
