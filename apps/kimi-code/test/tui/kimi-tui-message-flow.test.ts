@@ -79,6 +79,16 @@ import {
   type ExtractionResult,
 } from '#/tui/utils/image-placeholder';
 
+vi.mock('#/utils/client-configs', () => ({
+  clientConfigs: {
+    get: async () => undefined,
+    peek: () => undefined,
+    fetch: async () => undefined,
+    region: () => 'mainland-cn',
+    reset: () => {},
+  },
+}));
+
 vi.mock('#/tui/commands/prompts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('#/tui/commands/prompts')>();
   return {
@@ -473,7 +483,7 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 const tempDirs: string[] = [];
-const originalKimiCodeHome = process.env['KIMI_CODE_HOME'];
+const originalKimiCodeHome = process.env['TEA_CODE_HOME'];
 const originalPluginMarketplaceUrl = process.env['KIMI_CODE_PLUGIN_MARKETPLACE_URL'];
 const originalVisual = process.env['VISUAL'];
 const originalEditor = process.env['EDITOR'];
@@ -518,9 +528,9 @@ afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
   }
   if (originalKimiCodeHome === undefined) {
-    delete process.env['KIMI_CODE_HOME'];
+    delete process.env['TEA_CODE_HOME'];
   } else {
-    process.env['KIMI_CODE_HOME'] = originalKimiCodeHome;
+    process.env['TEA_CODE_HOME'] = originalKimiCodeHome;
   }
   if (originalVisual === undefined) {
     delete process.env['VISUAL'];
@@ -1077,7 +1087,7 @@ describe('KimiTUI message flow', () => {
       expect(stripSgr(picker().render(80).join(' '))).toContain('Session still in use');
     });
     expect(stripSgr(picker().render(120).join(' '))).toContain(
-      'If another Kimi Code process is still running, taking over may mix up the history.',
+      'If another Tea Code process is still running, taking over may mix up the history.',
     );
     if (takeOver) picker().handleInput('\u001B[B');
     picker().handleInput('\r');
@@ -2118,7 +2128,7 @@ describe('KimiTUI message flow', () => {
 
   it('hydrates lazy config defaults on a sessionless /reload (v2 engine)', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     const session = makeSession({ id: 'ses-lazy' });
     const getConfig = vi.fn(
       async (): Promise<{ models: Record<string, unknown>; defaultModel?: string }> => ({
@@ -2146,7 +2156,7 @@ describe('KimiTUI message flow', () => {
 
   it('clears stale lazy defaults when the default model is removed (v2 engine)', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     const session = makeSession({ id: 'ses-lazy' });
     const getConfig = vi.fn(
       async (): Promise<{ models: Record<string, unknown>; defaultModel?: string }> => ({
@@ -2213,7 +2223,7 @@ describe('KimiTUI message flow', () => {
 
   it('clears the stale permission default when it is removed from config (v2 engine)', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     const session = makeSession({ id: 'ses-lazy' });
     const getConfig = vi.fn(
       async (): Promise<{
@@ -2406,7 +2416,7 @@ describe('KimiTUI message flow', () => {
   });
 
   it('tracks theme changes from slash commands', async () => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     const { driver, harness } = await makeDriver();
     harness.track.mockClear();
 
@@ -2421,7 +2431,7 @@ describe('KimiTUI message flow', () => {
 
   it('dispatches /reload-tui without reloading the active session', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     await writeFile(
       join(homeDir, 'tui.toml'),
       `
@@ -2448,7 +2458,7 @@ command = "vim"
 
   it('dispatches /reload through session reload and applies tui.toml', async () => {
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     await writeFile(join(homeDir, 'tui.toml'), 'theme = "light"\n', 'utf-8');
     const { driver, session, harness } = await makeDriver();
     harness.track.mockClear();
@@ -3762,8 +3772,8 @@ command = "vim"
   });
 
   it('keeps a pending skill video when another input creates the first session', async () => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
-    const sourcePath = join(process.env['KIMI_CODE_HOME'], 'example.mp4');
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
+    const sourcePath = join(process.env['TEA_CODE_HOME'], 'example.mp4');
     await writeFile(sourcePath, 'example video');
     const session = makeSession({
       listSkills: vi.fn(async () => [
@@ -3804,7 +3814,7 @@ command = "vim"
   });
 
   it('keeps queued image parts aligned when one stashed skill attachment was removed', async () => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     const { driver, session } = await makeDriver();
     const imageStore = (driver as unknown as { imageStore: ImageAttachmentStore }).imageStore;
     const first = imageStore.addImage(new Uint8Array([1]), 'image/png', 1, 1, undefined, 'file-first');
@@ -3881,8 +3891,8 @@ command = "vim"
   });
 
   it.each(['drain', 'steer'])('uses the cached skill video argument instead of an expired queued video part (%s)', async (delivery) => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
-    const sourcePath = join(process.env['KIMI_CODE_HOME'], 'example.mp4');
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
+    const sourcePath = join(process.env['TEA_CODE_HOME'], 'example.mp4');
     await writeFile(sourcePath, 'example video');
     const session = makeSession({
       listSkills: vi.fn(async () => [
@@ -3934,7 +3944,7 @@ command = "vim"
   });
 
   it.each(['image', 'video'])('preserves skill media arguments when the cache hint starts a new session (%s)', async (kind) => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     const listSkills = vi.fn(async () => [
       { name: 'review', description: 'Review skill', path: '/tmp/review', source: 'user' },
     ]);
@@ -3965,7 +3975,7 @@ command = "vim"
     const imageStore = (driver as unknown as { imageStore: ImageAttachmentStore }).imageStore;
     const attachment = kind === 'image'
       ? stagedImage(imageStore, 'file-cached-skill')
-      : imageStore.addVideo('video/mp4', join(process.env['KIMI_CODE_HOME'], 'example.mp4'));
+      : imageStore.addVideo('video/mp4', join(process.env['TEA_CODE_HOME'], 'example.mp4'));
     if (attachment.kind === 'video') {
       await writeFile(attachment.sourcePath, 'example video');
       imageStore.completeVideo(attachment, {
@@ -4016,8 +4026,8 @@ command = "vim"
     { prefix: 'watch /skill:review', skills: [{ name: 'review' }] },
     { prefix: '/skill:review /skill:security', skills: [{ name: 'review' }, { name: 'security' }] },
   ])('waits for a pending video before submitting a skill prompt ($prefix)', async ({ prefix, skills }) => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
-    const sourcePath = join(process.env['KIMI_CODE_HOME'], 'example.mp4');
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
+    const sourcePath = join(process.env['TEA_CODE_HOME'], 'example.mp4');
     await writeFile(sourcePath, 'example video');
     const session = makeSession({
       listSkills: vi.fn(async () => [
@@ -4190,7 +4200,7 @@ command = "vim"
   });
 
   it('releases every queued use of shared media when the queue is discarded', async () => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     const { driver, harness } = await makeDriver();
     const imageStore = (driver as unknown as { imageStore: ImageAttachmentStore }).imageStore;
     const attachment = stagedImage(imageStore, 'file-queued');
@@ -4268,8 +4278,8 @@ command = "vim"
   it.each(['/skill:review', 'check /skill:review'])(
     'retries a failed skill video from input history (%s)',
     async (prefix) => {
-      process.env['KIMI_CODE_HOME'] = await makeTempHome();
-      const sourcePath = join(process.env['KIMI_CODE_HOME'], 'example.mp4');
+      process.env['TEA_CODE_HOME'] = await makeTempHome();
+      const sourcePath = join(process.env['TEA_CODE_HOME'], 'example.mp4');
       await writeFile(sourcePath, 'example video');
       const promptWithSkills = vi.fn(async (_input: unknown) => {})
         .mockRejectedValueOnce(new Error('Skill dispatch failed'))
@@ -4602,7 +4612,7 @@ command = "vim"
   });
 
   it('keeps a skill steer media lease unclaimed by an untracked turn it cannot merge into', async () => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     const session = makeSession({
       listSkills: vi.fn(async () => [
         { name: 'review', description: 'Review skill', path: '/tmp/review', source: 'user' },
@@ -4901,7 +4911,7 @@ command = "vim"
   });
 
   it('uses the existing media queue policy after the selected model changes', async () => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     const session = makeSession({
       listSkills: vi.fn(async () => [
         { name: 'review', description: 'Review skill', path: '/tmp/review', source: 'user' },
@@ -7618,8 +7628,8 @@ capabilities = ["image_in", "video_in"]
   });
 
   it.each(['ready', 'timeout', 'closed'] as const)('keeps a pending BTW skill video with its intended recipient (%s)', async (outcome) => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
-    const sourcePath = join(process.env['KIMI_CODE_HOME'], 'example.mp4');
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
+    const sourcePath = join(process.env['TEA_CODE_HOME'], 'example.mp4');
     await writeFile(sourcePath, 'example video');
     const session = makeSession({
       listSkills: vi.fn(async () => [
@@ -7750,8 +7760,8 @@ capabilities = ["image_in", "video_in"]
   });
 
   it('cancels a BTW skill prompt still waiting for media ingestion', async () => {
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
-    const sourcePath = join(process.env['KIMI_CODE_HOME'], 'example.mp4');
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
+    const sourcePath = join(process.env['TEA_CODE_HOME'], 'example.mp4');
     await writeFile(sourcePath, 'example video');
     const session = makeSession({
       listSkills: vi.fn(async () => [
@@ -9712,7 +9722,7 @@ capabilities = ["image_in", "video_in"]
       expect(getStatus).toHaveBeenCalledTimes(previousStatusCalls + 1);
       const output = stripSgr(driver.state.transcriptContainer.render(120).join('\n'));
       expect(output).toContain(' Status ');
-      expect(output).toContain('>_ Kimi Code');
+      expect(output).toContain('>_ Tea Code');
       expect(output).toContain('Model');
       expect(output).toContain('thinking high');
       expect(output).toContain('Permissions  Never Ask');
@@ -11008,11 +11018,11 @@ capabilities = ["image_in", "video_in"]
         );
       });
       expect(copyTextToClipboard).toHaveBeenCalledWith(
-        "cd '/tmp/proj-a' && kimi --resume 'ses-fork'",
+        "cd '/tmp/proj-a' && tea-code --resume 'ses-fork'",
       );
       const transcript = driver.state.transcriptContainer.render(120).join('\n');
       expect(transcript).toContain(
-        "To enter the fork in a new process, run: cd '/tmp/proj-a' && kimi --resume 'ses-fork'",
+        "To enter the fork in a new process, run: cd '/tmp/proj-a' && tea-code --resume 'ses-fork'",
       );
       expect(transcript).toContain('Command copied to clipboard');
       expect(driver.getCurrentSessionId()).toBe('ses-source');
@@ -11039,7 +11049,7 @@ capabilities = ["image_in", "video_in"]
     await vi.waitFor(() => {
       const transcript = driver.state.transcriptContainer.render(120).join('\n');
       expect(transcript).toContain(
-        "To enter the fork in a new process, run: cd '/tmp/proj-a' && kimi --resume 'ses-fork'",
+        "To enter the fork in a new process, run: cd '/tmp/proj-a' && tea-code --resume 'ses-fork'",
       );
       expect(transcript).toContain('Failed to copy command to clipboard');
     });
@@ -11081,7 +11091,7 @@ capabilities = ["image_in", "video_in"]
 
       await vi.waitFor(() => {
         expect(copyTextToClipboard).toHaveBeenCalledWith(
-          'pushd "D:\\proj" && kimi --resume "ses-fork"',
+          'pushd "D:\\proj" && tea-code --resume "ses-fork"',
         );
       });
       expect(driver.getCurrentSessionId()).toBe('ses-source');
@@ -11862,7 +11872,7 @@ describe('KimiTUI session rating survey', () => {
   it.each(['startup', 'switch', 'reload'] as const)(
     'reports cumulative user turns after a %s mount',
     async (mount) => {
-      process.env['KIMI_CODE_HOME'] = await makeTempHome();
+      process.env['TEA_CODE_HOME'] = await makeTempHome();
       vi.spyOn(Math, 'random').mockReturnValue(0);
       try {
         const session = makeSession();
@@ -11908,7 +11918,7 @@ describe('KimiTUI session rating survey', () => {
   it.each(['lazy', 'new-command'] as const)(
     'starts from zero when a new session is created through %s',
     async (creation) => {
-      process.env['KIMI_CODE_HOME'] = await makeTempHome();
+      process.env['TEA_CODE_HOME'] = await makeTempHome();
       vi.spyOn(Math, 'random').mockReturnValue(0);
       try {
         const session = makeSession({ getResumeState: vi.fn(() => undefined) });
@@ -11948,7 +11958,7 @@ describe('KimiTUI session rating survey', () => {
   it('runs the end-to-end rating flow after five user turns', async () => {
     vi.useFakeTimers();
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     vi.spyOn(Math, 'random').mockReturnValue(0);
     try {
       const { driver, harness } = await makeDriver();
@@ -12090,7 +12100,7 @@ describe('KimiTUI session rating survey', () => {
   it('shows the long-context survey once the context window crosses the threshold', async () => {
     vi.useFakeTimers();
     const homeDir = await makeTempHome();
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    process.env['TEA_CODE_HOME'] = homeDir;
     vi.spyOn(Math, 'random').mockReturnValue(0);
     try {
       const { driver, harness } = await makeDriver();
@@ -12160,7 +12170,7 @@ describe('KimiTUI session rating survey', () => {
 
   it('ignores non-user turns for the survey warmup', async () => {
     vi.useFakeTimers();
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     vi.spyOn(Math, 'random').mockReturnValue(0);
     try {
       const { driver } = await makeDriver();
@@ -12195,7 +12205,7 @@ describe('KimiTUI session rating survey', () => {
 
       vi.useRealTimers();
       await vi.waitFor(() => {
-        expect(existsSync(join(process.env['KIMI_CODE_HOME']!, 'feedback-survey-state.json'))).toBe(
+        expect(existsSync(join(process.env['TEA_CODE_HOME']!, 'feedback-survey-state.json'))).toBe(
           true,
         );
       });
@@ -12207,7 +12217,7 @@ describe('KimiTUI session rating survey', () => {
 
   it('counts user-slash skill and plugin command turns toward the survey warmup', async () => {
     vi.useFakeTimers();
-    process.env['KIMI_CODE_HOME'] = await makeTempHome();
+    process.env['TEA_CODE_HOME'] = await makeTempHome();
     vi.spyOn(Math, 'random').mockReturnValue(0);
     try {
       const { driver } = await makeDriver();
@@ -12272,7 +12282,7 @@ describe('KimiTUI session rating survey', () => {
 
       vi.useRealTimers();
       await vi.waitFor(() => {
-        expect(existsSync(join(process.env['KIMI_CODE_HOME']!, 'feedback-survey-state.json'))).toBe(
+        expect(existsSync(join(process.env['TEA_CODE_HOME']!, 'feedback-survey-state.json'))).toBe(
           true,
         );
       });

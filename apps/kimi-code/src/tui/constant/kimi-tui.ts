@@ -9,7 +9,7 @@ export const CTRL_C_HINT = 'Press Ctrl+C again to exit';
 export const SHUTTING_DOWN_HINT = 'Shutting down… (running shutdown hooks)';
 export const MAIN_AGENT_ID = 'main';
 export const OAUTH_LOGIN_REQUIRED_STARTUP_NOTICE = 'OAuth login expired. Send /login to login.';
-export const TUI_MODE_RESTART_NOTICE = 'TUI mode takes effect after restarting Kimi Code.';
+export const TUI_MODE_RESTART_NOTICE = 'TUI mode takes effect after restarting Tea Code.';
 export const SESSIONLESS_STARTUP_NOTICE =
   'No session yet — one will be created on your first message.';
 export const TOWER_TEARDOWN_PROMPT =

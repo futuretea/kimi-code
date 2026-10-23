@@ -332,8 +332,8 @@ describe('KimiTUI startup', () => {
 
   it('reports the legacy survey setting migration and applies the migrated value', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'kimi-tui-survey-home-'));
-    const previousHome = process.env['KIMI_CODE_HOME'];
-    process.env['KIMI_CODE_HOME'] = homeDir;
+    const previousHome = process.env['TEA_CODE_HOME'];
+    process.env['TEA_CODE_HOME'] = homeDir;
     try {
       writeFileSync(join(homeDir, 'tui.toml'), 'disable_feedback_survey = true\n');
       const setConfig = vi.fn(async () => ({}));
@@ -367,8 +367,8 @@ describe('KimiTUI startup', () => {
         'disable_feedback_survey',
       );
     } finally {
-      if (previousHome === undefined) delete process.env['KIMI_CODE_HOME'];
-      else process.env['KIMI_CODE_HOME'] = previousHome;
+      if (previousHome === undefined) delete process.env['TEA_CODE_HOME'];
+      else process.env['TEA_CODE_HOME'] = previousHome;
       rmSync(homeDir, { recursive: true, force: true });
     }
   });
@@ -380,8 +380,8 @@ describe('KimiTUI startup', () => {
     'reports $action for the legacy survey setting migration',
     async ({ legacy, configured, action, reportedConfigured }) => {
       const homeDir = mkdtempSync(join(tmpdir(), 'kimi-tui-survey-home-'));
-      const previousHome = process.env['KIMI_CODE_HOME'];
-      process.env['KIMI_CODE_HOME'] = homeDir;
+      const previousHome = process.env['TEA_CODE_HOME'];
+      process.env['TEA_CODE_HOME'] = homeDir;
       try {
         writeFileSync(join(homeDir, 'tui.toml'), `disable_feedback_survey = ${String(legacy)}\n`);
         const setConfig = vi.fn(async () => ({}));
@@ -415,8 +415,8 @@ describe('KimiTUI startup', () => {
           'disable_feedback_survey',
         );
       } finally {
-        if (previousHome === undefined) delete process.env['KIMI_CODE_HOME'];
-        else process.env['KIMI_CODE_HOME'] = previousHome;
+        if (previousHome === undefined) delete process.env['TEA_CODE_HOME'];
+        else process.env['TEA_CODE_HOME'] = previousHome;
         rmSync(homeDir, { recursive: true, force: true });
       }
     },
@@ -1798,7 +1798,7 @@ describe('KimiTUI startup', () => {
 
     expect(resumeSession).not.toHaveBeenCalled();
     expect(driver.state.activeDialog).toBeNull();
-    const expectedResumeCmd = `cd ${quoteShellArg('/tmp/proj-b')} && kimi --resume ${quoteShellArg('ses-other-cwd')}`;
+    const expectedResumeCmd = `cd ${quoteShellArg('/tmp/proj-b')} && tea-code --resume ${quoteShellArg('ses-other-cwd')}`;
     expect(copyTextToClipboardMock).toHaveBeenCalledWith(expectedResumeCmd);
     const transcript = driver.state.transcriptContainer.render(160).join('\n');
     expect(transcript).toContain('Current session is in a different working directory.');
@@ -1836,7 +1836,7 @@ describe('KimiTUI startup', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(resumeSession).not.toHaveBeenCalled();
-    const expectedResumeCmd = `cd ${quoteShellArg('/tmp/proj$(touch /tmp/pwned)')} && kimi --resume ${quoteShellArg('ses-other-cwd')}`;
+    const expectedResumeCmd = `cd ${quoteShellArg('/tmp/proj$(touch /tmp/pwned)')} && tea-code --resume ${quoteShellArg('ses-other-cwd')}`;
     expect(copyTextToClipboardMock).toHaveBeenCalledWith(expectedResumeCmd);
     const transcript = driver.state.transcriptContainer.render(160).join('\n');
     expect(transcript).toContain(`To resume, run: ${expectedResumeCmd}`);
@@ -1873,7 +1873,7 @@ describe('KimiTUI startup', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(resumeSession).not.toHaveBeenCalled();
-    const expectedResumeCmd = `cd ${quoteShellArg('/tmp/proj-b')} && kimi --resume ${quoteShellArg('ses-other-cwd')}`;
+    const expectedResumeCmd = `cd ${quoteShellArg('/tmp/proj-b')} && tea-code --resume ${quoteShellArg('ses-other-cwd')}`;
     expect(copyTextToClipboardMock).toHaveBeenCalledWith(expectedResumeCmd);
     expect(stop).toHaveBeenCalledOnce();
     expect(stop).toHaveBeenCalledWith(0);
@@ -3292,7 +3292,7 @@ describe('KimiTUI startup', () => {
   it('writes display state after rendering a once banner', async () => {
     const originalEnv = { ...process.env };
     const dir = mkdtempSync(join(tmpdir(), 'kimi-startup-banner-'));
-    process.env['KIMI_CODE_HOME'] = dir;
+    process.env['TEA_CODE_HOME'] = dir;
 
     try {
       const banner = {
@@ -3346,7 +3346,7 @@ describe('KimiTUI startup', () => {
   it('does not write display state for an always banner', async () => {
     const originalEnv = { ...process.env };
     const dir = mkdtempSync(join(tmpdir(), 'kimi-startup-banner-'));
-    process.env['KIMI_CODE_HOME'] = dir;
+    process.env['TEA_CODE_HOME'] = dir;
 
     try {
       const banner = {

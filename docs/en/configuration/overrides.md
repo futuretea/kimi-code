@@ -12,7 +12,7 @@ This distinction matters: many users run `export KIMI_API_KEY=xxx` in the shell 
 
 Environment variables fall into three categories by function and cannot be collapsed into a single linear priority order:
 
-1. **Locating the config file**: `KIMI_CODE_HOME` sets the data root directory, making the config file path `$KIMI_CODE_HOME/config.toml`. This step runs before all other resolution and is not a fallback for individual parameters.
+1. **Locating the config file**: `TEA_CODE_HOME` sets the data root directory, making the config file path `$TEA_CODE_HOME/config.toml`. This step runs before all other resolution and is not a fallback for individual parameters.
 2. **Runtime switches**: A small set of variables like `KIMI_DISABLE_TELEMETRY` directly shut down the corresponding subsystem. Even if `config.toml` has `telemetry = true`, a truthy value for this variable disables telemetry. The semantics are "additionally disable", not "ordinary override".
 3. **Runtime endpoints and diagnostics**: Variables like `KIMI_CODE_OAUTH_HOST`, `KIMI_CODE_BASE_URL`, and `KIMI_LOG_LEVEL` are read when the OAuth or logging subsystems initialize. For the full list, see [Environment variables](./env-vars.md).
 
@@ -21,7 +21,7 @@ Environment variables fall into three categories by function and cannot be colla
 For ordinary runtime parameters such as model alias, Plan mode, permission mode, and Skills directories, priority from highest to lowest is:
 
 1. **Command-line options** (`-m`, `--plan`, `--yolo`, etc.): apply only to the current startup
-2. **User config file** (`~/.kimi-code/config.toml`): stores long-term preferences
+2. **User config file** (`~/.tea-code/config.toml`): stores long-term preferences
 
 A small number of environment variables explicitly override specific config file fields. For example, `KIMI_CODE_BACKGROUND_KEEP_ALIVE_ON_EXIT` has higher priority than `[background].keep_alive_on_exit`. These exceptions are noted in [Environment variables](./env-vars.md) and in the relevant field descriptions in [Configuration files](./config-files.md).
 
@@ -29,7 +29,7 @@ A small number of environment variables explicitly override specific config file
 **Ordinary runtime parameters do not fall back to shell environment variables.** Provider `api_key` / `base_url` are read only from `config.toml` (including the `[providers.<name>.env]` sub-table) and do not fall back to `export`-ed shell variables. The only exceptions are the `KIMI_MODEL_*` family and a provider's `api_key_env` field, two explicit channels that *do* read credentials from the shell; see [Define a model from environment variables](./env-vars.md#define-a-model-from-environment-variables-kimi_model_) and [Provider credentials](#provider-credentials).
 :::
 
-The CLI currently reads a single user-level config file and has no project-level config file mechanism. To isolate config between different projects, point `KIMI_CODE_HOME` at different data directories; see [Common scenarios](#common-scenarios) below.
+The CLI currently reads a single user-level config file and has no project-level config file mechanism. To isolate config between different projects, point `TEA_CODE_HOME` at different data directories; see [Common scenarios](#common-scenarios) below.
 
 ## Provider credentials
 
@@ -44,7 +44,7 @@ For a single provider, credentials are resolved in this order:
 
 `api_key` and `api_key_env` are alternatives, not a priority chain: set exactly one — setting both is rejected as a configuration conflict, as is setting `api_key_env` together with `oauth`.
 
-`api_key_env` is the one deliberate exception to "no shell environment variables for credentials": the value is re-read from the process's own environment on every request, so it is never cached beyond the process lifetime and no secret lands in `config.toml`. Note that a running process only sees the environment it started with — rotating the variable takes a restart of the `kimi` / TUI or kap-server process; a fresh `export` in the parent shell only affects newly spawned processes. Declaring `api_key_env` while the variable is unset or empty fails fast with an error naming the provider and the variable — at session readiness checks (print mode, kap-server session creation) and at request time — and is never silently ignored, with no fallback to another credential source.
+`api_key_env` is the one deliberate exception to "no shell environment variables for credentials": the value is re-read from the process's own environment on every request, so it is never cached beyond the process lifetime and no secret lands in `config.toml`. Note that a running process only sees the environment it started with — rotating the variable takes a restart of the `tea-code` / TUI or kap-server process; a fresh `export` in the parent shell only affects newly spawned processes. Declaring `api_key_env` while the variable is unset or empty fails fast with an error naming the provider and the variable — at session readiness checks (print mode, kap-server session creation) and at request time — and is never silently ignored, with no fallback to another credential source.
 
 `base_url` is resolved the same way: first `[providers.<name>].base_url`, then the `*_BASE_URL` key in `[providers.<name>.env]`.
 
@@ -84,7 +84,7 @@ Mutual exclusion rules (startup fails if violated):
 **Isolated test environment**: use a separate data directory to avoid polluting the main config and sessions:
 
 ```sh
-KIMI_CODE_HOME="$PWD/.kimi-sandbox" kimi
+TEA_CODE_HOME="$PWD/.tea-sandbox" tea-code
 ```
 
 **One-off test key**: since provider credentials are read only from the config file, write a test key into the `env` sub-table:
@@ -97,16 +97,16 @@ KIMI_API_KEY = "sk-test"
 **Skip approval for batch tasks**:
 
 ```sh
-kimi --yolo -p "Batch rename the following files..."
+tea-code --yolo -p "Batch rename the following files..."
 ```
 
 **Enter Plan mode temporarily** (to make it permanent, set `default_plan_mode = true` in the config file):
 
 ```sh
-kimi --plan
+tea-code --plan
 ```
 
 ## Next steps
 
 - [Configuration files](./config-files.md) — complete reference for all configurable fields
-- [Environment variables](./env-vars.md) — full list and description of `KIMI_CODE_HOME` and related variables
+- [Environment variables](./env-vars.md) — full list and description of `TEA_CODE_HOME` and related variables

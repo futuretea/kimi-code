@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { runPrompt } from '#/cli/run-prompt';
+import { requireConfiguredModel, runPrompt } from '#/cli/run-prompt';
 
 const mocks = vi.hoisted(() => ({
   runV2Print: vi.fn(
@@ -25,15 +25,15 @@ const mocks = vi.hoisted(() => ({
             role: 'meta',
             type: 'session.resume_hint',
             session_id: 'ses_prompt',
-            command: 'kimi -r ses_prompt',
-            content: 'To resume this session: kimi -r ses_prompt',
+            command: 'tea-code -r ses_prompt',
+            content: 'To resume this session: tea-code -r ses_prompt',
           })}\n`,
         );
         return;
       }
-      stderr.write(`kimi version ${version}\n`);
+      stderr.write(`tea-code version ${version}\n`);
       stdout.write('• hello world\n\n');
-      stderr.write('To resume this session: kimi -r ses_prompt\n');
+      stderr.write('To resume this session: tea-code -r ses_prompt\n');
     },
   ),
 }));
@@ -73,6 +73,12 @@ function writer(columns?: number) {
 }
 
 describe('runPrompt', () => {
+  it('points model configuration recovery at the Tea Code command', () => {
+    expect(() => requireConfiguredModel()).toThrow(
+      'No model configured. Run `tea-code` and use /login to sign in, then retry; or set default_model in config.toml.',
+    );
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -84,8 +90,8 @@ describe('runPrompt', () => {
     await runPrompt(opts(), '1.2.3-test', { stdout, stderr });
 
     expect(mocks.runV2Print).toHaveBeenCalled();
-    expect(stderr.write).toHaveBeenNthCalledWith(1, 'kimi version 1.2.3-test\n');
-    expect(stderr.text().startsWith('kimi version 1.2.3-test\n')).toBe(true);
+    expect(stderr.write).toHaveBeenNthCalledWith(1, 'tea-code version 1.2.3-test\n');
+    expect(stderr.text().startsWith('tea-code version 1.2.3-test\n')).toBe(true);
     expect(stdout.text()).toBe('• hello world\n\n');
   });
 

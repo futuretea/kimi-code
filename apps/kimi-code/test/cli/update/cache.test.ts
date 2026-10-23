@@ -19,7 +19,7 @@ let dir: string;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'kimi-update-cache-'));
-  process.env['KIMI_CODE_HOME'] = dir;
+  process.env['TEA_CODE_HOME'] = dir;
 });
 
 afterEach(() => {
@@ -54,7 +54,7 @@ describe('update cache', () => {
 
   it('writes and reads back the cache from updates/latest.json', async () => {
     const cache = {
-      source: 'cdn',
+      source: 'npm-registry',
       checkedAt: '2026-04-23T08:00:00.000Z',
       latest: '0.5.0',
       manifest: null,
@@ -68,7 +68,7 @@ describe('update cache', () => {
 
   it('writes and reads back a cache carrying a rollout manifest', async () => {
     const cache = {
-      source: 'cdn',
+      source: 'npm-registry',
       checkedAt: '2026-04-23T08:00:00.000Z',
       latest: '0.5.0',
       manifest: {
@@ -92,7 +92,7 @@ describe('update cache', () => {
     writeFileSync(
       getUpdateStateFile(),
       JSON.stringify({
-        source: 'cdn',
+        source: 'npm-registry',
         checkedAt: '2026-04-23T08:00:00.000Z',
         latest: '0.5.0',
       }),
@@ -100,7 +100,7 @@ describe('update cache', () => {
     );
 
     await expect(readUpdateCache()).resolves.toEqual({
-      source: 'cdn',
+      source: 'npm-registry',
       checkedAt: '2026-04-23T08:00:00.000Z',
       latest: '0.5.0',
       manifest: null,
@@ -112,7 +112,7 @@ describe('update cache', () => {
     writeFileSync(
       getUpdateStateFile(),
       JSON.stringify({
-        source: 'cdn',
+        source: 'npm-registry',
         checkedAt: '2026-04-23T08:00:00.000Z',
         latest: '0.5.0',
         manifest: { version: 'not-semver', publishedAt: 'nope', rollout: 'bad' },
@@ -121,7 +121,7 @@ describe('update cache', () => {
     );
 
     await expect(readUpdateCache()).resolves.toEqual({
-      source: 'cdn',
+      source: 'npm-registry',
       checkedAt: '2026-04-23T08:00:00.000Z',
       latest: '0.5.0',
       manifest: null,

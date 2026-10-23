@@ -12,15 +12,14 @@ describe('bootstrap path helpers', () => {
       expect(resolveKimiHome('/tmp/kimi')).toBe('/tmp/kimi');
     });
 
-    it('falls back to KIMI_CODE_HOME env', () => {
-      const prev = process.env['KIMI_CODE_HOME'];
-      process.env['KIMI_CODE_HOME'] = '/env/kimi';
-      try {
-        expect(resolveKimiHome()).toBe('/env/kimi');
-      } finally {
-        if (prev === undefined) delete process.env['KIMI_CODE_HOME'];
-        else process.env['KIMI_CODE_HOME'] = prev;
-      }
+    it.each([
+      { env: {}, expected: '/user/.tea-code' },
+      { env: { TEA_CODE_HOME: '/env/tea' }, expected: '/env/tea' },
+      { env: { KIMI_CODE_HOME: '/env/kimi' }, expected: '/user/.tea-code' },
+      { env: { TEA_CODE_HOME: '/env/tea', KIMI_CODE_HOME: '/env/kimi' }, expected: '/env/tea' },
+    ])('isolates the user home for $env', ({ env, expected }) => {
+      expect(resolveKimiHome(undefined, env, '/user')).toBe(expected);
+      expect(resolveKimiHome('/explicit', env, '/user')).toBe('/explicit');
     });
   });
 

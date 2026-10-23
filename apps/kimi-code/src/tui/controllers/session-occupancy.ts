@@ -80,7 +80,7 @@ function showSessionTakeover(
   host.mountEditorReplacement(
     new ChoicePickerComponent({
       title: 'Session still in use',
-      notice: 'If another Kimi Code process is still running, taking over may mix up the history.',
+      notice: 'If another Tea Code process is still running, taking over may mix up the history.',
       noticeTone: 'warning',
       options: [
         { value: 'cancel', label: 'Cancel', description: 'get your message back' },

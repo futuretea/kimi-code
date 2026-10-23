@@ -54,7 +54,7 @@ function pidAlive(pid: number): boolean {
 }
 
 const CLIENT_DISPLAY_NAMES: Record<string, string> = {
-  kimi_code_cli: 'Kimi Code CLI',
+  kimi_code_cli: 'Tea Code CLI',
   kimi_code_desktop: 'Kimi Code Desktop',
   kimi_code_vscode: 'Kimi Code for VS Code',
 };

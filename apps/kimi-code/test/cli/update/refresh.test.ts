@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { refreshUpdateCache } from '#/cli/update/refresh';
 import type { UpdateManifest } from '#/cli/update/types';
@@ -14,6 +14,39 @@ const MANIFEST: UpdateManifest = {
 };
 
 describe('refreshUpdateCache', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('checks only the Tea npm package and caches its actual response', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ version: '2.1.1' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const writeCache = vi.fn(async () => {});
+    const result = await refreshUpdateCache({ writeCache });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://registry.npmjs.org/%40futuretea%2Ftea-code/latest',
+      { signal: expect.any(AbortSignal) },
+    );
+    expect(result).toMatchObject({ source: 'npm-registry', latest: '2.1.1', manifest: null });
+    expect(writeCache).toHaveBeenCalledWith(result);
+  });
+
+  it.each([
+    ['HTTP failure', () => new Response('', { status: 404 })],
+    ['invalid version', () => Response.json({ version: 'not-semver' })],
+    ['missing version', () => Response.json({ name: '@futuretea/tea-code' })],
+  ])('preserves the cache without a CDN fallback on %s', async (_label, response) => {
+    const fetchMock = vi.fn(async () => response());
+    vi.stubGlobal('fetch', fetchMock);
+    const writeCache = vi.fn(async () => {});
+
+    await expect(refreshUpdateCache({ writeCache })).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(writeCache).not.toHaveBeenCalled();
+  });
+
   it('writes a fresh cache carrying the manifest on successful fetch', async () => {
     const writeCache = vi.fn(async () => {});
     const result = await refreshUpdateCache({
@@ -23,7 +56,7 @@ describe('refreshUpdateCache', () => {
     });
 
     expect(result).toEqual({
-      source: 'cdn',
+      source: 'npm-registry',
       checkedAt: '2026-05-20T12:34:56.000Z',
       latest: '0.5.0',
       manifest: MANIFEST,
@@ -31,7 +64,7 @@ describe('refreshUpdateCache', () => {
     expect(writeCache).toHaveBeenCalledWith(result);
   });
 
-  it('writes a null manifest when the fetch fell back to plain text', async () => {
+  it('writes a null manifest when the registry fetch has no rollout manifest', async () => {
     const writeCache = vi.fn(async () => {});
     const result = await refreshUpdateCache({
       fetchLatest: async () => ({ latest: '0.5.0', manifest: null }),
@@ -40,7 +73,7 @@ describe('refreshUpdateCache', () => {
     });
 
     expect(result).toEqual({
-      source: 'cdn',
+      source: 'npm-registry',
       checkedAt: '2026-05-20T12:34:56.000Z',
       latest: '0.5.0',
       manifest: null,
@@ -63,7 +96,7 @@ describe('refreshUpdateCache', () => {
     expect(writeCache).not.toHaveBeenCalled();
   });
 
-  it('threads timeoutMs into the default CDN fetch', async () => {
+  it('threads timeoutMs into the default npm registry fetch', async () => {
     vi.useFakeTimers();
     vi.stubGlobal(
       'fetch',

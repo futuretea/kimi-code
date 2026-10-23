@@ -1,6 +1,6 @@
-# @moonshot-ai/kimi-code
+# @futuretea/tea-code
 
-## 2.3.1
+## 2.3.1 (upstream)
 
 ### Patch Changes
 

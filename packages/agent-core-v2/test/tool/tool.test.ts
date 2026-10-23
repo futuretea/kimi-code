@@ -1430,6 +1430,7 @@ describe('Agent tool execution contract', () => {
     vi.useRealTimers();
     await ctx?.dispose();
     ctx = undefined;
+    vi.unstubAllEnvs();
   });
 
   function createAgentToolContext(
@@ -3500,6 +3501,7 @@ describe('Agent tool execution contract', () => {
 
   it('returns the spawned agent id when a foreground subagent times out', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.stubEnv('KIMI_CODE_WATCH', '0');
     const lifecycle = createAgentLifecycleStub({
       createAgentIds: ['agent-child'],
       runCompletion: (_agentId, _request, options) =>

@@ -4,6 +4,7 @@ import type { createKimiDeviceId as createKimiDeviceIdFn } from '@moonshot-ai/ki
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { runShell } from '#/cli/run-shell';
+import { resolveLegacySourceHome, sameLegacyPath } from '#/migration/index';
 import { refreshKimiRegion } from '#/utils/region';
 
 import { captureProcessWrite, ExitCalled, mockProcessExit } from '../helpers/process';
@@ -21,7 +22,7 @@ const mocks = vi.hoisted(() => {
     readonly fallback: TuiConfigFallback;
 
     constructor(fallback: TuiConfigFallback) {
-      super('Invalid TUI config in ~/.kimi-code/tui.toml; using defaults.');
+      super('Invalid TUI config in ~/.tea-code/tui.toml; using defaults.');
       this.fallback = fallback;
     }
   }
@@ -147,10 +148,15 @@ vi.mock('../../src/tui/theme/detect', () => ({
   detectTerminalTheme: mocks.detectTerminalTheme,
 }));
 
-vi.mock('../../src/migration/index', async (importOriginal) => ({
-  ...(await importOriginal()),
-  detectPendingMigration: mocks.detectPendingMigration,
-}));
+vi.mock('../../src/migration/index', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/migration/index')>();
+  return {
+    ...actual,
+    resolveLegacySourceHome: vi.fn(actual.resolveLegacySourceHome),
+    sameLegacyPath: vi.fn(actual.sameLegacyPath),
+    detectPendingMigration: mocks.detectPendingMigration,
+  };
+});
 
 vi.mock('node:child_process', () => ({
   execFileSync: mocks.execFileSync,
@@ -239,6 +245,48 @@ describe('runShell', () => {
     stubTuiStartup();
     await runShell(minimalCliOptions, '1.2.3-test');
     expect(mocks.kimiHarnessConstructor).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([undefined, '/tmp/upstream-legacy-home'])(
+    'does not probe legacy data on ordinary startup with KIMI_SHARE_DIR %s',
+    async (shareDir) => {
+      stubTuiStartup();
+      vi.stubEnv('KIMI_SHARE_DIR', shareDir);
+
+      await runShell(minimalCliOptions, '1.2.3-test');
+
+      expect(resolveLegacySourceHome).not.toHaveBeenCalled();
+      expect(sameLegacyPath).not.toHaveBeenCalled();
+      expect(mocks.detectPendingMigration).not.toHaveBeenCalled();
+      expect(mocks.kimiTuiConstructor).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ migrationPlan: null }),
+      );
+    },
+  );
+
+  it('probes the requested legacy directory only for explicit migration', async () => {
+    stubTuiStartup();
+    vi.stubEnv('KIMI_SHARE_DIR', '/tmp/upstream-legacy-home');
+    mocks.detectPendingMigration.mockResolvedValueOnce({ totalSessions: 1 });
+
+    await runShell(minimalCliOptions, '1.2.3-test', { migrateOnly: true });
+
+    expect(resolveLegacySourceHome).toHaveBeenCalledOnce();
+    expect(sameLegacyPath).toHaveBeenCalledOnce();
+    expect(mocks.detectPendingMigration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceHome: '/tmp/upstream-legacy-home',
+        targetHome: '/tmp/kimi-code-test-home',
+        ignoreMarker: true,
+      }),
+    );
+    expect(mocks.kimiTuiConstructor).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ migrationPlan: { totalSessions: 1 }, migrateOnly: true }),
+    );
   });
 
   it('constructs KimiHarness and KimiTUI with startup input', async () => {
@@ -644,7 +692,7 @@ describe('runShell', () => {
     expect(mocks.detectTerminalTheme).toHaveBeenCalledOnce();
     const [, , startupInput] = mocks.kimiTuiConstructor.mock.calls[0]!;
     expect(startupInput).toMatchObject({
-      startupNotice: 'Invalid TUI config in ~/.kimi-code/tui.toml; using defaults.',
+      startupNotice: 'Invalid TUI config in ~/.tea-code/tui.toml; using defaults.',
       tuiConfig: {
         theme: 'auto',
         editorCommand: 'vim',
@@ -874,7 +922,7 @@ describe('runShell', () => {
       expect(mocks.harnessTrack).not.toHaveBeenCalledWith('exit', expect.anything());
       expect(mocks.shutdownTelemetry).toHaveBeenCalledOnce();
       expect(stdout.text()).toBe(' Bye!\n');
-      expect(stderr.text()).toContain(' To resume this session: kimi -r ses-1');
+      expect(stderr.text()).toContain(' To resume this session: tea-code -r ses-1');
     } finally {
       exitSpy.mockRestore();
       stdout.restore();
@@ -921,7 +969,7 @@ describe('runShell', () => {
         ExitCalled,
       );
 
-      expect(stderr.text()).toContain(' To resume this session: kimi -r ses-1');
+      expect(stderr.text()).toContain(' To resume this session: tea-code -r ses-1');
       expect(stderr.text()).toContain('open ');
       expect(stderr.text()).toContain(openedUrl);
     } finally {

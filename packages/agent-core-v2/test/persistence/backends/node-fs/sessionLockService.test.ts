@@ -104,7 +104,7 @@ describe('SessionLockService', () => {
     {
       platform: 'kimi_code_cli',
       userAgentSuffix: undefined,
-      displayName: 'Kimi Code CLI',
+      displayName: 'Tea Code CLI',
     },
     {
       platform: 'kimi_code_desktop',
