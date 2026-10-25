@@ -10,11 +10,17 @@
 - 现有发行身份是 npm 包 `@futuretea/tea-code`、可执行命令 `tea-code`，运行目录是 `TEA_CODE_HOME` 或默认的 `~/.tea-code`。
 - Tea Code 自 `2.1.1` 起与对应 Kimi Code 使用相同版本号，以减少变基时的发行元数据差异。当前沿用上游 `getVersion()` 和身份传递，不维护 `UPSTREAM_VERSION`、`getUpstreamVersion()` 或独立版本映射机制。
 
-## 本轮新增发行：Tea Code 2.3.1
+## 本轮新增发行：Tea Code 2.3.2
 
-- 本轮目标为新增 `@futuretea/tea-code@2.3.1`，同步官方 `@moonshot-ai/kimi-code@2.3.1` tag；该 tag 解引用后的 commit 为 `684bae9ea6a437f3bae98bba1dcb797a917d500b`。以此为功能基线重新计算最小 re-brand 差异，保留本文既有范围与边界。
-- 计划实现与正式 npm 发布分支为 `tea/moonshot-231`，执行时创建或确认该分支，并将 `.github/workflows/release.yml` 的 push 分支与 `.changeset/config.json` 的 `baseBranch` 同步指向它。本轮沿用上游 `2.3.1` 的发布授权流程：合并对应版本更新 PR，且该合并提交的 CI 通过后才允许 npm 发布；普通推送不发布。上述 `2.1.1` 发行和 `tea/moonshot-211` 分支及其推送发布流程只作为历史对照。
-- 本轮 Tea Code 发行版本、`tea-code --version`、npm 更新目标和默认 Kimi 网络身份版本均为 `2.3.1`；ACP 编辑器显示名称为 `Tea Code CLI/2.3.1`，Kimi OAuth 身份为 `Kimi Code CLI/2.3.1`。沿用后文的产品 token、协议前缀、Web 后缀和 SDK 自定义身份保留规则。
+- 本轮目标为新增 `@futuretea/tea-code@2.3.2`，同步官方 `@moonshot-ai/kimi-code@2.3.2` tag；该 tag 解引用后的 commit 为 `b8dd3a134060c6e80ba4a1659335cd63b68483f2`。以此为功能基线重新计算最小 re-brand 差异，保留本文既有范围与边界。
+- 计划实现与正式 npm 发布分支为 `tea/moonshot-232`，执行时创建或确认该分支，并将 `.github/workflows/release.yml` 的 push 分支与 `.changeset/config.json` 的 `baseBranch` 同步指向它。本轮沿用上游 `2.3.2` 的发布授权流程：合并对应版本更新 PR，且该合并提交的 CI 通过后才允许 npm 发布；普通推送不发布。`2.1.1` 与 `2.3.1` 的发行目标及对应分支只作为历史对照。
+- 本轮 Tea Code 发行版本、`tea-code --version`、npm 更新目标和默认 Kimi 网络身份版本均为 `2.3.2`；ACP 编辑器显示名称为 `Tea Code CLI/2.3.2`，Kimi OAuth 身份为 `Kimi Code CLI/2.3.2`。沿用后文的产品 token、协议前缀、Web 后缀和 SDK 自定义身份保留规则。
+
+## 上一轮发行目标：Tea Code 2.3.1（仅供对照）
+
+- 该轮目标为新增 `@futuretea/tea-code@2.3.1`，同步官方 `@moonshot-ai/kimi-code@2.3.1` tag；该 tag 解引用后的 commit 为 `684bae9ea6a437f3bae98bba1dcb797a917d500b`。以此为功能基线重新计算最小 re-brand 差异，保留本文既有范围与边界。
+- 计划实现与正式 npm 发布分支为 `tea/moonshot-231`，执行时创建或确认该分支，并将 `.github/workflows/release.yml` 的 push 分支与 `.changeset/config.json` 的 `baseBranch` 同步指向它。该轮沿用上游 `2.3.1` 的发布授权流程：合并对应版本更新 PR，且该合并提交的 CI 通过后才允许 npm 发布；普通推送不发布。上述 `2.1.1` 发行和 `tea/moonshot-211` 分支及其推送发布流程只作为历史对照。
+- 该轮 Tea Code 发行版本、`tea-code --version`、npm 更新目标和默认 Kimi 网络身份版本均为 `2.3.1`；ACP 编辑器显示名称为 `Tea Code CLI/2.3.1`，Kimi OAuth 身份为 `Kimi Code CLI/2.3.1`。沿用后文的产品 token、协议前缀、Web 后缀和 SDK 自定义身份保留规则。
 
 ## 产品意图
 
