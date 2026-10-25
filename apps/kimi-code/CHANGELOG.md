@@ -1,6 +1,6 @@
-# @moonshot-ai/kimi-code
+# @futuretea/tea-code
 
-## 2.3.2
+## 2.3.2 (upstream)
 
 ### Patch Changes
 
@@ -9,6 +9,12 @@
 - [#4384](https://github.com/MoonshotAI/kimi-code/pull/4384) [`c9a4836`](https://github.com/MoonshotAI/kimi-code/commit/c9a48369843fdee1b494b9d49b1f4b3aeee73497) Thanks [@RealKai42](https://github.com/RealKai42)! - Agent swarms now start only when you turn on swarm mode: the agent can no longer launch `AgentSwarm` by itself, so swarms are no longer available in `kimi -p` or ACP clients such as Zed.
 
 ## 2.3.1
+
+### Patch Changes
+
+- [`281445a`](https://github.com/futuretea/kimi-code/commit/281445ae10ffacc8a5474d45433dd90c7ae989bd) Thanks [@futuretea](https://github.com/futuretea)! - Sync Tea Code with Kimi Code 2.3.1.
+
+## 2.3.1 (upstream)
 
 ### Patch Changes
 

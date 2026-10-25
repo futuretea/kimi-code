@@ -2025,7 +2025,7 @@ describe('Remote Control manager', () => {
           relayOrigin: `http://127.0.0.1:${relay.port}`,
           stderr: { write: () => true },
         }),
-      ).rejects.toThrow('Remote Control requires a Kimi login');
+      ).rejects.toThrow('Remote Control requires a Kimi login. Run `tea-code login` first.');
       expect(existsSync(remoteControlLockPath(homeDir))).toBe(false);
     } finally {
       vi.restoreAllMocks();

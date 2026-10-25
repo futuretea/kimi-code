@@ -122,7 +122,7 @@ In the web UI, the goal bar below the conversation lets you pause, resume, or ca
 
 Use `/goal next <objective>` to line up follow-up work without interrupting the current goal — queued goals stay invisible to the agent until the current one completes, then the first starts automatically. `/goal next manage` opens an interactive manager to reorder, edit, or delete queued goals (arrow keys to browse, `Space` to select, `E` to edit, `D` to delete, `Esc` to cancel). Queued goals never start while the current goal is paused, cancelled, or blocked.
 
-> Tip: in `manual` permission mode a goal may stop at tool approvals; non-interactive mode only supports creating goals (`kimi -p "/goal ..."`) — exit code `0` on complete, `3` on blocked, `6` on paused.
+> Tip: in `manual` permission mode a goal may stop at tool approvals; non-interactive mode only supports creating goals (`tea-code -p "/goal ..."`) — exit code `0` on complete, `3` on blocked, `6` on paused.
 
 ## During streaming output
 

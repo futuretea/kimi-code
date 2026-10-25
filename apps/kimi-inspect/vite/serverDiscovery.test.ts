@@ -4,11 +4,11 @@
  * filtering, URL normalization and dedupe. Runs in Node (mkdtemp homes).
  */
 
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
+import { join, sep } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   discoverLocalServers,
@@ -18,6 +18,14 @@ import {
   readServerToken,
   resolveKimiHomeDir,
 } from './serverDiscovery';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const fs = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...fs, readFile: vi.fn(fs.readFile), readdir: vi.fn(fs.readdir) };
+});
+
+const read = vi.mocked(readFile);
+const list = vi.mocked(readdir);
 
 const ALIVE_PID = process.pid;
 // Far above any realistic pid_max; must not collide with a live process.
@@ -30,6 +38,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await rm(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 });
 });
 
@@ -130,8 +139,60 @@ describe('discoverLocalServers', () => {
 });
 
 describe('resolveKimiHomeDir', () => {
-  it('honors KIMI_CODE_HOME, else falls back to ~/.kimi-code', () => {
-    expect(resolveKimiHomeDir({ KIMI_CODE_HOME: '/tmp/kh' })).toBe('/tmp/kh');
-    expect(resolveKimiHomeDir({})).toBe(join(process.env['HOME'] ?? '', '.kimi-code'));
+  it.each([
+    { tea: undefined, kimi: undefined },
+    { tea: '/tmp/th', kimi: undefined },
+    { tea: undefined, kimi: '/tmp/kh' },
+    { tea: '/tmp/th', kimi: '/tmp/kh' },
+  ])('honors Tea home and ignores upstream home for $tea and $kimi', ({ tea, kimi }) => {
+    expect(resolveKimiHomeDir({ TEA_CODE_HOME: tea, KIMI_CODE_HOME: kimi })).toBe(
+      tea ?? join(homedir(), '.tea-code'),
+    );
+  });
+
+  it.each([
+    { tea: false, kimi: false },
+    { tea: true, kimi: false },
+    { tea: false, kimi: true },
+    { tea: true, kimi: true },
+  ])('discovers only Tea state for tea=$tea and kimi=$kimi', async ({ tea, kimi }) => {
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
+    const homes = [
+      join(home, '.tea-code'),
+      join(home, 'custom-tea'),
+      join(home, '.kimi-code'),
+      join(home, 'custom-kimi'),
+    ];
+    vi.stubEnv('TEA_CODE_HOME', tea ? homes[1] : undefined);
+    vi.stubEnv('KIMI_CODE_HOME', kimi ? homes[3] : undefined);
+    for (const [index, root] of homes.entries()) {
+      await mkdir(join(root, 'server', 'instances'), { recursive: true });
+      await writeFile(join(root, 'server.token'), `test-token-${index}`);
+      await writeFile(
+        join(root, 'server', 'instances', `instance-${index}.json`),
+        JSON.stringify({ server_id: `instance-${index}`, pid: ALIVE_PID, host: '127.0.0.1', port: 58627 + index }),
+      );
+    }
+    const upstreamPaths = homes.slice(2).map((root) => join(root, 'server.token'));
+    const upstreamBytes = await Promise.all(upstreamPaths.map((path) => readFile(path)));
+    read.mockClear();
+    list.mockClear();
+
+    const payload = await discoverLocalServers();
+
+    const expectedIndex = tea ? 1 : 0;
+    const expectedHome = homes[expectedIndex]!;
+    expect(payload.home).toBe(expectedHome);
+    expect(payload.token).toBe(`test-token-${expectedIndex}`);
+    expect(payload.servers.map((server) => server.id)).toEqual([`instance-${expectedIndex}`]);
+    const accessed = [
+      ...read.mock.calls.map(([path]) => path),
+      ...list.mock.calls.map(([path]) => path),
+    ];
+    expect(accessed).toContain(join(expectedHome, 'server.token'));
+    expect(accessed).toContain(join(expectedHome, 'server', 'instances'));
+    expect(accessed.every((path) => (path as string).startsWith(`${expectedHome}${sep}`))).toBe(true);
+    expect(await Promise.all(upstreamPaths.map((path) => readFile(path)))).toEqual(upstreamBytes);
   });
 });

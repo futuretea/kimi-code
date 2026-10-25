@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - 'release/*'
+      - tea/moonshot-232
 
   workflow_dispatch:
 
@@ -13,8 +14,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}-${{ startsWith(github.ref, 'refs/heads/release/') && github.sha || '' }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/heads/release/') }}
+  group: ci-${{ github.ref }}-${{ (startsWith(github.ref, 'refs/heads/release/') || github.ref == 'refs/heads/tea/moonshot-232') && github.sha || '' }}
+  cancel-in-progress: ${{ !(startsWith(github.ref, 'refs/heads/release/') || github.ref == 'refs/heads/tea/moonshot-232') }}
 
 jobs:
   release-workflow-tests:

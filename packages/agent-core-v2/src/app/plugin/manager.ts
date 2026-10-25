@@ -278,6 +278,7 @@ export class PluginManager {
           ...hook,
           cwd: record.root,
           env: {
+            TEA_CODE_HOME: this.kimiHomeDir,
             KIMI_CODE_HOME: this.kimiHomeDir,
             KIMI_PLUGIN_ROOT: record.root,
           },
@@ -705,6 +706,7 @@ function withPluginMcpRuntime(
 
   const env = {
     ...config.env,
+    TEA_CODE_HOME: kimiHomeDir,
     KIMI_CODE_HOME: kimiHomeDir,
     KIMI_PLUGIN_ROOT: pluginRoot,
   };

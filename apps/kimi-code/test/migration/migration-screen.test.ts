@@ -41,10 +41,25 @@ describe('MigrationScreenComponent — ask phase', () => {
     });
     const out = render(c);
     expect(out).toContain('Migrate from kimi-cli');
+    expect(out).toContain('Migrate this data to Tea Code?');
     expect(out).toContain('1365 sessions');
     expect(out).toContain('Migrate now');
     expect(out).toContain('Ask me later');
     expect(out).toContain('Never ask again');
+  });
+
+  it('shows Tea Code recovery and continuation copy after migration failure', () => {
+    const c = new MigrationScreenComponent({
+      plan: makePlan(),
+      sourceHome: '/x/.kimi',
+      targetHome: '/y/.tea-code',
+      onComplete: () => {},
+    });
+    c.showFailure(new Error('Example migration failure'));
+
+    const out = render(c);
+    expect(out).toContain('running "tea-code migrate".');
+    expect(out).toContain('continue to Tea Code');
   });
 
   it('ask1 summary does not mention kimi-cli login (oauth is not a migrated kind)', async () => {

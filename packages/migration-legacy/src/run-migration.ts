@@ -14,14 +14,9 @@ import { migrateSessionsStep } from './sessions/index.js';
 import { writeReport } from './report.js';
 import { writeMigrationErrorsLog } from './migration-errors-log.js';
 import { appendMarkerRun, readMarker, writeMarker } from './marker.js';
+import { siblingConfigToml, siblingTuiToml } from './paths.js';
 
 const DEFAULT_MIGRATOR_VERSION = '0.1.1';
-
-const CONFIG_CONFLICT_NOTICE =
-  'Your existing config.toml could not be parsed; migrated copy saved to ~/.kimi-code/config.migrated-from-kimi-cli.toml — please review and merge manually.';
-
-const TUI_CONFLICT_NOTICE =
-  'Your existing tui.toml had user modifications; migrated copy saved to ~/.kimi-code/tui.migrated-from-kimi-cli.toml — please review and merge manually.';
 
 export interface RunMigrationInput {
   readonly plan: MigrationPlan;
@@ -118,8 +113,12 @@ export async function runMigration(input: RunMigrationInput): Promise<MigrationR
       mcpOauthServersRequiringReauth: input.plan.detectedMcpOauthServers,
       oauthLoginsRequiringRelogin: input.plan.oauthCredentials,
       detectedPlugins: input.plan.detectedPlugins,
-      configConflictNotice: config.wroteSiblingDueToConflict ? CONFIG_CONFLICT_NOTICE : null,
-      tuiConflictNotice: config.wroteTuiSibling ? TUI_CONFLICT_NOTICE : null,
+      configConflictNotice: config.wroteSiblingDueToConflict
+        ? `Your existing config.toml could not be parsed; migrated copy saved to ${siblingConfigToml(input.target)} — please review and merge manually.`
+        : null,
+      tuiConflictNotice: config.wroteTuiSibling
+        ? `Your existing tui.toml had user modifications; migrated copy saved to ${siblingTuiToml(input.target)} — please review and merge manually.`
+        : null,
       plansCopiedNotice,
     },
   };

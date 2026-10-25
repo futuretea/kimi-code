@@ -2,11 +2,12 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, normalize } from 'pathe';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HostFileSystem } from '#/os/backends/node-local/hostFsService';
 import type { IHostFileSystem } from '#/os/interface/hostFileSystem';
 import {
+  agentsMdWatchRoots,
   extractAgentsMdPathsFromSystemPrompt,
   loadAgentsMd,
   loadAgentsMdDetailed,
@@ -30,6 +31,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await rm(homeDir, { recursive: true, force: true });
   await rm(workDir, { recursive: true, force: true });
   await Promise.all(extraDirs.map((dir) => rm(dir, { recursive: true, force: true })));
@@ -37,8 +39,8 @@ afterEach(async () => {
 
 describe('loadAgentsMd user-level discovery', () => {
   it('loads user-level branded and generic files before project-level', async () => {
-    await mkdir(join(homeDir, '.kimi-code'), { recursive: true });
-    await writeFile(join(homeDir, '.kimi-code', 'AGENTS.md'), 'user branded', 'utf-8');
+    await mkdir(join(homeDir, '.tea-code'), { recursive: true });
+    await writeFile(join(homeDir, '.tea-code', 'AGENTS.md'), 'user branded', 'utf-8');
     await mkdir(join(homeDir, '.agents'), { recursive: true });
     await writeFile(join(homeDir, '.agents', 'AGENTS.md'), 'user generic', 'utf-8');
     await writeFile(join(workDir, 'AGENTS.md'), 'project instructions', 'utf-8');
@@ -74,7 +76,7 @@ describe('loadAgentsMd user-level discovery', () => {
     await mkdir(join(homeDir, '.kimi-code'), { recursive: true });
     await writeFile(join(homeDir, '.kimi-code', 'AGENTS.md'), 'home branded', 'utf-8');
 
-    const result = await loadAgentsMd({ fs, homeDir }, homeDir);
+    const result = await loadAgentsMd({ fs, homeDir }, homeDir, join(homeDir, '.kimi-code'));
 
     expect(result.split('home branded').length - 1).toBe(1);
   });
@@ -89,8 +91,8 @@ describe('loadAgentsMd symlinked files', () => {
     await writeFile(brandTarget, 'brand via symlink', 'utf-8');
     await writeFile(projectTarget, 'project via symlink', 'utf-8');
 
-    await mkdir(join(homeDir, '.kimi-code'), { recursive: true });
-    await symlink(brandTarget, join(homeDir, '.kimi-code', 'AGENTS.md'));
+    await mkdir(join(homeDir, '.tea-code'), { recursive: true });
+    await symlink(brandTarget, join(homeDir, '.tea-code', 'AGENTS.md'));
     await symlink(projectTarget, join(workDir, 'AGENTS.md'));
 
     const result = await loadAgentsMd({ fs, homeDir }, workDir);
@@ -114,7 +116,7 @@ describe('loadAgentsMd unreadable paths', () => {
   });
 });
 
-describe('loadAgentsMd brand home (KIMI_CODE_HOME)', () => {
+describe('loadAgentsMd brand home (TEA_CODE_HOME)', () => {
   let brandHome: string;
 
   beforeEach(async () => {
@@ -136,10 +138,10 @@ describe('loadAgentsMd brand home (KIMI_CODE_HOME)', () => {
     expect(result).toContain('real home generic');
   });
 
-  it('ignores the real-home .kimi-code/AGENTS.md when the brand home is elsewhere', async () => {
+  it('ignores the real-home .tea-code/AGENTS.md when the brand home is elsewhere', async () => {
     await writeFile(join(brandHome, 'AGENTS.md'), 'brand wins', 'utf-8');
-    await mkdir(join(homeDir, '.kimi-code'), { recursive: true });
-    await writeFile(join(homeDir, '.kimi-code', 'AGENTS.md'), 'stale real-home brand', 'utf-8');
+    await mkdir(join(homeDir, '.tea-code'), { recursive: true });
+    await writeFile(join(homeDir, '.tea-code', 'AGENTS.md'), 'stale real-home brand', 'utf-8');
 
     const result = await loadAgentsMd({ fs, homeDir }, workDir, brandHome);
 
@@ -147,13 +149,30 @@ describe('loadAgentsMd brand home (KIMI_CODE_HOME)', () => {
     expect(result).not.toContain('stale real-home brand');
   });
 
-  it('falls back to the real-home .kimi-code/AGENTS.md when no brand home is given', async () => {
+  it('falls back to the real-home .tea-code/AGENTS.md without reading upstream instructions', async () => {
+    await mkdir(join(homeDir, '.tea-code'), { recursive: true });
+    await writeFile(join(homeDir, '.tea-code', 'AGENTS.md'), 'fallback branded', 'utf-8');
+    const upstreamPath = join(homeDir, '.kimi-code', 'AGENTS.md');
     await mkdir(join(homeDir, '.kimi-code'), { recursive: true });
-    await writeFile(join(homeDir, '.kimi-code', 'AGENTS.md'), 'fallback branded', 'utf-8');
+    await writeFile(upstreamPath, 'upstream instructions', 'utf-8');
+    const read = vi.spyOn(fs, 'readText');
 
     const result = await loadAgentsMd({ fs, homeDir }, workDir);
 
     expect(result).toContain('fallback branded');
+    expect(result).not.toContain('upstream instructions');
+    expect(read.mock.calls.map(([path]) => path)).not.toContain(upstreamPath);
+  });
+
+  it('watches the Tea user home while retaining project .kimi-code instruction paths', async () => {
+    const roots = await agentsMdWatchRoots({ fs, homeDir }, workDir);
+
+    expect(roots[0]).toEqual({
+      root: join(homeDir, '.tea-code'),
+      candidates: [join(homeDir, '.tea-code', 'AGENTS.md')],
+    });
+    expect(roots.flatMap((root) => root.candidates)).toContain(join(workDir, '.kimi-code', 'AGENTS.md'));
+    expect(roots.flatMap((root) => root.candidates)).not.toContain(join(homeDir, '.kimi-code', 'AGENTS.md'));
   });
 });
 
@@ -276,8 +295,8 @@ describe('loadAgentsMdDetailed discovered paths', () => {
   });
 
   it('returns the normalized paths of every injected file in collection order', async () => {
-    await mkdir(join(homeDir, '.kimi-code'), { recursive: true });
-    await writeFile(join(homeDir, '.kimi-code', 'AGENTS.md'), 'user branded', 'utf-8');
+    await mkdir(join(homeDir, '.tea-code'), { recursive: true });
+    await writeFile(join(homeDir, '.tea-code', 'AGENTS.md'), 'user branded', 'utf-8');
     await mkdir(join(workDir, '.kimi-code'), { recursive: true });
     await writeFile(join(workDir, '.kimi-code', 'AGENTS.md'), 'dot kimi', 'utf-8');
     await writeFile(join(workDir, 'AGENTS.md'), 'project instructions', 'utf-8');
@@ -285,7 +304,7 @@ describe('loadAgentsMdDetailed discovered paths', () => {
     const result = await loadAgentsMdDetailed({ fs, homeDir }, workDir);
 
     expect(result.paths).toEqual([
-      normalize(join(homeDir, '.kimi-code', 'AGENTS.md')),
+      normalize(join(homeDir, '.tea-code', 'AGENTS.md')),
       normalize(join(workDir, '.kimi-code', 'AGENTS.md')),
       normalize(join(workDir, 'AGENTS.md')),
     ]);

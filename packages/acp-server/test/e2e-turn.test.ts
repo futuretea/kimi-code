@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 import { getLiveSessionById, IAgentLifecycleService, IEventBus } from '@moonshot-ai/agent-core-v2';
 import { ToolProgress } from '@moonshot-ai/agent-core-v2/agent/toolExecutor/toolExecutorEvents';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mapPromptLaunchError } from '../src/session';
 import { createTestClient, type TestClient } from './_helpers/acpClient';
@@ -43,6 +43,7 @@ describe('acp-server real prompt turn (scripted LLM)', () => {
       await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
       homeDir = undefined;
     }
+    vi.restoreAllMocks();
   });
 
   function installTerminalClient(c: TestClient): void {
@@ -66,6 +67,47 @@ describe('acp-server real prompt turn (scripted LLM)', () => {
     if (clientCapabilities['terminal'] === true) installTerminalClient(client);
     return client;
   }
+
+  it.each([
+    { productName: 'Kimi Code CLI', version: '2.3.1', platform: 'kimi_code_cli' },
+    { productName: 'Example ACP Client', version: '9.8.7', platform: 'example_client' },
+  ])('sends the explicit $productName identity in real model requests', async (identity) => {
+    homeDir = await mkdtemp(join(tmpdir(), 'acp-identity-request-'));
+    await writeFile(join(homeDir, 'config.toml'), `
+default_model = "example"
+telemetry = false
+[providers.example]
+type = "kimi"
+base_url = "https://api.example.test/v1"
+api_key = "test-key"
+[models.example]
+provider = "example"
+model = "example-model"
+max_context_size = 32000
+`);
+    let headers: Headers | undefined;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const request = new Request(input, init);
+      if (request.url.endsWith('/chat/completions')) headers = request.headers;
+      return new Response(
+        'data: {"id":"example","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"hello"},"finish_reason":null}]}\n\n' +
+        'data: {"id":"example","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n' +
+        'data: [DONE]\n\n',
+        { headers: { 'Content-Type': 'text/event-stream' } },
+      );
+    });
+    client = await createTestClient({ homeDir, clientIdentity: identity });
+    await client.send('initialize', { protocolVersion: 1, clientCapabilities: {} });
+    const created = await client.send('session/new', { cwd: homeDir, mcpServers: [] }) as { sessionId: string };
+    const result = await client.send('session/prompt', {
+      sessionId: created.sessionId,
+      prompt: [{ type: 'text', text: 'Say hello' }],
+    });
+    expect(result).toMatchObject({ stopReason: 'end_turn' });
+    expect(headers?.get('User-Agent')).toBe(`${identity.productName}/${identity.version}`);
+    expect(headers?.get('X-Msh-Version')).toBe(identity.version);
+    expect(headers?.get('X-Msh-Platform')).toBe(identity.platform);
+  }, 30_000);
 
   it('drives initialize → new → prompt and streams the assistant text as agent_message_chunk', async () => {
     const c = await boot();

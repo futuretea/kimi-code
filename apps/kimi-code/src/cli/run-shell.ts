@@ -93,27 +93,29 @@ export async function runShell(
   });
 
   await harness.ensureConfigFile();
-  const legacySource = resolveLegacySourceHome(process.env, homedir(), process.cwd());
-  const sourceIsTarget = sameLegacyPath(legacySource.sourceHome, harness.homeDir);
-  if (sourceIsTarget) {
-    process.stderr.write(
-      `  KIMI_SHARE_DIR (${legacySource.sourceHome}) points at the Kimi Code home; legacy migration is disabled. Unset it or point it at the kimi-cli data directory to migrate.\n`,
-    );
-  }
-  const migrationPlan = sourceIsTarget
-    ? null
-    : await detectPendingMigration({
+  let migrationPlan: Awaited<ReturnType<typeof detectPendingMigration>> = null;
+  if (runOptions.migrateOnly === true) {
+    const legacySource = resolveLegacySourceHome(process.env, homedir(), process.cwd());
+    const sourceIsTarget = sameLegacyPath(legacySource.sourceHome, harness.homeDir);
+    if (sourceIsTarget) {
+      process.stderr.write(
+        `  KIMI_SHARE_DIR (${legacySource.sourceHome}) points at the Tea Code home; legacy migration is disabled. Unset it or point it at the kimi-cli data directory to migrate.\n`,
+      );
+    } else {
+      migrationPlan = await detectPendingMigration({
         sourceHome: legacySource.sourceHome,
         skillsSourceHome: legacySource.skillsSourceHome,
         targetHome: harness.homeDir,
-        ignoreMarker: runOptions.migrateOnly,
+        ignoreMarker: true,
       });
-  if (runOptions.migrateOnly === true && migrationPlan === null) {
-    if (!sourceIsTarget) {
-      process.stdout.write(`  Nothing to migrate from ${legacySource.sourceHome}.\n`);
     }
-    await harness.close();
-    return;
+    if (migrationPlan === null) {
+      if (!sourceIsTarget) {
+        process.stdout.write(`  Nothing to migrate from ${legacySource.sourceHome}.\n`);
+      }
+      await harness.close();
+      return;
+    }
   }
   const config = await harness.getConfig();
   startupTrace('config:loaded');
@@ -245,7 +247,7 @@ export async function runShell(
     process.stdout.write(`${gutter}Bye!\n`);
     const hints: string[] = [];
     if (sessionId !== '' && hasContent) {
-      hints.push(`${gutter}To resume this session: kimi -r ${sessionId}`);
+      hints.push(`${gutter}To resume this session: tea-code -r ${sessionId}`);
     }
     if (tui.exitOpenUrl !== undefined) {
       hints.push(`${gutter}open ${toTerminalHyperlink(tui.exitOpenUrl, tui.exitOpenUrl)}`);

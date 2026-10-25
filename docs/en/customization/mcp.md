@@ -20,7 +20,7 @@ Kimi Code CLI supports three MCP server connection methods:
 
 MCP server configuration is written in `mcp.json`, at two levels:
 
-- **User level**: `~/.kimi-code/mcp.json` (or `$KIMI_CODE_HOME/mcp.json`), shared across projects
+- **User level**: `~/.tea-code/mcp.json` (or `$TEA_CODE_HOME/mcp.json`), shared across projects
 - **Project level**: `.kimi-code/mcp.json` in the working directory, effective only for the current repository
 
 Entries with the same name: the project-level entry takes precedence and overrides the user-level entry.
@@ -31,7 +31,7 @@ Deleting a server from the configuration does not interrupt open sessions: the s
 
 When Kimi Code finds project-level MCP servers in an untrusted folder, it shows each server's transport and launch target in the workspace trust prompt. The prompt defaults to `Trust this folder`; review the listed command and arguments or remote URL before confirming. Trusting the folder enables the project-level MCP servers for that workspace.
 
-Headless runs (for example `kimi -p` in CI) cannot show the trust prompt, so project-level MCP servers stay disabled there unless the workspace is already trusted. Set [`KIMI_CODE_TRUST_WORKSPACE`](../configuration/env-vars.md#runtime-switches) to `1` to trust the workspace for that process.
+Headless runs (for example `tea-code -p` in CI) cannot show the trust prompt, so project-level MCP servers stay disabled there unless the workspace is already trusted. Set [`KIMI_CODE_TRUST_WORKSPACE`](../configuration/env-vars.md#runtime-switches) to `1` to trust the workspace for that process.
 
 Structure of `mcp.json`:
 
