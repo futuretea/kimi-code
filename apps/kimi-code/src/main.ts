@@ -11,7 +11,6 @@ import {
   installGlobalProxyDispatcher,
   log,
   resolveGlobalLogPath,
-  resolveKimiHome,
   type TelemetryClient,
 } from '@moonshot-ai/kimi-code-sdk';
 import {
@@ -25,6 +24,7 @@ import {
 import { createProgram } from './cli/commands';
 import { finalizeHeadlessRun } from './cli/headless-exit';
 import { startupTrace } from './utils/startup-trace';
+import { getDataDir } from './utils/paths';
 import type { CLIOptions } from './cli/options';
 import { OptionConflictError, validateOptions } from './cli/options';
 import { runPrompt } from './cli/run-prompt';
@@ -123,6 +123,7 @@ export async function handleUpgradeCommand(version: string, yes: boolean): Promi
   };
   const harness = createKimiHarness({
     homeDir: telemetryBootstrap.homeDir,
+    forwardTeaCodeHome: true,
     identity: createKimiCodeHostIdentity(version),
     telemetry: telemetryClient,
   });
@@ -161,6 +162,9 @@ const MIGRATE_CLI_OPTIONS: CLIOptions = {
 };
 
 export function main(): void {
+  process.env['TEA_CODE_HOME'] = getDataDir();
+  const version = getVersion();
+  process.env['KIMI_MSH_VERSION'] ??= version;
   process.title = PROCESS_NAME;
   installCrashHandlers();
   // A staged native update is swapped in and re-exec'd here, before any other
@@ -171,7 +175,7 @@ export function main(): void {
     exePath: process.execPath,
     argv: process.argv,
     env: process.env,
-    currentVersion: getVersion(),
+    currentVersion: version,
     isNative: detectNativeInstall(),
   })
     .catch(() => false)
@@ -256,7 +260,7 @@ function bootstrap(): void {
               operation,
             }),
           );
-          process.stderr.write(`See log: ${resolveGlobalLogPath(resolveKimiHome())}\n`);
+          process.stderr.write(`See log: ${resolveGlobalLogPath(getDataDir())}\n`);
           process.exit(1);
         });
     },
@@ -264,7 +268,7 @@ function bootstrap(): void {
       void handleMigrateCommand(version, migrateOptions).catch(async (error: unknown) => {
         await logStartupFailure('run migration', error);
         process.stderr.write(formatStartupError(error, { operation: 'run migration' }));
-        process.stderr.write(`See log: ${resolveGlobalLogPath(resolveKimiHome())}\n`);
+        process.stderr.write(`See log: ${resolveGlobalLogPath(getDataDir())}\n`);
         process.exit(1);
       });
     },
@@ -279,7 +283,7 @@ function bootstrap(): void {
       void handleUpgradeCommand(version, yes).catch(async (error: unknown) => {
         await logStartupFailure('upgrade', error);
         process.stderr.write(formatStartupError(error, { operation: 'upgrade' }));
-        process.stderr.write(`See log: ${resolveGlobalLogPath(resolveKimiHome())}\n`);
+        process.stderr.write(`See log: ${resolveGlobalLogPath(getDataDir())}\n`);
         process.exit(1);
       });
     },

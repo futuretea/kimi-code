@@ -7,7 +7,6 @@ import {
   loadRuntimeConfigSafe,
   log,
   resolveConfigPath,
-  resolveKimiHome,
   type KimiConfig,
   type TelemetryClient,
 } from '@moonshot-ai/kimi-code-sdk';
@@ -21,6 +20,7 @@ import {
 } from '@moonshot-ai/kimi-telemetry';
 
 import { CLI_USER_AGENT_PRODUCT, WEB_UI_MODE } from '#/constant/app';
+import { getDataDir } from '#/utils/paths';
 import {
   currentKimiProfile,
   currentKimiRegionResolution,
@@ -48,7 +48,7 @@ export interface InitializeCliTelemetryOptions {
 
 export function createCliTelemetryBootstrap(): CliTelemetryBootstrap {
   let firstLaunch = false;
-  const homeDir = resolveKimiHome();
+  const homeDir = getDataDir();
   const deviceId = createKimiDeviceId(homeDir, {
     onFirstLaunch: () => {
       firstLaunch = true;

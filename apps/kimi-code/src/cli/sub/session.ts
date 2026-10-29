@@ -105,6 +105,7 @@ function createDefaultSessionListDeps(
   const getHarness = (): KimiHarness => {
     harness ??= createKimiHarness({
       homeDir: createCliTelemetryBootstrap().homeDir,
+      forwardTeaCodeHome: true,
       identity,
       telemetry: telemetryClient,
     });

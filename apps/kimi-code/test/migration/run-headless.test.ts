@@ -53,6 +53,15 @@ async function writeRealSession(workdir: string, uuid: string): Promise<void> {
 }
 
 describe('runHeadlessMigrate', () => {
+  it('reports the actual target when a config conflict creates a sibling', async () => {
+    await writeLegacyConfig();
+    await writeFile(join(target, 'config.toml'), 'invalid = [\n', 'utf-8');
+    await runHeadlessMigrate({ configOnly: true }, { env: {}, userHome: home, targetHome: target, write });
+    const expected = join(target, 'config.migrated-from-kimi-cli.toml');
+    expect(lines.join('\n')).toContain(expected);
+    const report = JSON.parse(await readFile(join(target, 'migration-report.json'), 'utf-8'));
+    expect(report.notices.configConflictNotice).toContain(expected);
+  });
   it('reports nothing to migrate for an empty source', async () => {
     await mkdir(sourceHome(), { recursive: true });
     const code = await runHeadlessMigrate(

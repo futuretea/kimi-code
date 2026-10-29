@@ -15,9 +15,6 @@ import { z } from 'zod';
 import type { MermaidRenderMode } from '#/tui/utils/markdown-options';
 import { getDataDir } from '#/utils/paths';
 
-export const INVALID_TUI_CONFIG_MESSAGE =
-  'Invalid TUI config in ~/.kimi-code/tui.toml; using defaults.';
-
 function legacyFullscreenEnvMode(): TuiMode | undefined {
   return process.env['KIMI_CODE_TUI_FULL_SCREEN'] === '1' ? 'fullscreen' : undefined;
 }
@@ -156,14 +153,14 @@ export const DEFAULT_TUI_CONFIG: TuiConfig = TuiConfigSchema.parse({
 /**
  * Thrown by `loadTuiConfig` when the on-disk TOML cannot be parsed.
  * Carries `fallback` so the caller can recover without re-running the
- * I/O, and use `message` (== `INVALID_TUI_CONFIG_MESSAGE`) as a
+ * I/O, and use `message` as a
  * user-facing notice.
  */
 export class TuiConfigParseError extends Error {
   override readonly name = 'TuiConfigParseError';
   readonly fallback: TuiConfig;
-  constructor(fallback: TuiConfig) {
-    super(INVALID_TUI_CONFIG_MESSAGE);
+  constructor(fallback: TuiConfig, filePath: string) {
+    super(`Invalid TUI config in ${filePath}; using defaults.`);
     this.fallback = fallback;
   }
 }
@@ -207,7 +204,7 @@ export async function loadTuiConfig(
     }
     return migrated;
   } catch {
-    throw new TuiConfigParseError(DEFAULT_TUI_CONFIG);
+    throw new TuiConfigParseError(DEFAULT_TUI_CONFIG, filePath);
   }
 }
 
@@ -359,11 +356,11 @@ export function renderTuiConfig(config: TuiConfig): string {
 # items = ${JSON.stringify([...STATUS_LINE_ITEMS])}
 # Or render your own: a command whose first stdout line replaces footer line 1.
 # It receives a JSON snapshot (model, cwd, git, usage, mode) on stdin.
-# command = "~/.kimi-code/statusline.sh"
+# command = "/path/to/statusline.sh"
 `;
-  return `# ~/.kimi-code/tui.toml
-# Client preferences for kimi-code.
-# Agent/runtime settings stay in ~/.kimi-code/config.toml.
+  return `# Tea Code TUI configuration
+# Client preferences for tea-code.
+# Agent/runtime settings stay in config.toml in the data directory.
 
 theme = "${escapeTomlBasicString(config.theme)}" # "auto" | "dark" | "light" | custom theme name
 ${tuiModeLine}

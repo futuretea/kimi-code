@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_TUI_CONFIG,
-  INVALID_TUI_CONFIG_MESSAGE,
   loadTuiConfig,
   parseTuiConfig,
   removeLegacySurveySetting,
@@ -35,7 +34,7 @@ describe('TUI config', () => {
 
     expect(result).toEqual(DEFAULT_TUI_CONFIG);
     const text = readFileSync(filePath, 'utf-8');
-    expect(text).toContain('Client preferences for kimi-code.');
+    expect(text).toContain('Client preferences for tea-code.');
     expect(text).toContain('theme = "auto"');
     expect(text).toContain('cache_expiry_hint = true');
     expect(text).not.toContain('disable_feedback_survey');
@@ -163,7 +162,7 @@ command = "   "
     );
 
     expect(error).toBeInstanceOf(TuiConfigParseError);
-    expect((error as TuiConfigParseError).message).toBe(INVALID_TUI_CONFIG_MESSAGE);
+    expect((error as TuiConfigParseError).message).toBe(`Invalid TUI config in ${filePath}; using defaults.`);
     expect((error as TuiConfigParseError).fallback).toEqual(DEFAULT_TUI_CONFIG);
     expect(readFileSync(filePath, 'utf-8')).toBe('[[[');
   });

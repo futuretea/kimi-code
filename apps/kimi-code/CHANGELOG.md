@@ -1,6 +1,6 @@
-# @moonshot-ai/kimi-code
+# @futuretea/tea-code
 
-## 2.4.0
+## 2.4.0 (upstream)
 
 ### Minor Changes
 
@@ -87,6 +87,12 @@
 - [#4443](https://github.com/MoonshotAI/kimi-code/pull/4443) [`60c888f`](https://github.com/MoonshotAI/kimi-code/commit/60c888f300ab02cbd2cc08a3f6769ca23712cb12) Thanks [@kimi-agent-bot](https://github.com/kimi-agent-bot)! - web: Improved interactions and fixed known bugs.
 
 ## 2.3.2
+
+### Patch Changes
+
+- [`6817287`](https://github.com/futuretea/kimi-code/commit/681728734f58ae7973352299de306d8cbb16366f) Thanks [@futuretea](https://github.com/futuretea)! - Sync Tea Code with Kimi Code 2.3.2, disabling proactive subagents by default; request delegation explicitly and use `/swarm on` for agent swarms.
+
+## 2.3.2 (upstream)
 
 ### Patch Changes
 

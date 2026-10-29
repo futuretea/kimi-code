@@ -36,7 +36,7 @@ export function registerRotateTokenCommand(server: Command): void {
         // reconnect immediately. When a server is running its bind host/port
         // come from the instance registry; otherwise there is nothing to
         // connect to yet.
-        const instance = await getLiveServerInstance();
+        const instance = await getLiveServerInstance(getDataDir());
         if (instance !== undefined) {
           for (const { label, url: href } of accessUrlLines(instance.host, instance.port, token)) {
             // De-emphasize the `#token=…` fragment so the host/port stands out.

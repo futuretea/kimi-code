@@ -47,6 +47,7 @@ import { GrepTool as ProductionGrepTool } from '#/agent/tools/os/grep/grepTool';
 import { IAgentRuntimeService } from '#/agent/runtimeBinding/agentRuntime';
 import { FakeRuntime } from '#/runtime/fakeRuntime';
 import { ensureRgPath } from '#/os/backends/node-local/tools/rgLocator';
+import { IBootstrapService } from '#/app/bootstrap/bootstrap';
 import { stubWorkspaceContext } from '../../../../session/workspaceContext/stub-workspace-context';
 import { recordingTelemetry, type TelemetryRecord } from '../../../../app/telemetry/stubs';
 import { registerStateServices } from '../../../../state/stubs';
@@ -177,6 +178,7 @@ class GrepTool extends ProductionGrepTool {
     kaos: FakeKaos,
     workspaceConfig: WorkspaceConfig,
     telemetry: ITelemetryService = noopTelemetryService,
+    bootstrap?: IBootstrapService,
   ) {
     const environment = createTestEnv(kaos);
     const backend = Object.assign(
@@ -201,6 +203,9 @@ class GrepTool extends ProductionGrepTool {
       runtime,
       stubWorkspaceContext(workspaceConfig.workspaceDir, workspaceConfig.additionalDirs),
       telemetry,
+      undefined,
+      undefined,
+      bootstrap,
     );
   }
 }
@@ -354,6 +359,7 @@ describe('GrepTool', () => {
           });
           reg.defineInstance(ISessionWorkspaceContext, stubWorkspaceContext('/workspace'));
           reg.defineInstance(ITelemetryService, noopTelemetryService);
+          reg.definePartialInstance(IBootstrapService, { args: { requestHeaders: {}, forwardTeaCodeHome: false } });
           reg.definePartialInstance(IOAuthService, {
             getRegion: () => 'mainland-cn',
             getRegionAsync: async () => 'mainland-cn',
@@ -413,6 +419,14 @@ describe('GrepTool', () => {
     expect(GrepInputSchema.safeParse({ pattern: 'needle', output_mode: 'bad' }).success).toBe(
       false,
     );
+  });
+
+  it('uses the Tea home for the ripgrep cache when isolation is enabled', async () => {
+    const tool = new GrepTool(createFakeKaos(), workspace, noopTelemetryService, {
+      homeDir: '/tea-home', args: { forwardTeaCodeHome: true },
+    } as IBootstrapService);
+    await executeTool(tool, context({ pattern: 'example' }));
+    expect(ensureRgPath).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ shareDir: '/tea-home' }));
   });
 
   describe('output_mode enum value', () => {

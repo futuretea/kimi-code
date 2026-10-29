@@ -47,9 +47,14 @@ function makeHost(
   providers = stubProviderService(),
   env: NodeJS.ProcessEnv = {},
   telemetry: ITelemetryService = noopTelemetryService,
+  forwardTeaCodeHome = false,
 ): ScopedTestHost {
+  const bootstrap = stubBootstrap(homeDir, env);
   return createScopedTestHost([
-    stubPair(IBootstrapService, stubBootstrap(homeDir, env)),
+    stubPair(IBootstrapService, {
+      ...bootstrap,
+      args: { ...bootstrap.args, forwardTeaCodeHome },
+    }),
     stubPair(IProviderService, providers),
     stubPair(ISkillDiscovery, {
       _serviceBrand: undefined,
@@ -163,6 +168,22 @@ describe('PluginService (plugin boundary)', () => {
     while (createdDirs.length > 0) {
       const dir = createdDirs.pop();
       if (dir !== undefined) await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('forwards the Tea home option from bootstrap to plugin hooks', async () => {
+    const home = await makeHome();
+    const root = await makePluginDir('demo', {
+      hooks: [{ event: 'Stop', command: 'echo stop' }],
+    });
+    createdDirs.push(root);
+    await writeInstalledFile(home, JSON.stringify(installedFile('demo', root)));
+    const host = makeHost(home, undefined, {}, undefined, true);
+    try {
+      const hooks = await host.app.accessor.get(IPluginService).enabledHooks();
+      expect(hooks[0]?.env).toMatchObject({ TEA_CODE_HOME: home, KIMI_CODE_HOME: home });
+    } finally {
+      host.dispose();
     }
   });
 

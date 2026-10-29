@@ -1,7 +1,6 @@
 import {
   loadRuntimeConfigSafe,
   resolveConfigPath,
-  resolveKimiHome,
 } from '@moonshot-ai/kimi-code-sdk';
 import {
   createKimiRegionResolver,
@@ -14,6 +13,8 @@ import {
   type KimiRegionResolver,
 } from '@moonshot-ai/kimi-code-oauth';
 
+import { getDataDir } from '#/utils/data-dir';
+
 const MANAGED_KIMI_CODE_PROVIDER_KEY = 'managed:kimi-code';
 
 export const KIMI_CODE_GLOBAL_PLATFORM_VALUE = 'kimi-code-global';
@@ -24,7 +25,7 @@ export interface PersistedKimiOAuthRef {
 }
 
 export function persistedKimiOAuthRef(): PersistedKimiOAuthRef | undefined {
-  const result = loadRuntimeConfigSafe(resolveConfigPath({}));
+  const result = loadRuntimeConfigSafe(resolveConfigPath({ homeDir: getDataDir() }));
   const oauth = result.config.providers?.[MANAGED_KIMI_CODE_PROVIDER_KEY]?.oauth;
   if (oauth === undefined) return undefined;
   return { key: oauth.key, oauthHost: oauth.oauthHost };
@@ -32,7 +33,7 @@ export function persistedKimiOAuthRef(): PersistedKimiOAuthRef | undefined {
 
 function readAuth(): KimiRegionAuthRead {
   try {
-    const result = loadRuntimeConfigSafe(resolveConfigPath({}));
+    const result = loadRuntimeConfigSafe(resolveConfigPath({ homeDir: getDataDir() }));
     if (result.fileError !== undefined) return { status: 'unreadable' };
     const ref = result.config.providers?.[MANAGED_KIMI_CODE_PROVIDER_KEY]?.oauth;
     return ref === undefined ? { status: 'logged-out' } : { status: 'logged-in', ref };
@@ -45,9 +46,9 @@ let resolver: KimiRegionResolver | undefined;
 
 function regionResolver(): KimiRegionResolver {
   resolver ??= createKimiRegionResolver({
-    homeDir: resolveKimiHome(),
+    homeDir: getDataDir(),
     readAuth,
-    authFilePath: resolveConfigPath({}),
+    authFilePath: resolveConfigPath({ homeDir: getDataDir() }),
     readMarker: process.env['KIMI_CODE_REGION_MARKER'] !== 'off',
   });
   return resolver;

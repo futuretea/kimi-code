@@ -36,7 +36,6 @@ import {
   ErrorCodes,
   makeAgentScopeContext,
   makeSessionContext,
-  resolveKimiHome,
   type BootstrapInput,
   type Event2,
 } from '@moonshot-ai/agent-core-v2';
@@ -385,6 +384,7 @@ function makeFakeHarness() {
 
 describe('runV2Print', () => {
   beforeEach(() => {
+    vi.stubEnv('TEA_CODE_HOME', join(tmpdir(), 'tea-print-test-home'));
     vi.stubEnv('KIMI_CODE_EXPERIMENTAL_FLAG', '1');
     vi.stubEnv('KIMI_MODEL_OUTPUT_FORMAT', '');
     // Pin the telemetry kill-switch to "unset" so the host environment cannot
@@ -421,7 +421,7 @@ describe('runV2Print', () => {
       meta: { origin: { kind: 'user' }, tracked: true },
     });
     // Version banner is first, then the rendered assistant output.
-    expect(stderr.write).toHaveBeenNthCalledWith(1, 'kimi version 1.2.3-test\n');
+    expect(stderr.write).toHaveBeenNthCalledWith(1, 'tea-code version 1.2.3-test\n');
     expect(stdout.text()).toContain('hello world');
     expect(app.dispose).toHaveBeenCalled();
   });
@@ -484,6 +484,7 @@ describe('runV2Print', () => {
 
     const input = mocks.bootstrap.mock.calls[0]?.[0] as BootstrapInput;
     expect(input.args?.skillDirs).toEqual(['/skills']);
+    expect(input.args?.forwardTeaCodeHome).toBe(true);
   });
 
   it('leaves the skill dirs arg unset when --skillsDir is empty', async () => {
@@ -743,7 +744,7 @@ describe('runV2Print', () => {
     await runV2Print(opts({ session: 'ses_1' }) as never, '1.2.3-test', { stdout, stderr });
 
     expect(stderr.text()).toContain(
-      'Session "ses_1" is in Plan mode, and its plan cannot be approved in print mode; review it with `kimi -r ses_1`.',
+      'Session "ses_1" is in Plan mode, and its plan cannot be approved in print mode; review it with `tea-code -r ses_1`.',
     );
     const plan = agentServices.get(IAgentPlanService) as { cancel: ReturnType<typeof vi.fn> };
     expect(plan.cancel).not.toHaveBeenCalled();
@@ -862,7 +863,7 @@ describe('runV2Print', () => {
     expect(telemetry.addAppender).toHaveBeenCalledTimes(1);
     expect(mocks.initializeTelemetry).toHaveBeenCalledTimes(1);
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith({
-      homeDir: resolveKimiHome(),
+      homeDir: join(tmpdir(), 'tea-print-test-home'),
       deviceId: 'device-1',
       appName: CLI_USER_AGENT_PRODUCT,
       version: '1.2.3-test',

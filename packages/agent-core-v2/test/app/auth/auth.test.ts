@@ -35,6 +35,7 @@ import { RegionService } from '#/app/region/regionService';
 import { IAgentIdentity } from '#/app/agentIdentity/agentIdentity';
 import { IBootstrapService } from '#/app/bootstrap/bootstrap';
 import { IModelService, type ModelRecord } from '#/llm-adapter/model/model';
+import { IHostRequestHeaders } from '#/llm-adapter/model/host-request-headers';
 import { MODELS_SECTION } from '#/app/kosongConfig/configSection';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
 import { IProviderService, type ProviderConfig, type ProvidersChangedEvent } from '#/llm-adapter/provider/provider';
@@ -1218,11 +1219,13 @@ describe('WebSearchProviderService', () => {
   let providers: Record<string, ProviderConfig>;
   let servicesConfig: ServicesConfig | undefined;
   let resolveTokenProvider: ReturnType<typeof vi.fn>;
+  let identityHeaders: Record<string, string>;
 
   beforeEach(() => {
     disposables = new DisposableStore();
     providers = {};
     servicesConfig = undefined;
+    identityHeaders = { 'User-Agent': 'kimi-code-cli/test', 'X-Msh-Device-Id': 'device-test' };
     resolveTokenProvider = vi
       .fn()
       .mockReturnValue({ getAccessToken: async () => 'access-token' });
@@ -1241,11 +1244,12 @@ describe('WebSearchProviderService', () => {
         };
         reg.defineInstance(
           IAgentIdentity,
-          stubAgentIdentity({ hostRequestHeaders: hostHeaders }),
+          stubAgentIdentity({ hostRequestHeaders: identityHeaders }),
         );
-        reg.definePartialInstance(IBootstrapService, {
-          args: { requestHeaders: hostHeaders },
+        reg.definePartialInstance(IHostRequestHeaders, {
+          headers: hostHeaders,
         });
+        reg.definePartialInstance(IBootstrapService, { args: { requestHeaders: hostHeaders } });
         reg.definePartialInstance(IConfigService, {
           get: ((domain: string) =>
             domain === SERVICES_SECTION ? servicesConfig : undefined) as IConfigService['get'],
@@ -1267,6 +1271,46 @@ describe('WebSearchProviderService', () => {
     providers = { [NON_OAUTH_PROVIDER]: { type: 'openai', apiKey: 'sk-test' } };
     expect(createService().getWebSearchProvider()).toBeUndefined();
     expect(resolveTokenProvider).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['https://api.example.test/v1', false],
+    ['https://api.kimi.com/coding/v1', true],
+  ])('limits ACP host headers to managed endpoints: %s', async (baseUrl, receivesHeaders) => {
+    providers = { [OAUTH_PROVIDER]: { type: 'kimi', baseUrl, oauth: { storage: 'file', key: 'oauth/kimi-code' } } };
+    Object.assign(ix.get(IHostRequestHeaders), { restrictToManagedBaseUrl: true });
+    Object.assign(ix.get(IBootstrapService), { args: { requestHeaders: {} } });
+    ix.set(IAgentIdentity, stubAgentIdentity({ hostRequestHeaders: {} }));
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, json: async () => ({ search_results: [] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    await createService().getWebSearchProvider()!.search('example');
+    const headers = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
+    expect(headers['X-Msh-Device-Id']).toBe(receivesHeaders ? 'device-test' : undefined);
+  });
+
+  it('preserves bootstrap headers for non-ACP callers with a custom host header seed', async () => {
+    providers = { [OAUTH_PROVIDER]: { type: 'kimi', baseUrl: 'https://api.example.test/v1', oauth: { storage: 'file', key: 'oauth/kimi-code' } } };
+    Object.assign(ix.get(IHostRequestHeaders), { headers: { 'X-Other': 'seed' } });
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, json: async () => ({ search_results: [] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    await createService().getWebSearchProvider()!.search('example');
+    const headers = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
+    expect(headers['X-Msh-Device-Id']).toBe('device-test');
+    expect(headers['X-Other']).toBeUndefined();
+  });
+
+  it.each([
+    ['https://api.kimi.com/coding/v1/search', true],
+    ['https://custom.example.test/search', false],
+  ])('limits ACP headers for configured search services: %s', async (baseUrl, allowed) => {
+    servicesConfig = { moonshotSearch: { baseUrl, apiKey: 'key' } };
+    Object.assign(ix.get(IHostRequestHeaders), { restrictToManagedBaseUrl: true });
+    ix.set(IAgentIdentity, stubAgentIdentity({ hostRequestHeaders: {} }));
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, json: async () => ({ search_results: [] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    await createService().getWebSearchProvider()!.search('example');
+    const headers = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
+    expect(headers['X-Msh-Device-Id']).toBe(allowed ? 'device-test' : undefined);
   });
 
   it('returns undefined when the managed provider is not an OAuth kimi provider', () => {
@@ -1446,12 +1490,13 @@ describe('WebSearchProviderService', () => {
         resolveTokenProvider:
           resolveTokenProvider as unknown as IOAuthService['resolveTokenProvider'],
       } as IOAuthService,
-      { args: { requestHeaders: {} } } as unknown as IBootstrapService,
+      { args: { requestHeaders: {} } } as IBootstrapService,
       {
         get: ((domain: string) =>
           domain === SERVICES_SECTION ? servicesConfig : undefined) as IConfigService['get'],
       } as IConfigService,
       notFrozen,
+      { headers: {}, thirdPartyHeaders: {} } as IHostRequestHeaders,
     );
 
     expect(svc.hasWebSearchProvider()).toBe(true);

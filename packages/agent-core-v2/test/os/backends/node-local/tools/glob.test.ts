@@ -6,6 +6,7 @@ import { Readable, type Writable } from 'node:stream';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ensureRgPath, type RgProbe } from '#/os/backends/node-local/tools/rgLocator';
+import type { IBootstrapService } from '#/app/bootstrap/bootstrap';
 import { PathSecurityError, type PathClass } from '#/tool/path-access';
 import { noopTelemetryService } from '#/app/telemetry/telemetry';
 import type { ISessionWorkspaceContext } from '#/session/workspaceContext/workspaceContext';
@@ -228,6 +229,7 @@ function makeTool(
     stat?: ReturnType<typeof vi.fn>;
     readdir?: ReturnType<typeof vi.fn>;
     telemetry?: ITelemetryService;
+    bootstrap?: IBootstrapService;
   } = {},
 ): { tool: GlobTool; exec: ReturnType<typeof vi.fn>; withCwd: ReturnType<typeof withCwdOf> } {
   const exec = opts.exec ?? execReturning('');
@@ -238,11 +240,21 @@ function makeTool(
     createRuntime(fs, env, processService),
     workspaceConfig,
     opts.telemetry ?? noopTelemetryService,
+    undefined,
+    undefined,
+    opts.bootstrap,
   );
   return { tool, exec, withCwd: withCwdOf(exec) };
 }
 
 describe('GlobTool', () => {
+  it('uses the Tea home for the ripgrep cache when isolation is enabled', async () => {
+    const { tool } = makeTool(workspace, { bootstrap: {
+      homeDir: '/tea-home', args: { forwardTeaCodeHome: true },
+    } as IBootstrapService });
+    await execute(tool, { pattern: '*.ts' });
+    expect(ensureRgPath).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ shareDir: '/tea-home' }));
+  });
   it('exposes current metadata and schema', () => {
     const { tool } = makeTool(workspace);
 

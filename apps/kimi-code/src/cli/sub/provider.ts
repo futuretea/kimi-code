@@ -30,6 +30,7 @@ import type { Command } from 'commander';
 
 import { createKimiCodeHostIdentity, createKimiCodeUserAgent } from '#/cli/version';
 import { fetchCatalogOrBuiltIn } from '#/utils/catalog-fetch';
+import { getDataDir } from '#/utils/paths';
 
 interface WritableLike {
   write(chunk: string): boolean;
@@ -327,7 +328,7 @@ export async function handleCatalogAdd(
 
   if (opts.defaultModel !== undefined && !models.some((m) => m.id === opts.defaultModel)) {
     deps.stderr.write(
-      `Model "${opts.defaultModel}" is not in provider "${providerId}". Run "kimi provider catalog list ${providerId}" to see available ids.\n`,
+      `Model "${opts.defaultModel}" is not in provider "${providerId}". Run "tea-code provider catalog list ${providerId}" to see available ids.\n`,
     );
     deps.exit(1);
   }
@@ -534,7 +535,7 @@ function resolveDeps(overrides: Partial<ProviderDeps> = {}): ResolvedProviderDep
     getHarness:
       overrides.getHarness ??
       (() => {
-        harness ??= createKimiHarness({ identity });
+        harness ??= createKimiHarness({ homeDir: getDataDir(), identity, forwardTeaCodeHome: true });
         return harness;
       }),
     stdout: overrides.stdout ?? process.stdout,

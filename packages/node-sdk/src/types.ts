@@ -222,6 +222,7 @@ export interface KimiHarnessOptions {
   readonly autoLoadConfig?: boolean | undefined;
   readonly uiMode?: string;
   readonly skillDirs?: readonly string[];
+  readonly forwardTeaCodeHome?: boolean;
   /**
    * UI surfaces this host can render, declared once per process and passed
    * into the engine through `BootstrapInput.args.uiCapabilities`. Engine

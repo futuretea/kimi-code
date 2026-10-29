@@ -94,7 +94,7 @@ export async function handleUpgrade(
       currentVersion,
       plan: plan.kind,
     });
-    deps.stdout.write(`Kimi Code is already up to date (${formatDisplayVersion(currentVersion)}).\n`);
+    deps.stdout.write(`Tea Code is already up to date (${formatDisplayVersion(currentVersion)}).\n`);
     return 0;
   }
 
@@ -153,7 +153,7 @@ export async function handleUpgrade(
     });
     logUpgradeWarn(deps.logger, 'manual upgrade install failed', { ...logBase, error });
     deps.stderr.write(
-      `warning: failed to install @moonshot-ai/kimi-code@${target.version}: ` +
+      `warning: failed to install @futuretea/tea-code@${target.version}: ` +
         `${formatErrorMessage(error)}\n`,
     );
     return 1;

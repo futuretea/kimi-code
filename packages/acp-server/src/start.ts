@@ -13,6 +13,8 @@
 
 import { Readable, Writable } from 'node:stream';
 
+import { createKimiDefaultHeaders } from '@moonshot-ai/kimi-code-oauth';
+
 import { ndJsonStream, type AgentConnection, type Stream } from '@agentclientprotocol/sdk';
 import {
   bootstrap,
@@ -34,11 +36,13 @@ import {
   resolveConfigPath,
   resolveKimiHome,
   resolveLoggingConfig,
+  type BootstrapInput,
   type Scope,
   type ScopeSeed,
   sessionMediaOriginalsDir,
 } from '@moonshot-ai/agent-core-v2';
 import type { Klient } from '@moonshot-ai/klient';
+import { IHostRequestHeaders } from '@moonshot-ai/agent-core-v2/llm-adapter/model/host-request-headers';
 import { createKlient } from '@moonshot-ai/klient/memory';
 
 import { acpClientFromContext } from './acp-client';
@@ -55,6 +59,8 @@ export interface RunAcpServerOptions extends AcpServerOptions {
   readonly configPath?: string;
   readonly input?: NodeJS.ReadableStream;
   readonly output?: NodeJS.WritableStream;
+  readonly clientIdentity?: BootstrapInput['clientIdentity'];
+  readonly forwardTeaCodeHome?: boolean;
   /**
    * Extra App-scope service seeds forwarded to `bootstrap()`. Intended for
    * tests — e.g. seeding a scripted `IProtocolAdapterRegistry` to drive a
@@ -104,22 +110,29 @@ export async function runAcpServerWithStream(
   const logging = resolveLoggingConfig({ homeDir, env: process.env });
   // `bootstrap()` seeds `IFileSystemStorageService` with a `FileStorageService`
   // rooted at `homeDir`, so session metadata, wire records, blobs, and the
-  // session index all persist to disk. `clientIdentity` is required by the
-  // engine: reuse the advertised ACP `agentInfo` (the embedding CLI's
-  // name/version) with the CLI platform — the literal matches
-  // `KIMI_CODE_PLATFORM` from `@moonshot-ai/kimi-code-oauth`, which this
-  // package does not depend on.
+  // session index all persist to disk. The network client identity can be
+  // supplied independently of the ACP display metadata. Otherwise, reuse
+  // `agentInfo` name/version with the CLI platform — the literal matches
+  // `KIMI_CODE_PLATFORM` from `@moonshot-ai/kimi-code-oauth`.
+  const headerSeeds: ScopeSeed = opts.clientIdentity === undefined
+    ? []
+    : [[IHostRequestHeaders, {
+      headers: createKimiDefaultHeaders({ homeDir, ...opts.clientIdentity }),
+      thirdPartyHeaders: {},
+      restrictToManagedBaseUrl: true,
+    }]];
   const { app: core } = bootstrap(
     {
       homeDir,
       configPath,
-      clientIdentity: {
+      clientIdentity: opts.clientIdentity ?? {
         productName: opts.agentInfo?.name ?? 'kimi-code-acp',
         version: opts.agentInfo?.version ?? '0.0.0',
         platform: 'kimi_code_cli',
       },
+      args: { forwardTeaCodeHome: opts.forwardTeaCodeHome },
     },
-    [...logSeed(logging), ...(opts.extraSeeds ?? [])],
+    [...logSeed(logging), ...headerSeeds, ...(opts.extraSeeds ?? [])],
   );
 
   // The klient dispatches against the same app scope — calls and events stay
@@ -151,6 +164,7 @@ export async function runAcpServerWithStream(
     disableAuth: opts.disableAuth,
     terminalAuthEnv: opts.terminalAuthEnv,
     terminalAuthLegacyCommand: opts.terminalAuthLegacyCommand,
+    terminalAuthLegacyArgs: opts.terminalAuthLegacyArgs,
     slashCommands: opts.slashCommands,
     bindSessionRuntime: async (sessionId) => {
       const handle = getLiveSessionById(core.accessor, sessionId);

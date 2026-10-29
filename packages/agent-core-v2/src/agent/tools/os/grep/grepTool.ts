@@ -8,6 +8,7 @@ import {
 } from '#/tool/toolContract';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
 import { IOAuthService } from '#/app/auth/auth';
+import { IBootstrapService } from '#/app/bootstrap/bootstrap';
 import { registerAgentToolService } from '#/agent/toolRegistry/toolContribution';
 import type { IHostEnvironment } from '#/os/interface/hostEnvironment';
 import type { IHostFileSystem } from '#/os/interface/hostFileSystem';
@@ -74,6 +75,7 @@ export class GrepTool implements IGrepTool {
     @ITelemetryService private readonly telemetry: ITelemetryService,
     @ISessionSkillCatalog private readonly skillCatalog?: ISessionSkillCatalog,
     @IOAuthService private readonly auth?: IOAuthService,
+    @IBootstrapService private readonly bootstrap?: IBootstrapService,
   ) {}
 
   private workspace(view: RuntimeWorkspaceView): WorkspaceConfig {
@@ -140,6 +142,7 @@ export class GrepTool implements IGrepTool {
     try {
       const resolution = await ensureRgPath(this.createRgProbe(processService), {
         signal,
+        shareDir: this.bootstrap?.args.forwardTeaCodeHome ? this.bootstrap.homeDir : undefined,
         allowCachedFallback: true,
         resolveRegion: () => this.auth?.getRegion(),
       });
@@ -155,7 +158,7 @@ export class GrepTool implements IGrepTool {
         return { isError: true, output: 'Grep aborted' };
       }
       this.telemetry.track2('grep_tool_rg_fallback', { outcome: 'failed' });
-      return { isError: true, output: rgUnavailableMessage(error) };
+      return { isError: true, output: rgUnavailableMessage(error, this.bootstrap?.args.forwardTeaCodeHome ? this.bootstrap.homeDir : undefined) };
     }
 
     let runResult: RunRgResult;
@@ -182,7 +185,7 @@ export class GrepTool implements IGrepTool {
         runResult = retryRun;
       }
     } catch (error) {
-      return { isError: true, output: formatSpawnError(error) };
+      return { isError: true, output: formatSpawnError(error, this.bootstrap?.args.forwardTeaCodeHome ? this.bootstrap.homeDir : undefined) };
     }
 
     const { exitCode, stderrText, bufferTruncated, stderrTruncated, timedOut } = runResult;
@@ -354,9 +357,9 @@ registerAgentToolService(IGrepTool, GrepTool, {
   requiredRuntimeCapabilities: ['fs', 'process'],
 });
 
-function formatSpawnError(error: unknown): string {
+function formatSpawnError(error: unknown, shareDir?: string): string {
   return errorCode(error) === 'ENOENT'
-    ? rgUnavailableMessage(error)
+    ? rgUnavailableMessage(error, shareDir)
     : error instanceof Error
       ? error.message
       : String(error);

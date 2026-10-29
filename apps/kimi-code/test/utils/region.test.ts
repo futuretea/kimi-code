@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -17,7 +17,7 @@ let home: string;
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'kimi-region-test-'));
-  process.env['KIMI_CODE_HOME'] = home;
+  process.env['TEA_CODE_HOME'] = home;
   delete process.env['KIMI_CODE_OAUTH_HOST'];
   delete process.env['KIMI_OAUTH_HOST'];
   delete process.env['KIMI_CODE_REGION_MARKER'];
@@ -31,6 +31,15 @@ afterEach(() => {
 });
 
 describe('currentKimiRegion', () => {
+  it('ignores the upstream home when resolving the region', () => {
+    const upstreamHome = join(home, 'upstream');
+    mkdirSync(upstreamHome);
+    writeFileSync(join(home, 'region'), 'mainland-cn\n');
+    writeFileSync(join(upstreamHome, 'region'), 'global\n');
+    process.env['KIMI_CODE_HOME'] = upstreamHome;
+    expect(refreshKimiRegion()).toBe('mainland-cn');
+  });
+
   it('follows the install-channel marker before the first login', () => {
     writeFileSync(join(home, 'region'), 'global\n');
     expect(refreshKimiRegion()).toBe('global');

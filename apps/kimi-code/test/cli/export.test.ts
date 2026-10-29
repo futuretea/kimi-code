@@ -103,6 +103,7 @@ beforeEach(() => {
   vi.stubEnv('KIMI_CODE_OAUTH_HOST', 'https://auth.kimi.com');
   resetKimiRegionCache();
   tmp = mkdtempSync(join(tmpdir(), 'kimi-export-'));
+  vi.stubEnv('TEA_CODE_HOME', tmp);
 });
 
 afterEach(() => {
@@ -412,11 +413,11 @@ describe('kimi export', () => {
     expect(mocks.harnessEnsureConfigFile).toHaveBeenCalledOnce();
     expect(mocks.harnessGetConfig).toHaveBeenCalledOnce();
     expect(mocks.createKimiDeviceId).toHaveBeenCalledWith(
-      '/tmp/kimi-export-home',
+      tmp,
       expect.objectContaining({ onFirstLaunch: expect.any(Function) }),
     );
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith({
-      homeDir: '/tmp/kimi-export-home',
+      homeDir: tmp,
       deviceId: 'device-1',
       enabled: true,
       appName: 'kimi-code-cli',
@@ -522,14 +523,14 @@ describe('kimi export', () => {
 
     expect(mocks.createKimiDeviceId).toHaveBeenNthCalledWith(
       1,
-      '/tmp/kimi-export-home',
+      tmp,
       expect.objectContaining({ onFirstLaunch: expect.any(Function) }),
     );
     expect(mocks.createKimiDeviceId.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.kimiHarnessConstructor.mock.invocationCallOrder[0]!,
     );
     expect(mocks.kimiHarnessConstructor).toHaveBeenCalledWith(
-      expect.objectContaining({ homeDir: '/tmp/kimi-export-home' }),
+      expect.objectContaining({ homeDir: tmp }),
     );
     expect(mocks.harnessTrack).toHaveBeenCalledWith('first_launch');
     expect(mocks.initializeTelemetry.mock.invocationCallOrder[0]).toBeLessThan(

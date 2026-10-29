@@ -107,6 +107,7 @@ export interface ServerStartOptions {
   readonly host?: string;
   readonly port?: number;
   readonly homeDir?: string;
+  readonly forwardTeaCodeHome?: boolean;
   readonly env?: NodeJS.ProcessEnv;
   readonly pluginMarketplaceUrl?: string;
   readonly configPath?: string;
@@ -210,6 +211,7 @@ export async function startServer(opts: ServerStartOptions): Promise<RunningServ
       clientIdentity: opts.hostIdentity,
       args: {
         requestHeaders: createKimiDefaultHeaders({ homeDir, ...opts.hostIdentity }),
+        forwardTeaCodeHome: opts.forwardTeaCodeHome,
         skillDirs: opts.skillDirs,
         displayName: opts.hostIdentity.displayName,
         replyStyleGuide: opts.hostIdentity.replyStyleGuide,

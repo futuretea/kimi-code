@@ -62,8 +62,8 @@ function getShareDir(): string {
   return join(homedir(), '.kimi-code');
 }
 
-export function getShareBinRgPath(): string {
-  return join(getShareDir(), 'bin', rgBinaryName());
+export function getShareBinRgPath(shareDir = getShareDir()): string {
+  return join(shareDir, 'bin', rgBinaryName());
 }
 
 function rgBaseUrl(resolveRegion: (() => KimiRegion | undefined) | undefined): string {
@@ -362,10 +362,10 @@ export async function extractRgFromZip(archivePath: string, destination: string)
   });
 }
 
-export function rgUnavailableMessage(cause: unknown): string {
+export function rgUnavailableMessage(cause: unknown, shareDir?: string): string {
   const detail =
     cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : 'unknown error';
-  const shareBin = getShareBinRgPath();
+  const shareBin = getShareBinRgPath(shareDir);
   return (
     `ripgrep (rg) is not available and the automatic bootstrap failed.\n` +
     `\n` +

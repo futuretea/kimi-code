@@ -84,6 +84,7 @@ export class PluginService extends Service implements IPluginService {
       bootstrap.getEnv(KIMI_CODE_OAUTH_HOST_ENV) ?? bootstrap.getEnv(KIMI_OAUTH_HOST_ENV);
     this.manager = new PluginManager({
       kimiHomeDir: this.homeDir,
+      forwardTeaCodeHome: bootstrap.args.forwardTeaCodeHome,
       discoverSkills: (roots) => discovery.discover(roots),
     });
   }

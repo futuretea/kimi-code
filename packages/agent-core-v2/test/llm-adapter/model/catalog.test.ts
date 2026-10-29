@@ -44,17 +44,18 @@ const HOST_HEADERS = { 'User-Agent': 'kimi-test/1.0', 'X-Msh-Device-Id': 'device
 function hostHeadersPort(spec: {
   headers: Record<string, string>;
   identitySlug?: string;
+  restrictToManagedBaseUrl?: boolean;
 }): IHostRequestHeaders {
-  return new HostRequestHeadersAdapter(
+  return Object.assign(new HostRequestHeadersAdapter(
     stubBootstrap('/home', {}, { requestHeaders: spec.headers }),
     stubAgentIdentity({ slug: spec.identitySlug, hostRequestHeaders: spec.headers }),
-  );
+  ), { restrictToManagedBaseUrl: spec.restrictToManagedBaseUrl });
 }
 
 function createHost(
   sections: Record<string, unknown> = {},
   oauthTokens: IModelOAuthTokens = stubModelOAuthTokens(),
-  hostHeaders: { headers: Record<string, string>; identitySlug?: string } = {
+  hostHeaders: { headers: Record<string, string>; identitySlug?: string; restrictToManagedBaseUrl?: boolean } = {
     headers: HOST_HEADERS,
   },
 ): {
@@ -116,6 +117,22 @@ afterEach(() => {
 });
 
 describe('Model assembly (pure data)', () => {
+  it.each([
+    ['https://api.kimi.com/coding/v1', true],
+    ['https://api.moonshot.ai/v1', true],
+    ['https://api.moonshot.cn/v1', true],
+    ['https://proxy.example.test/v1', false],
+  ])('restricts ACP model identity by base URL, including Anthropic protocol: %s', (baseUrl, allowed) => {
+    const { host, catalog } = createHost({
+      providers: { kimi: { type: 'kimi', apiKey: 'sk', baseUrl } },
+      models: { k2: { provider: 'kimi', protocol: 'anthropic', model: 'kimi-k2', maxContextSize: 200000 } },
+    }, stubModelOAuthTokens(), { headers: HOST_HEADERS, restrictToManagedBaseUrl: true });
+    try {
+      expect(catalog.get('k2').headers['X-Msh-Device-Id']).toBe(allowed ? 'device-1' : undefined);
+    } finally {
+      host.dispose();
+    }
+  });
   it('assembles a kimi model: protocol resolves to the vendor base, never a vendor', () => {
     const { host, catalog } = createHost(kimiSections);
     try {

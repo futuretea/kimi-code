@@ -1,4 +1,4 @@
-import { parseKimiCodeCustomHeaders } from '@moonshot-ai/kimi-code-oauth';
+import { isManagedKimiCodeBaseUrl, parseKimiCodeCustomHeaders } from '@moonshot-ai/kimi-code-oauth';
 import {
   apiKeyEnvMissingMessage,
   declaredProviderCredential,
@@ -383,6 +383,7 @@ export class ModelCatalog extends Disposable implements IModelCatalog {
         providerConfig?.type,
         providerConfig?.customHeaders,
         this.hostRequestHeaders,
+        rawBaseUrl,
       ),
       capabilities,
       maxContextSize: model.maxContextSize,
@@ -492,13 +493,24 @@ export class ModelCatalog extends Disposable implements IModelCatalog {
 export function resolveOutboundHeaders(
   providerType: string | undefined,
   customHeaders: Readonly<Record<string, string>> | undefined,
-  host: Pick<IHostRequestHeaders, 'headers' | 'thirdPartyHeaders'>,
+  host: Pick<IHostRequestHeaders, 'headers' | 'thirdPartyHeaders' | 'restrictToManagedBaseUrl'>,
+  baseUrl?: string,
 ): Readonly<Record<string, string>> {
   const forwardsAll =
     providerType !== undefined &&
-    getProviderDefinition(providerType)?.hostHeaders === 'full';
+    getProviderDefinition(providerType)?.hostHeaders === 'full' &&
+    !(host.restrictToManagedBaseUrl && baseUrl !== undefined && !isKimiModelBaseUrl(baseUrl));
   const hostLayer = forwardsAll ? host.headers : host.thirdPartyHeaders;
   return { ...parseKimiCodeCustomHeaders(), ...hostLayer, ...customHeaders };
+}
+
+function isKimiModelBaseUrl(baseUrl: string): boolean {
+  if (isManagedKimiCodeBaseUrl(baseUrl)) return true;
+  try {
+    return ['https://api.moonshot.ai', 'https://api.moonshot.cn'].includes(new URL(baseUrl).origin);
+  } catch {
+    return false;
+  }
 }
 
 function resolveModelCapabilities(

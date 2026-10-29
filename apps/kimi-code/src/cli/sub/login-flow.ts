@@ -6,10 +6,11 @@
  */
 
 import { createKimiHarness } from '@moonshot-ai/kimi-code-sdk';
-import { OAuthAccessDeniedError, type KimiRegion } from '@moonshot-ai/kimi-code-oauth';
+import { OAuthAccessDeniedError, type KimiHostIdentity, type KimiRegion } from '@moonshot-ai/kimi-code-oauth';
 
 import { createKimiCodeHostIdentity } from '#/cli/version';
 import { openUrl } from '#/utils/open-url';
+import { getDataDir } from '#/utils/data-dir';
 import { persistedKimiOAuthRef, regionForBareLogin } from '#/utils/region';
 
 /** Parse a `--region` CLI flag; exits with an actionable message on bad input. */
@@ -21,14 +22,16 @@ export function parseRegionFlag(value: string): KimiRegion {
   return value;
 }
 
-export async function runLoginFlow(options: { region?: KimiRegion } = {}): Promise<never> {
+export async function runLoginFlow(options: { region?: KimiRegion; identity?: KimiHostIdentity } = {}): Promise<never> {
   // No flag: a fresh install follows the resolved region (env/marker/
   // default); an existing login keeps its own environment (see
   // regionForBareLogin — the default slot re-pins mainland-cn, a scoped slot
   // keeps its configured hosts).
   const region = options.region ?? regionForBareLogin(persistedKimiOAuthRef());
-  const identity = createKimiCodeHostIdentity();
+  const identity = options.identity ?? createKimiCodeHostIdentity();
   const harness = createKimiHarness({
+    homeDir: getDataDir(),
+    forwardTeaCodeHome: true,
     identity,
     uiMode: 'cli',
   });

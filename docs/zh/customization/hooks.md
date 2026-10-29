@@ -28,7 +28,7 @@ Hooks（钩子）是一种自动触发机制：你预先告诉 Kimi Code CLI"每
 下面这条 hook 会在每次后台任务完成时，在终端标题栏闪一下通知（macOS 需要安装 `terminal-notifier`）：
 
 ```toml
-# 写在 ~/.kimi-code/config.toml 里
+# 写在 ~/.tea-code/config.toml 里
 [[hooks]]
 event = "Notification"           # 触发时机：后台任务状态变化时
 matcher = "task\\.completed"     # 只关心"已完成"的通知
@@ -39,7 +39,7 @@ command = "terminal-notifier -title Kimi -message 'Task done'"
 
 ## 配置
 
-所有 hook 规则写在 `~/.kimi-code/config.toml` 的 `[[hooks]]` 数组里：
+所有 hook 规则写在 `~/.tea-code/config.toml` 的 `[[hooks]]` 数组里：
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -117,8 +117,8 @@ Hook 命令的工作目录是当前会话的项目目录。
 | `PermissionRequest` | 工具名 | — | 即将等待用户审批前触发 |
 | `PermissionResult` | 工具名 | — | 审批结束后触发 |
 | `SessionStart` | `startup` 或 `resume` | — | 新会话启动或历史会话恢复后触发；payload 含 `source`、`model`、`profile` |
-| `SessionEnd` | `exit` 或 `archive` | — | 会话关闭后触发；`archive` 表示会话被归档而非退出；`kimi web` 将空闲会话从内存卸载时不触发，之后归档或删除这个已卸载的会话也不触发；透明恢复不触发 `SessionStart` |
-| `SessionHeartbeat` | 空字符串 | — | 会话存活期间每 60 秒触发一次，仅配置本事件时计时器才运行；payload 含 `uptime_ms`；`kimi web` 卸载会话期间暂停，恢复后 `uptime_ms` 重新计时 |
+| `SessionEnd` | `exit` 或 `archive` | — | 会话关闭后触发；`archive` 表示会话被归档而非退出；`tea-code web` 将空闲会话从内存卸载时不触发，之后归档或删除这个已卸载的会话也不触发；透明恢复不触发 `SessionStart` |
+| `SessionHeartbeat` | 空字符串 | — | 会话存活期间每 60 秒触发一次，仅配置本事件时计时器才运行；payload 含 `uptime_ms`；`tea-code web` 卸载会话期间暂停，恢复后 `uptime_ms` 重新计时 |
 | `SubagentStart` | subagent 名称 | — | subagent 开始运行前触发 |
 | `SubagentStop` | subagent 名称 | — | subagent 成功完成后触发 |
 | `TaskStarted` | 任务类型（`agent`、`process` 或 `question`） | — | 后台任务启动时触发；payload 含 `task_id`、`description`、`detached` |
@@ -136,7 +136,7 @@ Hook 命令的工作目录是当前会话的项目目录。
 [[hooks]]
 event = "PreToolUse"
 matcher = "Bash"
-command = "node ~/.kimi-code/hooks/block-dangerous-bash.mjs"
+command = "node ~/.tea-code/hooks/block-dangerous-bash.mjs"
 timeout = 5
 ```
 

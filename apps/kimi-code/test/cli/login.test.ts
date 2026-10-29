@@ -7,6 +7,8 @@
  */
 
 import { Command } from 'commander';
+import { homedir, tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OAuthAccessDeniedError } from '@moonshot-ai/kimi-code-oauth';
@@ -55,8 +57,24 @@ describe('kimi login', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     exitSpy.mockRestore();
     stderrSpy.mockRestore();
+  });
+
+  it.each([
+    { teaHome: undefined, kimiHome: undefined, expected: join(homedir(), '.tea-code') },
+    { teaHome: join(tmpdir(), 'login-tea'), kimiHome: undefined, expected: join(tmpdir(), 'login-tea') },
+    { teaHome: undefined, kimiHome: join(tmpdir(), 'login-kimi'), expected: join(homedir(), '.tea-code') },
+    { teaHome: join(tmpdir(), 'login-tea'), kimiHome: join(tmpdir(), 'login-kimi'), expected: join(tmpdir(), 'login-tea') },
+  ])('uses the Tea home for login with Tea home $teaHome and Kimi home $kimiHome', async ({ teaHome, kimiHome, expected }) => {
+    vi.stubEnv('TEA_CODE_HOME', teaHome);
+    vi.stubEnv('KIMI_CODE_HOME', kimiHome);
+    mockLogin.mockResolvedValue({ providerName: 'kimi-code', ok: true });
+    const program = new Command('tea-code').exitOverride();
+    registerLoginCommand(program);
+    await expect(program.parseAsync(['node', 'tea-code', 'login'])).rejects.toThrow(ExitCalled);
+    expect(createKimiHarness).toHaveBeenCalledWith(expect.objectContaining({ homeDir: expected }));
   });
 
   it('registers a `login` subcommand on the program', () => {

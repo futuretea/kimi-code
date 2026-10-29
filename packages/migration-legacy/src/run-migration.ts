@@ -28,6 +28,7 @@ export interface RunMigrationInput {
   readonly scope: MigrationScope;
   readonly source: string;
   readonly target: string;
+  readonly conflictNoticeHome?: string;
   /** Legacy plans dir; defaults to `~/.kimi/plans` per kimi-cli's hardcode. */
   readonly plansSourceDir?: string;
   readonly migratorVersion?: string;
@@ -118,8 +119,10 @@ export async function runMigration(input: RunMigrationInput): Promise<MigrationR
       mcpOauthServersRequiringReauth: input.plan.detectedMcpOauthServers,
       oauthLoginsRequiringRelogin: input.plan.oauthCredentials,
       detectedPlugins: input.plan.detectedPlugins,
-      configConflictNotice: config.wroteSiblingDueToConflict ? CONFIG_CONFLICT_NOTICE : null,
-      tuiConflictNotice: config.wroteTuiSibling ? TUI_CONFLICT_NOTICE : null,
+      configConflictNotice: config.wroteSiblingDueToConflict
+        ? CONFIG_CONFLICT_NOTICE.replace('~/.kimi-code', input.conflictNoticeHome ?? '~/.kimi-code') : null,
+      tuiConflictNotice: config.wroteTuiSibling
+        ? TUI_CONFLICT_NOTICE.replace('~/.kimi-code', input.conflictNoticeHome ?? '~/.kimi-code') : null,
       plansCopiedNotice,
     },
   };

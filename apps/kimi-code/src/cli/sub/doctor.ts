@@ -7,6 +7,7 @@ import type { Command } from 'commander';
 import { z } from 'zod';
 
 import { getTuiConfigPath, parseTuiConfig } from '#/tui/config';
+import { getDataDir } from '#/utils/paths';
 
 interface WritableLike {
   write(chunk: string): boolean;
@@ -111,7 +112,7 @@ async function runDoctorCommand(
 function resolveDeps(deps: Partial<DoctorDeps> | DoctorDeps | undefined): ResolvedDoctorDeps {
   return {
     cwd: deps?.cwd ?? (() => process.cwd()),
-    defaultConfigPath: deps?.defaultConfigPath ?? (() => resolveConfigPath({})),
+    defaultConfigPath: deps?.defaultConfigPath ?? (() => resolveConfigPath({ homeDir: getDataDir() })),
     defaultTuiConfigPath: deps?.defaultTuiConfigPath ?? getTuiConfigPath,
     stdout: deps?.stdout ?? process.stdout,
     stderr: deps?.stderr ?? process.stderr,

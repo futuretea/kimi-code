@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resolve } from 'node:path';
 import { ErrorCodes, KimiError } from '@moonshot-ai/kimi-code-sdk';
 
 import { validateOptions } from '#/cli/options';
@@ -224,7 +225,25 @@ async function runHandleUpgradeCommand(yes = false): Promise<number> {
 
 describe('main entry command handling', () => {
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.clearAllMocks();
+  });
+
+  it('makes a relative Tea home absolute before launching child processes', async () => {
+    vi.stubEnv('TEA_CODE_HOME', 'relative-home');
+    main();
+    await waitForProgramArgs();
+    expect(process.env['TEA_CODE_HOME']).toBe(resolve('relative-home'));
+  });
+
+  it.each([
+    { configured: undefined, expected: '0.0.1-alpha.2' },
+    { configured: 'custom-version', expected: 'custom-version' },
+  ])('uses the host version as the plugin default without overriding a configured value', async ({ configured, expected }) => {
+    vi.stubEnv('KIMI_MSH_VERSION', configured);
+    main();
+    await waitForProgramArgs();
+    expect(process.env['KIMI_MSH_VERSION']).toBe(expected);
   });
 
   beforeEach(() => {

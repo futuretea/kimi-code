@@ -25,6 +25,7 @@ export interface HostArgs {
   readonly replyStyleGuide?: string;
   readonly nonInteractive?: boolean;
   readonly uiCapabilities?: readonly HostUiCapability[];
+  readonly forwardTeaCodeHome?: boolean;
 }
 
 export interface HostArgsInput {
@@ -35,6 +36,7 @@ export interface HostArgsInput {
   readonly replyStyleGuide?: string;
   readonly nonInteractive?: boolean;
   readonly uiCapabilities?: readonly HostUiCapability[];
+  readonly forwardTeaCodeHome?: boolean;
 }
 
 export function resolveHostArgs(input: HostArgsInput | undefined): HostArgs {
@@ -46,6 +48,7 @@ export function resolveHostArgs(input: HostArgsInput | undefined): HostArgs {
     replyStyleGuide: input?.replyStyleGuide,
     nonInteractive: input?.nonInteractive,
     uiCapabilities: input?.uiCapabilities,
+    forwardTeaCodeHome: input?.forwardTeaCodeHome,
   };
 }
 

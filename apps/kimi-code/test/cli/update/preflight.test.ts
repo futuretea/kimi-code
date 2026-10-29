@@ -118,7 +118,7 @@ vi.mock('node:child_process', async () => {
 
 function cacheWith(version: string): UpdateCache {
   return {
-    source: 'cdn',
+    source: 'npm-registry',
     channel: 'stable',
     checkedAt: '2026-04-23T08:00:00.000Z',
     latest: version,
@@ -137,7 +137,7 @@ function manifestFor(version: string, overrides: Partial<UpdateManifest> = {}): 
 
 function cacheWithManifest(manifest: UpdateManifest): UpdateCache {
   return {
-    source: 'cdn',
+    source: 'npm-registry',
     channel: 'stable',
     checkedAt: '2026-04-23T08:00:00.000Z',
     latest: manifest.version,
@@ -320,7 +320,7 @@ describe('runUpdatePreflight', () => {
     expect(detectInstallSource).toHaveBeenCalledTimes(1);
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^npm(\.cmd)?$/),
-      ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+      ['install', '-g', '@futuretea/tea-code@0.5.0'],
       { detached: true, stdio: 'ignore' },
     );
   });
@@ -381,16 +381,16 @@ describe('runUpdatePreflight', () => {
     await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('exit');
     expect(mocks.promptForInstallChoice).toHaveBeenCalledWith(
       expect.objectContaining({
-        installCommand: 'npm install -g @moonshot-ai/kimi-code@0.5.0',
+        installCommand: 'npm install -g @futuretea/tea-code@0.5.0',
         installSource: 'npm-global',
       }),
     );
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^npm(\.cmd)?$/),
-      ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+      ['install', '-g', '@futuretea/tea-code@0.5.0'],
       { stdio: 'inherit' },
     );
-    expect(stdout.join('')).toContain('Updated @moonshot-ai/kimi-code to 0.5.0');
+    expect(stdout.join('')).toContain('Updated @futuretea/tea-code to 0.5.0');
   });
 
   it('refreshes a stale cached target before showing the foreground install prompt', async () => {
@@ -408,15 +408,15 @@ describe('runUpdatePreflight', () => {
     expect(mocks.promptForInstallChoice).toHaveBeenCalledWith(
       expect.objectContaining({
         plan: upgradePlan('stable', '0.7.0'),
-        installCommand: 'npm install -g @moonshot-ai/kimi-code@0.7.0',
+        installCommand: 'npm install -g @futuretea/tea-code@0.7.0',
       }),
     );
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^npm(\.cmd)?$/),
-      ['install', '-g', '@moonshot-ai/kimi-code@0.7.0'],
+      ['install', '-g', '@futuretea/tea-code@0.7.0'],
       { stdio: 'inherit' },
     );
-    expect(stdout.join('')).toContain('Updated @moonshot-ai/kimi-code to 0.7.0');
+    expect(stdout.join('')).toContain('Updated @futuretea/tea-code to 0.7.0');
   });
 
   it('falls back to the cached foreground prompt target when the refresh hangs', async () => {
@@ -436,7 +436,7 @@ describe('runUpdatePreflight', () => {
       expect(mocks.promptForInstallChoice).toHaveBeenCalledWith(
         expect.objectContaining({
           plan: upgradePlan('stable', '0.6.0'),
-          installCommand: 'npm install -g @moonshot-ai/kimi-code@0.6.0',
+          installCommand: 'npm install -g @futuretea/tea-code@0.6.0',
         }),
       );
     } finally {
@@ -455,7 +455,7 @@ describe('runUpdatePreflight', () => {
     await runUpdatePreflight('0.4.0', options);
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^pnpm(\.cmd)?$/),
-      ['add', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+      ['add', '-g', '@futuretea/tea-code@0.5.0'],
       { stdio: 'inherit' },
     );
   });
@@ -475,7 +475,7 @@ describe('runUpdatePreflight', () => {
       expect(mocks.spawn).toHaveBeenCalledWith(
         // Resolved to an absolute path and quoted for the cmd.exe shell.
         '"pnpm.cmd"',
-        ['add', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+        ['add', '-g', '@futuretea/tea-code@0.5.0'],
         { stdio: 'inherit', shell: true },
       );
     } finally {
@@ -494,7 +494,7 @@ describe('runUpdatePreflight', () => {
     await runUpdatePreflight('0.4.0', options);
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^yarn(\.cmd)?$/),
-      ['global', 'add', '@moonshot-ai/kimi-code@0.5.0'],
+      ['global', 'add', '@futuretea/tea-code@0.5.0'],
       { stdio: 'inherit' },
     );
   });
@@ -510,25 +510,23 @@ describe('runUpdatePreflight', () => {
     await runUpdatePreflight('0.4.0', options);
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^bun(\.exe)?$/),
-      ['add', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+      ['add', '-g', '@futuretea/tea-code@0.5.0'],
       { stdio: 'inherit' },
     );
   });
 
-  it('homebrew: prints manual brew upgrade command, does not spawn', async () => {
+  it('homebrew: prints the Tea npm install command, does not spawn', async () => {
     mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.refreshUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.detectInstallSource.mockResolvedValue('homebrew');
     const { stdout, options } = captureOutput();
     await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
-    expect(stdout.join('')).toContain('brew upgrade kimi-code');
-    expect(stdout.join('')).toContain('Third-party sources may lag behind the official release.');
-    expect(stdout.join('')).toContain('https://www.kimi.com/code');
+    expect(stdout.join('')).toContain('npm install -g @futuretea/tea-code@0.5.0');
     expect(promptForInstallChoice).not.toHaveBeenCalled();
     expect(mocks.spawn).not.toHaveBeenCalled();
   });
 
-  it('native: self-spawns the staged downloader sub-command', async () => {
+  it('native: offers the Tea npm install command without spawning a downloader', async () => {
     disableAutoInstall();
     mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.refreshUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
@@ -539,19 +537,15 @@ describe('runUpdatePreflight', () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' });
     try {
       const { stdout, options } = captureOutput();
-      await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('exit');
-      expect(mocks.spawn).toHaveBeenCalledWith(
-        process.execPath,
-        ['__update_download', '0.5.0', '--manual'],
-        expect.objectContaining({ stdio: 'inherit' }),
-      );
-      expect(stdout.join('')).toContain('Updated @moonshot-ai/kimi-code to 0.5.0');
+      await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
+      expect(mocks.spawn).not.toHaveBeenCalled();
+      expect(stdout.join('')).toContain('npm install -g @futuretea/tea-code@0.5.0');
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform });
     }
   });
 
-  it('native on win32: auto-installs via the staged downloader sub-command', async () => {
+  it('native on win32: offers the Tea npm install command without spawning a downloader', async () => {
     disableAutoInstall();
     mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.refreshUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
@@ -562,20 +556,15 @@ describe('runUpdatePreflight', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' });
     try {
       const { stdout, options } = captureOutput();
-      await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('exit');
-      expect(mocks.spawn).toHaveBeenCalledWith(
-        process.execPath,
-        ['__update_download', '0.5.0', '--manual'],
-        expect.objectContaining({ stdio: 'inherit' }),
-      );
-      expect(stdout.join('')).toContain('Updated @moonshot-ai/kimi-code to 0.5.0');
-      expect(stdout.join('')).not.toContain('Auto-update is not supported');
+      await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
+      expect(mocks.spawn).not.toHaveBeenCalled();
+      expect(stdout.join('')).toContain('npm install -g @futuretea/tea-code@0.5.0');
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform });
     }
   });
 
-  it('global region: derives install commands and site links from the .ai profile', async () => {
+  it('global region: uses the Tea npm install command', async () => {
     vi.stubEnv('KIMI_CODE_OAUTH_HOST', 'https://auth.kimi.ai');
     resetKimiRegionCache();
     mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
@@ -583,16 +572,14 @@ describe('runUpdatePreflight', () => {
     const originalPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32' });
     try {
-      // Native updates self-spawn the staged downloader silently, so the
-      // region surface there is the manual install command text.
       expect(installCommandFor('native', '0.5.0', 'win32')).toBe(
-        'irm https://code.kimi.ai/kimi-code/install.ps1 | iex',
+        'npm install -g @futuretea/tea-code@0.5.0',
       );
 
       mocks.detectInstallSource.mockResolvedValue('homebrew');
       const brew = captureOutput();
       await expect(runUpdatePreflight('0.4.0', brew.options)).resolves.toBe('continue');
-      expect(brew.stdout.join('')).toContain('https://www.kimi.ai/code');
+      expect(brew.stdout.join('')).toContain('npm install -g @futuretea/tea-code@0.5.0');
       expect(mocks.spawn).not.toHaveBeenCalled();
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform });
@@ -606,7 +593,7 @@ describe('runUpdatePreflight', () => {
     mocks.detectInstallSource.mockResolvedValue('unsupported');
     const { stdout, options } = captureOutput();
     await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
-    expect(stdout.join('')).toContain('npm install -g @moonshot-ai/kimi-code@0.5.0');
+    expect(stdout.join('')).toContain('npm install -g @futuretea/tea-code@0.5.0');
     expect(mocks.spawn).not.toHaveBeenCalled();
   });
 
@@ -632,7 +619,7 @@ describe('runUpdatePreflight', () => {
     await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
     expect(stderr.join('')).toContain('warning: failed to install');
     // A failed install must never print the "Updated …" success line.
-    expect(stdout.join('')).not.toContain('Updated @moonshot-ai/kimi-code');
+    expect(stdout.join('')).not.toContain('Updated @futuretea/tea-code');
   });
 
   it('spawns the resolved absolute path instead of the bare command name', async () => {
@@ -650,7 +637,7 @@ describe('runUpdatePreflight', () => {
     expect(mocks.resolveCommandPath).toHaveBeenCalledWith('npm');
     expect(mocks.spawn).toHaveBeenCalledWith(
       '/usr/local/bin/npm',
-      ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+      ['install', '-g', '@futuretea/tea-code@0.5.0'],
       { stdio: 'inherit' },
     );
   });
@@ -669,7 +656,7 @@ describe('runUpdatePreflight', () => {
 
     expect(mocks.spawn).not.toHaveBeenCalled();
     expect(stderr.join('')).toContain('warning: failed to install');
-    expect(stdout.join('')).not.toContain('Updated @moonshot-ai/kimi-code');
+    expect(stdout.join('')).not.toContain('Updated @futuretea/tea-code');
   });
 
   it('records a background install failure without spawning when the package manager cannot be resolved', async () => {
@@ -707,7 +694,7 @@ describe('runUpdatePreflight', () => {
     expect(promptForInstallChoice).not.toHaveBeenCalled();
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^npm(\.cmd)?$/),
-      ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+      ['install', '-g', '@futuretea/tea-code@0.5.0'],
       { detached: true, stdio: 'ignore' },
     );
     expect(writeUpdateInstallState).toHaveBeenCalledWith(expect.objectContaining({
@@ -746,7 +733,7 @@ describe('runUpdatePreflight', () => {
       expect(mocks.spawn).toHaveBeenCalledWith(
         // Resolved to an absolute path and quoted for the cmd.exe shell.
         '"npm.cmd"',
-        ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+        ['install', '-g', '@futuretea/tea-code@0.5.0'],
         { detached: true, stdio: 'ignore', shell: true, windowsHide: true },
       );
     } finally {
@@ -754,9 +741,8 @@ describe('runUpdatePreflight', () => {
     }
   });
 
-  it('native: retries the background install when an old active record has no live lock', async () => {
-    // Orphaned `active`: older than the spawn grace window and the lock is
-    // free (beforeEach default) ⇒ the previous downloader is gone; retry.
+  it('native: does not retry a background download when an old active record has no live lock', async () => {
+    // An orphaned native update must not restart the upstream downloader.
     mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.readUpdateInstallState.mockResolvedValue(installState({
       active: {
@@ -771,11 +757,7 @@ describe('runUpdatePreflight', () => {
     const { options } = captureOutput();
 
     await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
-    expect(mocks.spawn).toHaveBeenCalledWith(
-      process.execPath,
-      ['__update_download', '0.5.0'],
-      expect.objectContaining({ detached: true, stdio: 'ignore' }),
-    );
+    expect(mocks.spawn).not.toHaveBeenCalled();
   });
 
   it('native: does not re-spawn while the install lock is genuinely held', async () => {
@@ -866,7 +848,7 @@ describe('runUpdatePreflight', () => {
     expect(promptForInstallChoice).not.toHaveBeenCalled();
     expect(mocks.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^npm(\.cmd)?$/),
-      ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+      ['install', '-g', '@futuretea/tea-code@0.5.0'],
       { detached: true, stdio: 'ignore' },
     );
   });
@@ -1124,7 +1106,7 @@ describe('runUpdatePreflight', () => {
 
       expect(mocks.spawn).toHaveBeenCalledWith(
         expect.stringMatching(/^npm(\.cmd)?$/),
-        ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+        ['install', '-g', '@futuretea/tea-code@0.5.0'],
         { detached: true, stdio: 'ignore' },
       );
       expect(track).toHaveBeenCalledWith('update_background_install_started', expect.objectContaining({
@@ -1250,7 +1232,7 @@ describe('runUpdatePreflight', () => {
 
       expect(mocks.spawn).toHaveBeenCalledWith(
         expect.stringMatching(/^npm(\.cmd)?$/),
-        ['install', '-g', '@moonshot-ai/kimi-code@0.5.0'],
+        ['install', '-g', '@futuretea/tea-code@0.5.0'],
         { detached: true, stdio: 'ignore' },
       );
       expect(track).toHaveBeenCalledWith('update_background_install_started', expect.objectContaining({
@@ -1337,7 +1319,7 @@ describe('runUpdatePreflight', () => {
 
       expect(mocks.spawn).toHaveBeenCalledWith(
         expect.stringMatching(/^npm(\.cmd)?$/),
-        ['install', '-g', `@moonshot-ai/kimi-code@${NEXT_CANARY}`],
+        ['install', '-g', `@futuretea/tea-code@${NEXT_CANARY}`],
         { detached: true, stdio: 'ignore' },
       );
       expect(refreshUpdateCache).toHaveBeenCalledWith({ channel: 'canary' });
@@ -1441,7 +1423,7 @@ describe('runUpdatePreflight', () => {
       await expect(runUpdatePreflight('0.5.0', options)).resolves.toBe('continue');
 
       expect(refreshUpdateCache).toHaveBeenCalledWith({ channel: 'stable' });
-      expect(stdout.join('')).toContain('brew upgrade');
+      expect(stdout.join('')).toContain('npm install -g @futuretea/tea-code@0.6.0');
       expect(stdout.join('')).not.toContain('canary');
     });
 
@@ -1449,10 +1431,10 @@ describe('runUpdatePreflight', () => {
       mockSpawnExit(0);
       const plan = switchPlan('stable', 'canary', CANARY);
       expect(installCommandFor('native', CANARY, 'darwin', 'canary')).toBe(
-        'KIMI_CODE_UPDATE_CHANNEL=canary kimi update --yes',
+        `npm install -g @futuretea/tea-code@${CANARY}`,
       );
       expect(installCommandFor('native', CANARY, 'win32', 'canary')).toBe(
-        "$env:KIMI_CODE_UPDATE_CHANNEL='canary'; kimi update --yes",
+        `npm install -g @futuretea/tea-code@${CANARY}`,
       );
 
       await installUpdate('native', plan, 'darwin');

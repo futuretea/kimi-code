@@ -1,7 +1,6 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { resolveKimiHome } from '@moonshot-ai/kimi-code-sdk';
 import {
   runMigration,
   type MigrationPlan,
@@ -11,6 +10,7 @@ import {
 
 import { detectPendingMigration } from './detect-pending';
 import { resolveLegacySourceHome, sameLegacyPath } from './legacy-source';
+import { getDataDir } from '#/utils/paths';
 
 export const MIGRATE_HEADLESS_EXIT = {
   success: 0,
@@ -46,7 +46,7 @@ export async function runHeadlessMigrate(
     env: deps?.env ?? process.env,
     userHome: deps?.userHome ?? homedir(),
     cwd: deps?.cwd ?? process.cwd(),
-    targetHome: deps?.targetHome ?? resolveKimiHome(),
+    targetHome: deps?.targetHome ?? getDataDir(),
     write: deps?.write ?? defaultWrite,
   };
   const log = (msg: string): void => {
@@ -96,6 +96,7 @@ export async function runHeadlessMigrate(
       scope,
       source: source.sourceHome,
       target: resolved.targetHome,
+      conflictNoticeHome: resolved.targetHome,
       plansSourceDir: plansSourceHome,
       onProgress: (msg) => log(`step: ${msg}`),
       onSessionProgress: (done, total) => log(`sessions: translating ${done}/${total}`),

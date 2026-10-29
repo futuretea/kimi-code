@@ -2,6 +2,8 @@ import {
   KIMI_CODE_PROVIDER_NAME,
   OAuthError,
   fetchChatTitle,
+  isManagedKimiCodeBaseUrl,
+  kimiCodeBaseUrl,
   kimiCodeToolsUrl,
   parseKimiCodeCustomHeaders,
   resolveKimiCodeRuntimeAuth,
@@ -122,7 +124,9 @@ export class SessionTitleService implements ISessionTitleService {
       fetchChatTitle(kimiCodeToolsUrl(runtimeAuth.baseUrl), accessToken, chatContent, {
         headers: {
           ...parseKimiCodeCustomHeaders(),
-          ...this.hostHeaders.headers,
+          ...(this.hostHeaders.restrictToManagedBaseUrl && !isManagedKimiCodeBaseUrl(runtimeAuth.baseUrl ?? kimiCodeBaseUrl())
+            ? this.hostHeaders.thirdPartyHeaders
+            : this.hostHeaders.headers),
           ...provider.customHeaders,
         },
       });

@@ -17,6 +17,7 @@ import { ISessionSkillCatalog } from '#/features/skill/session/skillCatalog';
 import { ISessionWorkspaceContext } from '#/session/workspaceContext/workspaceContext';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
 import { IOAuthService } from '#/app/auth/auth';
+import { IBootstrapService } from '#/app/bootstrap/bootstrap';
 import {
   DEFAULT_TOOL_RESULT_MAX_RETAINED_CHARS,
   ToolAccesses,
@@ -69,6 +70,7 @@ export class GlobTool implements IGlobTool {
     @ITelemetryService private readonly telemetry: ITelemetryService,
     @ISessionSkillCatalog private readonly skillCatalog?: ISessionSkillCatalog,
     @IOAuthService private readonly auth?: IOAuthService,
+    @IBootstrapService private readonly bootstrap?: IBootstrapService,
   ) {}
 
   get description(): string {
@@ -175,6 +177,7 @@ export class GlobTool implements IGlobTool {
     try {
       const resolution = await ensureRgPath(createRgProbe(processService), {
         signal,
+        shareDir: this.bootstrap?.args.forwardTeaCodeHome ? this.bootstrap.homeDir : undefined,
         allowCachedFallback: true,
         resolveRegion: () => this.auth?.getRegion(),
       });
@@ -190,14 +193,14 @@ export class GlobTool implements IGlobTool {
         return { isError: true, output: 'Glob aborted' };
       }
       this.telemetry.track2('glob_tool_rg_fallback', { outcome: 'failed' });
-      return { isError: true, output: rgUnavailableMessage(error) };
+      return { isError: true, output: rgUnavailableMessage(error, this.bootstrap?.args.forwardTeaCodeHome ? this.bootstrap.homeDir : undefined) };
     }
 
     let run;
     try {
       run = await runRgOnce(processService, buildRgArgs(rgPath, args), signal, { cwd: searchRoot });
     } catch (error) {
-      return { isError: true, output: formatSpawnError(error) };
+      return { isError: true, output: formatSpawnError(error, this.bootstrap?.args.forwardTeaCodeHome ? this.bootstrap.homeDir : undefined) };
     }
     if (run.kind === 'aborted') {
       return { isError: true, output: 'Glob aborted' };
@@ -207,7 +210,7 @@ export class GlobTool implements IGlobTool {
       try {
         run = await runRgOnce(processService, buildRgArgs(rgPath, args, true), signal, { cwd: searchRoot });
       } catch (error) {
-        return { isError: true, output: formatSpawnError(error) };
+        return { isError: true, output: formatSpawnError(error, this.bootstrap?.args.forwardTeaCodeHome ? this.bootstrap.homeDir : undefined) };
       }
       if (run.kind === 'aborted') {
         return { isError: true, output: 'Glob aborted' };
@@ -388,9 +391,9 @@ function formatGlobWarning(stderr: string): string {
     : 'Glob completed with warnings; some directories could not be read.';
 }
 
-function formatSpawnError(error: unknown): string {
+function formatSpawnError(error: unknown, shareDir?: string): string {
   return errorCode(error) === 'ENOENT'
-    ? rgUnavailableMessage(error)
+    ? rgUnavailableMessage(error, shareDir)
     : error instanceof Error
       ? error.message
       : String(error);

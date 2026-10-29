@@ -35,6 +35,7 @@ import {
 
 export interface PluginManagerOptions {
   readonly kimiHomeDir: string;
+  readonly forwardTeaCodeHome?: boolean;
   readonly discoverSkills?: (roots: readonly SkillRoot[]) => Promise<SkillDiscoveryResult>;
 }
 
@@ -45,11 +46,13 @@ interface ManagedPluginCopy {
 
 export class PluginManager {
   private readonly kimiHomeDir: string;
+  private readonly forwardTeaCodeHome: boolean;
   private readonly discoverSkills: (roots: readonly SkillRoot[]) => Promise<SkillDiscoveryResult>;
   private records = new Map<string, PluginRecord>();
 
   constructor(options: PluginManagerOptions) {
     this.kimiHomeDir = options.kimiHomeDir;
+    this.forwardTeaCodeHome = options.forwardTeaCodeHome === true;
     this.discoverSkills = options.discoverSkills ?? discoverFileSkills;
   }
 
@@ -274,13 +277,15 @@ export class PluginManager {
     for (const record of this.records.values()) {
       if (!record.enabled || record.state !== 'ok' || record.manifest === undefined) continue;
       for (const hook of record.manifest.hooks ?? []) {
+        const env: Record<string, string> = {
+          KIMI_CODE_HOME: this.kimiHomeDir,
+          KIMI_PLUGIN_ROOT: record.root,
+        };
+        if (this.forwardTeaCodeHome) env['TEA_CODE_HOME'] = this.kimiHomeDir;
         out.push({
           ...hook,
           cwd: record.root,
-          env: {
-            KIMI_CODE_HOME: this.kimiHomeDir,
-            KIMI_PLUGIN_ROOT: record.root,
-          },
+          env,
         });
       }
     }
@@ -363,6 +368,7 @@ export class PluginManager {
           withMcpServerEnabled(config, true),
           record.root,
           this.kimiHomeDir,
+          this.forwardTeaCodeHome,
         );
       }
     }
@@ -379,6 +385,7 @@ export class PluginManager {
           withMcpServerEnabled(config, enabled),
           record.root,
           this.kimiHomeDir,
+          this.forwardTeaCodeHome,
         );
         out.push({
           name: pluginMcpRuntimeName(record.id, name),
@@ -700,14 +707,16 @@ function withPluginMcpRuntime(
   config: McpServerConfig,
   pluginRoot: string,
   kimiHomeDir: string,
+  forwardTeaCodeHome: boolean,
 ): McpServerConfig {
   if (config.transport === 'http' || config.transport === 'sse') return config;
 
-  const env = {
+  const env: Record<string, string> = {
     ...config.env,
     KIMI_CODE_HOME: kimiHomeDir,
     KIMI_PLUGIN_ROOT: pluginRoot,
   };
+  if (forwardTeaCodeHome) env['TEA_CODE_HOME'] = kimiHomeDir;
 
   if (config.command === 'node' && isElectron()) {
     return {

@@ -1,5 +1,6 @@
 import {
   KIMI_CODE_PROVIDER_NAME,
+  isManagedKimiCodeBaseUrl,
   kimiCodeBaseUrl,
 } from '@moonshot-ai/kimi-code-oauth';
 import { LifecycleScope } from '#/app/scopes';
@@ -8,6 +9,7 @@ import { IOAuthService } from '#/app/auth/auth';
 import { SERVICES_SECTION, type ServicesConfig } from '#/app/auth/configSection';
 import { IAgentIdentity } from '#/app/agentIdentity/agentIdentity';
 import { IBootstrapService } from '#/app/bootstrap/bootstrap';
+import { IHostRequestHeaders } from '#/llm-adapter/model/host-request-headers';
 import { IConfigService } from '#/app/config/config';
 import { ITelemetryService } from '#/app/telemetry/telemetry';
 import { IProviderService } from '#/llm-adapter/provider/provider';
@@ -29,6 +31,7 @@ export class WebFetchService implements IWebFetchService {
     @IConfigService private readonly config: IConfigService,
     @IAgentIdentity private readonly identity: IAgentIdentity,
     @ITelemetryService private readonly telemetry: ITelemetryService,
+    @IHostRequestHeaders private readonly hostHeaders: IHostRequestHeaders,
   ) {
     this.localFetcher = new LocalFetchURLProvider();
   }
@@ -50,7 +53,9 @@ export class WebFetchService implements IWebFetchService {
       baseUrl: fetchConfig.baseUrl,
       tokenProvider,
       apiKey: nonEmptyString(fetchConfig.apiKey),
-      defaultHeaders: { ...this.identity.current().requestHeaders },
+      defaultHeaders: { ...(this.hostHeaders.restrictToManagedBaseUrl && isManagedKimiCodeBaseUrl(fetchConfig.baseUrl.replace(/\/fetch\/?$/, ''))
+        ? this.hostHeaders.headers
+        : this.identity.current().requestHeaders) },
       customHeaders: fetchConfig.customHeaders,
       localFallback: this.localFetcher,
       telemetry: this.telemetry,
@@ -73,7 +78,9 @@ export class WebFetchService implements IWebFetchService {
     return new MoonshotFetchURLProvider({
       baseUrl,
       tokenProvider,
-      defaultHeaders: { ...this.bootstrap.args.requestHeaders },
+      defaultHeaders: { ...(this.hostHeaders.restrictToManagedBaseUrl && isManagedKimiCodeBaseUrl(provider.baseUrl ?? kimiCodeBaseUrl())
+        ? this.hostHeaders.headers
+        : this.bootstrap.args.requestHeaders) },
       customHeaders: provider.customHeaders,
       localFallback: this.localFetcher,
       telemetry: this.telemetry,

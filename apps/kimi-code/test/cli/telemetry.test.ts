@@ -9,8 +9,8 @@ import { resetKimiRegionCache } from '#/utils/region';
 const mocks = vi.hoisted(() => ({
   initializeTelemetry: vi.fn(),
   createKimiDeviceId: vi.fn(() => 'device-123'),
-  resolveKimiHome: vi.fn(() => '/home/.kimi-code'),
-  resolveConfigPath: vi.fn(() => '/home/.kimi-code/config.toml'),
+  getDataDir: vi.fn(() => '/home/.tea-code'),
+  resolveConfigPath: vi.fn(() => '/home/.tea-code/config.toml'),
   loadRuntimeConfigSafe: vi.fn(
     (): {
       config: { defaultModel?: string; telemetry?: boolean };
@@ -45,7 +45,6 @@ vi.mock('@moonshot-ai/kimi-code-sdk', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@moonshot-ai/kimi-code-sdk')>();
   return {
     ...actual,
-    resolveKimiHome: mocks.resolveKimiHome,
     resolveConfigPath: mocks.resolveConfigPath,
     loadRuntimeConfigSafe: mocks.loadRuntimeConfigSafe,
     KimiAuthFacade: vi.fn(function () {
@@ -53,6 +52,8 @@ vi.mock('@moonshot-ai/kimi-code-sdk', async (importOriginal) => {
     }),
   };
 });
+
+vi.mock('#/utils/paths', () => ({ getDataDir: mocks.getDataDir }));
 
 describe('initializeServerTelemetry', () => {
   beforeEach(() => {
@@ -74,6 +75,8 @@ describe('initializeServerTelemetry', () => {
   it('configures the sink with ui_mode="web" and the CLI product identity', async () => {
     const { initializeServerTelemetry } = await import('#/cli/telemetry');
     const client = initializeServerTelemetry({ version: '1.2.3' });
+    expect(mocks.createKimiDeviceId).toHaveBeenCalledWith('/home/.tea-code', expect.any(Object));
+    expect(mocks.resolveConfigPath).toHaveBeenCalledWith({ homeDir: '/home/.tea-code' });
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith(
       expect.objectContaining({
         appName: 'kimi-code-cli',
@@ -82,7 +85,7 @@ describe('initializeServerTelemetry', () => {
         model: 'kimi-k2',
         enabled: true,
         deviceId: 'device-123',
-        homeDir: '/home/.kimi-code',
+        homeDir: '/home/.tea-code',
       }),
     );
     // The returned client wraps the module functions so core + the host share

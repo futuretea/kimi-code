@@ -14,6 +14,42 @@ const MANIFEST: UpdateManifest = {
 };
 
 describe('refreshUpdateCache', () => {
+  it.each([
+    ['stable', 'latest', '2.4.0'],
+    ['canary', 'canary', '2.4.1-canary.1'],
+  ] as const)('fetches the Tea npm %s channel', async (channel, tag, version) => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ version }),
+    }));
+    vi.stubGlobal('fetch', fetchImpl);
+    try {
+      const result = await refreshUpdateCache({ channel, writeCache: async () => {} });
+      expect(fetchImpl).toHaveBeenCalledOnce();
+      expect(fetchImpl).toHaveBeenCalledWith(
+        `https://registry.npmjs.org/%40futuretea%2Ftea-code/${tag}`,
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+      expect(result).toMatchObject({ source: 'npm-registry', channel, latest: version, manifest: null });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('does not fall back to another channel when the npm canary tag is missing', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: false, status: 404 }));
+    const writeCache = vi.fn(async () => {});
+    vi.stubGlobal('fetch', fetchImpl);
+    try {
+      await expect(refreshUpdateCache({ channel: 'canary', writeCache })).rejects.toThrow('HTTP 404');
+      expect(fetchImpl).toHaveBeenCalledOnce();
+      expect(writeCache).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('writes a fresh cache carrying the manifest on successful fetch', async () => {
     const writeCache = vi.fn(async () => {});
     const result = await refreshUpdateCache({
@@ -24,7 +60,7 @@ describe('refreshUpdateCache', () => {
     });
 
     const written = {
-      source: 'cdn',
+      source: 'npm-registry',
       channel: 'stable',
       checkedAt: '2026-05-20T12:34:56.000Z',
       latest: '0.5.0',
@@ -44,7 +80,7 @@ describe('refreshUpdateCache', () => {
     });
 
     const written = {
-      source: 'cdn',
+      source: 'npm-registry',
       channel: 'canary',
       checkedAt: '2026-05-20T12:34:56.000Z',
       latest: '0.5.0',
@@ -64,7 +100,7 @@ describe('refreshUpdateCache', () => {
     });
 
     const written = {
-      source: 'cdn',
+      source: 'npm-registry',
       channel: 'stable',
       checkedAt: '2026-05-20T12:34:56.000Z',
       latest: '0.5.0',

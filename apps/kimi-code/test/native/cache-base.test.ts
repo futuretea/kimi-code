@@ -19,7 +19,7 @@ describe('getNativeCacheBase precedence', () => {
       env: { KIMI_CODE_HOME: '/legacy' },
       platform: 'darwin',
     });
-    expect(got).toBe('/home/u/Library/Caches/kimi-code');
+    expect(got).toBe('/home/u/Library/Caches/tea-code/kimi-code');
   });
 
   it('uses platform default on macOS when no env set', () => {
@@ -28,24 +28,29 @@ describe('getNativeCacheBase precedence', () => {
       env: {},
       platform: 'darwin',
     });
-    expect(got).toBe('/home/u/Library/Caches/kimi-code');
+    expect(got).toBe('/home/u/Library/Caches/tea-code/kimi-code');
   });
 
-  it('uses XDG_CACHE_HOME on Linux when set', () => {
+  it('uses an isolated directory under XDG_CACHE_HOME', () => {
     const got = getNativeCacheBase({
       ...baseOptions,
       env: { XDG_CACHE_HOME: '/xdg' },
       platform: 'linux',
     });
-    expect(got).toBe('/xdg/kimi-code');
+    expect(got).toBe('/xdg/tea-code/kimi-code');
   });
 
-  it('uses LOCALAPPDATA on Windows when set', () => {
+  it('uses an isolated directory under LOCALAPPDATA', () => {
     const got = getNativeCacheBase({
       ...baseOptions,
       env: { LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local' },
       platform: 'win32',
     });
-    expect(got).toBe('C:\\Users\\u\\AppData\\Local\\kimi-code');
+    expect(got).toBe('C:\\Users\\u\\AppData\\Local\\tea-code\\kimi-code');
+  });
+
+  it('keeps the native cache separate from the Tea data home', () => {
+    expect(getNativeCacheBase({ ...baseOptions, env: { TEA_CODE_HOME: '/tea' }, platform: 'linux' }))
+      .toBe('/home/u/.cache/tea-code/kimi-code');
   });
 });

@@ -78,6 +78,23 @@ describe('findExistingRg', () => {
     expect(probe.exec).not.toHaveBeenCalled();
   });
 
+  it('uses the supplied Tea cache instead of an upstream home', async () => {
+    const upstream = join(fakeShare, 'upstream');
+    const binary = process.platform === 'win32' ? 'rg.exe' : 'rg';
+    mkdirSync(join(upstream, 'bin'), { recursive: true });
+    writeFileSync(join(upstream, 'bin', binary), 'upstream');
+    writeFileSync(join(fakeShare, 'bin', binary), 'tea');
+    vi.stubEnv('KIMI_CODE_HOME', upstream);
+    try {
+      const result = await ensureRgPath(noRgProbe(), { shareDir: fakeShare, allowCachedFallback: true });
+      expect(result).toEqual({ path: join(fakeShare, 'bin', binary), source: 'share-bin-cached' });
+      expect(readFileSync(join(upstream, 'bin', binary), 'utf8')).toBe('upstream');
+      expect(rgUnavailableMessage('missing', fakeShare)).toContain(join(fakeShare, 'bin', binary));
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('prefers system PATH over share-dir when both are available', async () => {
     const binDir = join(fakeShare, 'path-bin');
     mkdirSync(binDir, { recursive: true });

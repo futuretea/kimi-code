@@ -363,6 +363,7 @@ export interface SDKRpcClientV2Options {
    * source. Passed into the engine through `BootstrapInput.args.skillDirs`.
    */
   readonly skillDirs?: readonly string[];
+  readonly forwardTeaCodeHome?: boolean;
   readonly telemetry?: TelemetryClient;
   readonly onOAuthRefresh?: (outcome: OAuthRefreshOutcome) => void;
   readonly uiMode?: string;
@@ -467,6 +468,7 @@ export class SDKRpcClientV2 extends SDKRpcClientBase {
           // `--skills-dir` (v1 parity): explicit skill dirs replace default
           // user / project discovery for every session this client hosts.
           skillDirs: options.skillDirs,
+          forwardTeaCodeHome: options.forwardTeaCodeHome,
           uiCapabilities: options.uiCapabilities,
         },
       },
@@ -504,7 +506,7 @@ export class SDKRpcClientV2 extends SDKRpcClientBase {
   }
 
   async ensureConfigFile(): Promise<void> {
-    await ensureConfigFile(this.configPath);
+    await ensureConfigFile(this.configPath, this.app.accessor.get(IBootstrapService).args.forwardTeaCodeHome);
     // Surface a missing Git Bash early, before the TUI starts. The wait is
     // Windows-only: the failure cannot happen on POSIX, and `ready` also
     // covers the login-shell PATH enrichment, which spawns the user's login

@@ -34,7 +34,7 @@ function cacheWith(
   manifest: UpdateCache['manifest'] = null,
 ): UpdateCache {
   return {
-    source: 'cdn',
+    source: 'npm-registry',
     channel,
     checkedAt: '2026-04-23T08:00:00.000Z',
     latest: version,
@@ -117,7 +117,7 @@ describe('handleUpgrade', () => {
     expect(deps.promptForInstallChoice).toHaveBeenCalledWith({
       currentVersion: '0.4.0',
       plan,
-      installCommand: 'npm install -g @moonshot-ai/kimi-code@0.5.0',
+      installCommand: 'npm install -g @futuretea/tea-code@0.5.0',
       installSource: 'npm-global',
     });
     expect(deps.refreshUpdateCache).toHaveBeenCalledWith('stable');
@@ -139,7 +139,7 @@ describe('handleUpgrade', () => {
       targetVersion: '0.5.0',
       source: 'npm-global',
     }));
-    expect(stdout.join('')).toContain('Updated @moonshot-ai/kimi-code to 0.5.0');
+    expect(stdout.join('')).toContain('Updated @futuretea/tea-code to 0.5.0');
     expect(stderr.join('')).toBe('');
   });
 
@@ -174,7 +174,7 @@ describe('handleUpgrade', () => {
     expect(deps.track).toHaveBeenCalledWith('upgrade_command_no_update', expect.objectContaining({
       current_version: '0.4.0',
     }));
-    expect(stdout.join('')).toContain('Kimi Code is already up to date (v0.4.0).');
+    expect(stdout.join('')).toContain('Tea Code is already up to date (v0.4.0).');
   });
 
   it('defers the full source probe through the default dependency assembly', async () => {
@@ -212,7 +212,7 @@ describe('handleUpgrade', () => {
       target_version: '0.5.0',
       source: 'unsupported',
     }));
-    expect(stdout.join('')).toContain('To update manually, run: npm install -g @moonshot-ai/kimi-code@0.5.0');
+    expect(stdout.join('')).toContain('To update manually, run: npm install -g @futuretea/tea-code@0.5.0');
   });
 
   it('prints the manual update command without prompting when not interactive, and installs directly with yes', async () => {
@@ -227,7 +227,7 @@ describe('handleUpgrade', () => {
       target_version: '0.5.0',
       source: 'npm-global',
     }));
-    expect(stdout.join('')).toContain('To update manually, run: npm install -g @moonshot-ai/kimi-code@0.5.0');
+    expect(stdout.join('')).toContain('To update manually, run: npm install -g @futuretea/tea-code@0.5.0');
 
     const yesRun = captureOutput();
     const yesDeps = createDeps({ latest: '0.5.0', source: 'npm-global', isInteractive: false });
@@ -241,7 +241,7 @@ describe('handleUpgrade', () => {
       target_version: '0.5.0',
       source: 'npm-global',
     }));
-    expect(yesRun.stdout.join('')).toContain('Updated @moonshot-ai/kimi-code to 0.5.0');
+    expect(yesRun.stdout.join('')).toContain('Updated @futuretea/tea-code to 0.5.0');
   });
 
   it('returns a failing exit code when the foreground install fails', async () => {
@@ -255,7 +255,7 @@ describe('handleUpgrade', () => {
     await expect(handleUpgrade('0.4.0', { ...deps, ...writable })).resolves.toBe(1);
 
     expect(stderr.join('')).toContain(
-      'warning: failed to install @moonshot-ai/kimi-code@0.5.0: npm exited with code 1',
+      'warning: failed to install @futuretea/tea-code@0.5.0: npm exited with code 1',
     );
     expect(deps.track).toHaveBeenCalledWith('upgrade_command_failed', expect.objectContaining({
       target_version: '0.5.0',
@@ -300,7 +300,7 @@ describe('handleUpgrade', () => {
     await expect(handleUpgrade('0.4.0', { ...deps, ...writable })).resolves.toBe(0);
 
     expect(deps.installUpdate).toHaveBeenCalledWith('npm-global', upgradePlan('stable', '0.5.0'), 'darwin');
-    expect(stdout.join('')).toContain('Updated @moonshot-ai/kimi-code to 0.5.0');
+    expect(stdout.join('')).toContain('Updated @futuretea/tea-code to 0.5.0');
   });
 
   describe('update channels', () => {
@@ -312,7 +312,7 @@ describe('handleUpgrade', () => {
 
       expect(deps.refreshUpdateCache).toHaveBeenCalledWith('canary');
       expect(deps.installUpdate).toHaveBeenCalledWith('npm-global', upgradePlan('canary', NEXT_CANARY), 'darwin');
-      expect(stdout.join('')).toContain(`Updated @moonshot-ai/kimi-code to ${NEXT_CANARY}`);
+      expect(stdout.join('')).toContain(`Updated @futuretea/tea-code to ${NEXT_CANARY}`);
     });
 
     it('shows a canary update command for a native canary installation in a non-interactive run', async () => {
@@ -326,7 +326,7 @@ describe('handleUpgrade', () => {
       await expect(handleUpgrade(CANARY, { ...deps, ...writable })).resolves.toBe(0);
 
       expect(deps.installUpdate).not.toHaveBeenCalled();
-      expect(stdout.join('')).toContain('KIMI_CODE_UPDATE_CHANNEL=canary kimi update --yes');
+      expect(stdout.join('')).toContain(`npm install -g @futuretea/tea-code@${NEXT_CANARY}`);
       expect(stdout.join('')).not.toContain('/install.sh');
     });
 
@@ -334,7 +334,7 @@ describe('handleUpgrade', () => {
       const { stdout, writable } = captureOutput();
       const deps = createDeps({
         latest: CANARY,
-        source: 'native',
+        source: 'npm-global',
         env: { KIMI_CODE_UPDATE_CHANNEL: 'canary' },
       });
       const plan = switchPlan('stable', 'canary', CANARY);
@@ -344,17 +344,17 @@ describe('handleUpgrade', () => {
       expect(deps.promptForInstallChoice).toHaveBeenCalledWith(expect.objectContaining({
         currentVersion: '2.5.0',
         plan,
-        installCommand: 'KIMI_CODE_UPDATE_CHANNEL=canary kimi update --yes',
+        installCommand: `npm install -g @futuretea/tea-code@${CANARY}`,
       }));
-      expect(deps.installUpdate).toHaveBeenCalledWith('native', plan, 'darwin');
-      expect(stdout.join('')).toContain(`Switched @moonshot-ai/kimi-code to canary ${CANARY}`);
+      expect(deps.installUpdate).toHaveBeenCalledWith('npm-global', plan, 'darwin');
+      expect(stdout.join('')).toContain(`Switched @futuretea/tea-code to canary ${CANARY}`);
     });
 
     it('switches a canary build back to stable after confirmation', async () => {
       const { stdout, writable } = captureOutput();
       const deps = createDeps({
         latest: '2.4.1',
-        source: 'native',
+        source: 'npm-global',
         env: { KIMI_CODE_UPDATE_CHANNEL: 'stable' },
       });
       const plan = switchPlan('canary', 'stable', '2.4.1');
@@ -365,19 +365,19 @@ describe('handleUpgrade', () => {
         currentVersion: CANARY,
         plan,
       }));
-      expect(deps.installUpdate).toHaveBeenCalledWith('native', plan, 'darwin');
+      expect(deps.installUpdate).toHaveBeenCalledWith('npm-global', plan, 'darwin');
       expect(deps.track).toHaveBeenCalledWith('upgrade_command_succeeded', expect.objectContaining({
         target_version: '2.4.1',
         intent: 'switch-channel',
       }));
-      expect(stdout.join('')).toContain('Switched @moonshot-ai/kimi-code to stable 2.4.1');
+      expect(stdout.join('')).toContain('Switched @futuretea/tea-code to stable 2.4.1');
     });
 
     it('does not switch outside a terminal without yes, then treats yes as confirmation', async () => {
       const { stdout, writable } = captureOutput();
       const deps = createDeps({
         latest: CANARY,
-        source: 'native',
+        source: 'npm-global',
         isInteractive: false,
         env: { KIMI_CODE_UPDATE_CHANNEL: 'canary' },
       });
@@ -388,19 +388,19 @@ describe('handleUpgrade', () => {
       expect(deps.promptForInstallChoice).not.toHaveBeenCalled();
       expect(stdout.join('')).toContain('Release channel: stable -> canary');
       expect(stdout.join('')).toContain(CANARY);
-      expect(stdout.join('')).toContain('KIMI_CODE_UPDATE_CHANNEL=canary kimi update --yes');
+      expect(stdout.join('')).toContain(`npm install -g @futuretea/tea-code@${CANARY}`);
       expect(stdout.join('')).not.toContain('/install.sh');
 
       const yesRun = captureOutput();
       const yesDeps = createDeps({
         latest: CANARY,
-        source: 'native',
+        source: 'npm-global',
         isInteractive: false,
         env: { KIMI_CODE_UPDATE_CHANNEL: 'canary' },
       });
       await expect(handleUpgrade('2.5.0', { ...yesDeps, ...yesRun.writable, yes: true })).resolves.toBe(0);
       expect(yesDeps.promptForInstallChoice).not.toHaveBeenCalled();
-      expect(yesDeps.installUpdate).toHaveBeenCalledWith('native', switchPlan('stable', 'canary', CANARY), 'darwin');
+      expect(yesDeps.installUpdate).toHaveBeenCalledWith('npm-global', switchPlan('stable', 'canary', CANARY), 'darwin');
     });
 
     it('warns about an invalid channel value and follows the installed canary channel', async () => {
@@ -430,7 +430,7 @@ describe('handleUpgrade', () => {
 
       expect(deps.refreshUpdateCache).toHaveBeenCalledWith('stable');
       expect(deps.installUpdate).not.toHaveBeenCalled();
-      expect(stdout.join('')).toContain('brew upgrade kimi-code');
+      expect(stdout.join('')).toContain('npm install -g @futuretea/tea-code@0.5.0');
       expect(stdout.join('')).not.toContain('canary');
     });
 

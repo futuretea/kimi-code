@@ -3,13 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DisposableStore } from '#/_base/di/lifecycle';
 import { createServices, type TestInstantiationService } from '#/_base/di/test';
 import { IOAuthService } from '#/app/auth/auth';
+import { IBootstrapService } from '#/app/bootstrap/bootstrap';
 import { SERVICES_SECTION, type ServicesConfig } from '#/app/auth/configSection';
 import {
   buildAgentIdentitySnapshot,
   IAgentIdentity,
   type AgentIdentitySnapshot,
 } from '#/app/agentIdentity/agentIdentity';
-import { IBootstrapService } from '#/app/bootstrap/bootstrap';
+import { IHostRequestHeaders } from '#/llm-adapter/model/host-request-headers';
 import { IConfigService } from '#/app/config/config';
 import { ITelemetryService, noopTelemetryService } from '#/app/telemetry/telemetry';
 import { IProviderService, type ProviderConfig } from '#/llm-adapter/provider/provider';
@@ -33,6 +34,7 @@ describe('WebFetchService', () => {
   let providers: Record<string, ProviderConfig>;
   let servicesConfig: ServicesConfig | undefined;
   let identitySlug: string | undefined;
+  let identityHeaders: Record<string, string>;
   let resolveTokenProvider: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -40,6 +42,7 @@ describe('WebFetchService', () => {
     providers = {};
     servicesConfig = undefined;
     identitySlug = undefined;
+    identityHeaders = HOST_HEADERS;
     resolveTokenProvider = vi
       .fn()
       .mockReturnValue({ getAccessToken: async () => 'access-token' });
@@ -53,15 +56,16 @@ describe('WebFetchService', () => {
             resolveTokenProvider as unknown as IOAuthService['resolveTokenProvider'],
         });
         const snapshot = (): AgentIdentitySnapshot =>
-          buildAgentIdentitySnapshot({ slug: identitySlug, hostRequestHeaders: HOST_HEADERS });
+          buildAgentIdentitySnapshot({ slug: identitySlug, hostRequestHeaders: identityHeaders });
         reg.defineInstance(IAgentIdentity, {
           _serviceBrand: undefined,
           resolved: () => Promise.resolve(snapshot()),
           current: snapshot,
         });
-        reg.definePartialInstance(IBootstrapService, {
-          args: { requestHeaders: HOST_HEADERS },
+        reg.definePartialInstance(IHostRequestHeaders, {
+          headers: HOST_HEADERS,
         });
+        reg.definePartialInstance(IBootstrapService, { args: { requestHeaders: HOST_HEADERS } });
         reg.definePartialInstance(IConfigService, {
           get: ((domain: string) =>
             domain === SERVICES_SECTION ? servicesConfig : undefined) as IConfigService['get'],
@@ -146,6 +150,46 @@ describe('WebFetchService', () => {
     expect(headers['User-Agent']).toBe('kimi-code-cli/test');
     expect(headers['X-Msh-Device-Id']).toBe('device-test');
     expect(headers['X-Custom']).toBe('yes');
+  });
+
+  it.each([
+    ['https://api.example.test/v1', false],
+    ['https://api.kimi.com/coding/v1', true],
+  ])('limits ACP host headers to managed endpoints: %s', async (baseUrl, receivesHeaders) => {
+    identityHeaders = {};
+    Object.assign(ix.get(IBootstrapService), { args: { requestHeaders: {} } });
+    providers = { [OAUTH_PROVIDER]: { type: 'kimi', baseUrl, oauth: { storage: 'file', key: 'oauth/kimi-code' } } };
+    Object.assign(ix.get(IHostRequestHeaders), { restrictToManagedBaseUrl: true });
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, text: async () => 'page' });
+    vi.stubGlobal('fetch', fetchMock);
+    await fetcher().fetch('https://example.test/page');
+    const headers = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
+    expect(headers['X-Msh-Device-Id']).toBe(receivesHeaders ? 'device-test' : undefined);
+  });
+
+  it('preserves bootstrap headers for non-ACP callers with a custom host header seed', async () => {
+    providers = { [OAUTH_PROVIDER]: { type: 'kimi', baseUrl: 'https://api.example.test/v1', oauth: { storage: 'file', key: 'oauth/kimi-code' } } };
+    Object.assign(ix.get(IHostRequestHeaders), { headers: { 'X-Other': 'seed' } });
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, text: async () => 'page' });
+    vi.stubGlobal('fetch', fetchMock);
+    await fetcher().fetch('https://example.test/page');
+    const headers = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
+    expect(headers['X-Msh-Device-Id']).toBe('device-test');
+    expect(headers['X-Other']).toBeUndefined();
+  });
+
+  it.each([
+    ['https://api.kimi.com/coding/v1/fetch', true],
+    ['https://custom.example.test/fetch', false],
+  ])('limits ACP headers for configured fetch services: %s', async (baseUrl, allowed) => {
+    identityHeaders = {};
+    servicesConfig = { moonshotFetch: { baseUrl, apiKey: 'key' } };
+    Object.assign(ix.get(IHostRequestHeaders), { restrictToManagedBaseUrl: true });
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, text: async () => 'page' });
+    vi.stubGlobal('fetch', fetchMock);
+    await fetcher().fetch('https://example.test/page');
+    const headers = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
+    expect(headers['X-Msh-Device-Id']).toBe(allowed ? 'device-test' : undefined);
   });
 
   it('builds a Moonshot fetcher from the services.moonshot_fetch api_key config', async () => {

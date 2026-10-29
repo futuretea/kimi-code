@@ -20,7 +20,7 @@ Kimi Code CLI 支持三种 MCP server 接入方式：
 
 MCP server 配置写在 `mcp.json` 中，分两层：
 
-- **用户级**：`~/.kimi-code/mcp.json`（或 `$KIMI_CODE_HOME/mcp.json`），跨项目共享
+- **用户级**：`~/.tea-code/mcp.json`（或 `$TEA_CODE_HOME/mcp.json`），跨项目共享
 - **项目级**：工作目录下的 `.kimi-code/mcp.json`，只对当前仓库生效
 
 同名条目以项目级为准，覆盖用户级。
@@ -31,7 +31,7 @@ MCP server 配置写在 `mcp.json` 中，分两层：
 
 当 Kimi Code 在不受信任的文件夹中发现项目级 MCP server 时，工作区信任提示会显示每个 server 的传输方式和启动目标。提示默认选中 `Trust this folder`；核对列出的命令与参数或远程 URL 后确认即可，选择 `Don't trust` 则该工作区的项目级 MCP server 不会启用。
 
-无头运行（例如在 CI 中执行 `kimi -p`）无法显示信任提示，因此在工作区尚未受信任时，项目级 MCP server 会保持禁用。将 [`KIMI_CODE_TRUST_WORKSPACE`](../configuration/env-vars.md#运行时开关) 设为 `1` 即可在该进程中信任当前工作区。
+无头运行（例如在 CI 中执行 `tea-code -p`）无法显示信任提示，因此在工作区尚未受信任时，项目级 MCP server 会保持禁用。将 [`KIMI_CODE_TRUST_WORKSPACE`](../configuration/env-vars.md#运行时开关) 设为 `1` 即可在该进程中信任当前工作区。
 
 `mcp.json` 的结构：
 

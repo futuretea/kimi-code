@@ -66,6 +66,7 @@ describe('promptApiKey', () => {
     let replace: (() => void) | undefined;
     const release = vi.fn();
     const host = {
+      harness: { configPath: '/tmp/example-config.toml' },
       beginAuthBlock: vi.fn(() => release),
       mountEditorReplacement: vi.fn(
         (
@@ -90,6 +91,7 @@ describe('promptApiKey', () => {
   it('holds auth blocked until the prompt resolves', async () => {
     const release = vi.fn();
     const host = {
+      harness: { configPath: '/tmp/example-config.toml' },
       beginAuthBlock: vi.fn(() => release),
       mountEditorReplacement: vi.fn((dialog: { handleInput(data: string): void }) => {
         dialog.handleInput('YOUR_API_KEY');

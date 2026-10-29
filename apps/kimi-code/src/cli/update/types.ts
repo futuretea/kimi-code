@@ -71,7 +71,7 @@ export interface UpdateManifest {
 }
 
 export interface UpdateCache extends UpdateFeed {
-  readonly source: 'cdn';
+  readonly source: 'npm-registry';
   readonly checkedAt: string | null;
 }
 
@@ -104,7 +104,7 @@ export type UpdatePreflightResult = 'continue' | 'exit';
 
 export function emptyUpdateCache(): UpdateCache {
   return {
-    source: 'cdn',
+    source: 'npm-registry',
     channel: 'stable',
     checkedAt: null,
     latest: null,

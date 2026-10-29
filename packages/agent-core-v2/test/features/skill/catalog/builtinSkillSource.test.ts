@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { TestInstantiationService } from '#/_base/di/test';
 import { IConfigService } from '#/app/config/config';
 import { IFlagService } from '#/app/flag/flag';
+import { IBootstrapService } from '#/app/bootstrap/bootstrap';
 import {
   BUILTIN_SKILLS,
   IMPORT_FROM_CC_CODEX_SKILL,
@@ -35,11 +36,29 @@ async function loadNames(configured?: boolean): Promise<readonly string[]> {
     ),
   );
   ix.set(IFlagService, stubFlag(true));
+  ix.set(IBootstrapService, { args: { requestHeaders: {} } } as IBootstrapService);
   const source = ix.createInstance(BuiltinSkillSource);
   return (await source.load()).skills.map((s) => s.name);
 }
 
 describe('BuiltinSkillSource product-skill switch', () => {
+  it('uses Tea home in built-in instructions only when requested', async () => {
+    const config = new StubConfigService({});
+    const flags = stubFlag(true);
+    const upstream = await new BuiltinSkillSource(config, flags, { args: { requestHeaders: {} } } as IBootstrapService).load();
+    const tea = await new BuiltinSkillSource(config, flags, {
+      args: { forwardTeaCodeHome: true },
+    } as IBootstrapService).load();
+    for (const name of ['custom-theme', 'mcp-config', 'update-config', 'import-from-cc-codex']) {
+      const original = upstream.skills.find((skill) => skill.name === name)!;
+      const isolated = tea.skills.find((skill) => skill.name === name)!;
+      expect(original.content).toContain('KIMI_CODE_HOME');
+      expect(isolated.content).toContain('TEA_CODE_HOME');
+      expect(isolated.content).not.toContain('KIMI_CODE_HOME');
+      expect(isolated.content).not.toContain('~/.kimi-code');
+    }
+    expect(tea.skills.find((skill) => skill.name === 'mcp-config')!.content).toContain('<cwd>/.kimi-code/mcp.json');
+  });
   it('marks exactly the product-documentation skills', () => {
     expect(BUILTIN_SKILLS.filter((s) => s.productSpecific === true).map((s) => s.name).toSorted())
       .toEqual([...PRODUCT_SKILLS].toSorted());
@@ -74,6 +93,7 @@ describe('BuiltinSkillSource product-skill switch', () => {
     const ix = new TestInstantiationService();
     ix.set(IConfigService, config);
     ix.set(IFlagService, stubFlag(true));
+    ix.set(IBootstrapService, { args: { requestHeaders: {} } } as IBootstrapService);
     const source = ix.createInstance(BuiltinSkillSource);
 
     let fired = 0;
@@ -105,6 +125,7 @@ describe('BuiltinSkillSource product-skill switch', () => {
     const ix = new TestInstantiationService();
     ix.set(IConfigService, config);
     ix.set(IFlagService, stubFlag(true));
+    ix.set(IBootstrapService, { args: { requestHeaders: {} } } as IBootstrapService);
     const source = ix.createInstance(BuiltinSkillSource);
 
     const loading = source.load();

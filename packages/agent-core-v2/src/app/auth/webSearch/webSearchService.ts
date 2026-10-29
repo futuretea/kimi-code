@@ -1,5 +1,6 @@
 import {
   KIMI_CODE_PROVIDER_NAME,
+  isManagedKimiCodeBaseUrl,
   kimiCodeBaseUrl,
   type BearerTokenProvider,
 } from '@moonshot-ai/kimi-code-oauth';
@@ -8,6 +9,7 @@ import { ScopeActivation, registerScopedService } from '#/_base/di/scope';
 import { IOAuthService } from '#/app/auth/auth';
 import { IAgentIdentity } from '#/app/agentIdentity/agentIdentity';
 import { IBootstrapService } from '#/app/bootstrap/bootstrap';
+import { IHostRequestHeaders } from '#/llm-adapter/model/host-request-headers';
 import { IConfigService } from '#/app/config/config';
 import { IProviderService, type ProviderConfig } from '#/llm-adapter/provider/provider';
 import { isOAuthCatalogVendor } from '#/llm-adapter/provider/provider-definition';
@@ -26,6 +28,7 @@ export class WebSearchProviderService implements IWebSearchProviderService {
     @IBootstrapService private readonly bootstrap: IBootstrapService,
     @IConfigService private readonly config: IConfigService,
     @IAgentIdentity private readonly identity: IAgentIdentity,
+    @IHostRequestHeaders private readonly hostHeaders: IHostRequestHeaders,
   ) {}
 
   getWebSearchProvider(): WebSearchProvider | undefined {
@@ -68,7 +71,9 @@ export class WebSearchProviderService implements IWebSearchProviderService {
       baseUrl: search.baseUrl,
       tokenProvider,
       apiKey: nonEmptyString(search.apiKey),
-      defaultHeaders: { ...this.identity.current().requestHeaders },
+      defaultHeaders: { ...(this.hostHeaders.restrictToManagedBaseUrl && isManagedKimiCodeBaseUrl(search.baseUrl.replace(/\/search\/?$/, ''))
+        ? this.hostHeaders.headers
+        : this.identity.current().requestHeaders) },
       customHeaders: search.customHeaders,
     });
   }
@@ -81,7 +86,9 @@ export class WebSearchProviderService implements IWebSearchProviderService {
     return new MoonshotWebSearchProvider({
       baseUrl,
       tokenProvider,
-      defaultHeaders: { ...this.bootstrap.args.requestHeaders },
+      defaultHeaders: { ...(this.hostHeaders.restrictToManagedBaseUrl && isManagedKimiCodeBaseUrl(provider.baseUrl ?? kimiCodeBaseUrl())
+        ? this.hostHeaders.headers
+        : this.bootstrap.args.requestHeaders) },
       customHeaders: provider.customHeaders,
     });
   }

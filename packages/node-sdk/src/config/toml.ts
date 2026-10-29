@@ -46,12 +46,15 @@ const DEFAULT_CONFIG_FILE_TEXT = `# ~/.kimi-code/config.toml
 # Login will populate managed Kimi provider and model entries.
 `;
 
-export async function ensureConfigFile(filePath: string): Promise<void> {
+export async function ensureConfigFile(filePath: string, teaCode = false): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true, mode: 0o700 });
   let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
     handle = await open(filePath, 'wx', 0o600);
-    await handle.writeFile(DEFAULT_CONFIG_FILE_TEXT, 'utf-8');
+    await handle.writeFile(teaCode
+      ? DEFAULT_CONFIG_FILE_TEXT.replace('# ~/.kimi-code/config.toml', '# Tea Code configuration')
+        .replace('# Runtime settings for Kimi Code.', '# Runtime settings for Tea Code.')
+      : DEFAULT_CONFIG_FILE_TEXT, 'utf-8');
   } catch (error) {
     if (isFileExistsError(error)) return;
     throw error;

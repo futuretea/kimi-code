@@ -146,9 +146,9 @@ describe('kimi web', () => {
       exitSpy.mockRestore();
 
       expect(exitCalls).toEqual([1]);
-      expect(stderr).toContain('`kimi server` has been deprecated and no longer works.');
-      expect(stderr).toContain('kimi web');
-      expect(stderr).toContain('kimi server kill');
+      expect(stderr).toContain('`tea-code server` has been deprecated and no longer works.');
+      expect(stderr).toContain('tea-code web');
+      expect(stderr).toContain('tea-code server kill');
       expect(stderr).toContain('0.28.0');
       expect(stderr).toContain('next major version');
     }
@@ -471,7 +471,7 @@ describe('`kimi web` opens the browser', () => {
   it('requests foreground shutdown when the relay takes the device offline', async () => {
     const { handleWebCommand } = await import('#/cli/sub/web/run');
     const home = mkdtempSync(join(tmpdir(), 'kimi-web-rc-'));
-    vi.stubEnv('KIMI_CODE_HOME', home);
+    vi.stubEnv('TEA_CODE_HOME', home);
     const { stdout, stderr, readStdout } = makeIo();
     const requestShutdown = vi.fn();
     const runner: ForegroundRunner = async (_options, hooks) => {
@@ -522,7 +522,7 @@ describe('`kimi web` opens the browser', () => {
   it('does not request shutdown when the tunnel closes locally', async () => {
     const { handleWebCommand } = await import('#/cli/sub/web/run');
     const home = mkdtempSync(join(tmpdir(), 'kimi-web-rc-'));
-    vi.stubEnv('KIMI_CODE_HOME', home);
+    vi.stubEnv('TEA_CODE_HOME', home);
     const { stdout, stderr } = makeIo();
     const requestShutdown = vi.fn();
     const runner: ForegroundRunner = async (_options, hooks) => {
@@ -1160,16 +1160,16 @@ describe('`kimi web rotate-token`', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'kimi-rotate-'));
-    prevHome = process.env['KIMI_CODE_HOME'];
-    process.env['KIMI_CODE_HOME'] = dir;
+    prevHome = process.env['TEA_CODE_HOME'];
+    process.env['TEA_CODE_HOME'] = dir;
     vi.resetModules();
   });
 
   afterEach(() => {
     if (prevHome === undefined) {
-      delete process.env['KIMI_CODE_HOME'];
+      delete process.env['TEA_CODE_HOME'];
     } else {
-      process.env['KIMI_CODE_HOME'] = prevHome;
+      process.env['TEA_CODE_HOME'] = prevHome;
     }
     rmSync(dir, { recursive: true, force: true });
   });

@@ -128,6 +128,7 @@ export interface AcpServerOptions {
    * to undefined (the `_meta` fallback is omitted).
    */
   readonly terminalAuthLegacyCommand?: string;
+  readonly terminalAuthLegacyArgs?: string[];
   /**
    * Resolve a session's media-originals dir for prompt-image compression.
    * This is a composition-root concern (it reads the live engine scope tree,
@@ -147,6 +148,7 @@ export class AcpServer {
   private readonly disableAuth: boolean;
   private readonly terminalAuthEnv: Readonly<Record<string, string>> | undefined;
   private readonly terminalAuthLegacyCommand: string | undefined;
+  private readonly terminalAuthLegacyArgs: string[] | undefined;
   private readonly resolveOriginalsDir: ((sessionId: string) => string | undefined) | undefined;
   private readonly bindSessionRuntime: ((sessionId: string) => Promise<void>) | undefined;
   private readonly unbindSessionRuntime: ((sessionId: string) => Promise<void>) | undefined;
@@ -170,6 +172,7 @@ export class AcpServer {
     this.disableAuth = opts.disableAuth ?? false;
     this.terminalAuthEnv = opts.terminalAuthEnv;
     this.terminalAuthLegacyCommand = opts.terminalAuthLegacyCommand;
+    this.terminalAuthLegacyArgs = opts.terminalAuthLegacyArgs;
     this.resolveOriginalsDir = opts.resolveOriginalsDir;
     this.bindSessionRuntime = opts.bindSessionRuntime;
     this.unbindSessionRuntime = opts.unbindSessionRuntime;
@@ -232,6 +235,7 @@ export class AcpServer {
           ? buildTerminalAuthMethod({
               env: this.terminalAuthEnv,
               legacyCommand: this.terminalAuthLegacyCommand,
+              legacyArgs: this.terminalAuthLegacyArgs,
             })
           : TERMINAL_AUTH_METHOD,
       ],

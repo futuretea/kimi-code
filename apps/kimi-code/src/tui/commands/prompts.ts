@@ -115,7 +115,7 @@ export function promptFeedbackAttachment(
 export function promptApiKey(
   host: SlashCommandHost,
   platformName: string,
-  subtitleLines: readonly string[] = ['Your key will be saved to ~/.kimi-code/config.toml'],
+  subtitleLines: readonly string[] = [`Your key will be saved to ${host.harness.configPath}`],
 ): Promise<string | undefined> {
   const releaseAuthBlock = host.beginAuthBlock();
   return new Promise<string | undefined>((resolve) => {

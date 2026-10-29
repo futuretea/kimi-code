@@ -26,7 +26,7 @@ Tower 还会安排独立 review 检查 worker 完成情况。每个 mission 都�
 
 Tower 默认关闭，可以通过以下方式启用实验功能。
 
-如需长期启用，在 `config.toml`（默认位于 `~/.kimi-code/config.toml`，详见 [配置文件](../configuration/config-files.md)）中加入：
+如需长期启用，在 `config.toml`（默认位于 `~/.tea-code/config.toml`，详见 [配置文件](../configuration/config-files.md)）中加入：
 
 ```toml
 [experimental]
@@ -36,7 +36,7 @@ tower = true
 也可以在 `/experiments` 中启用 **Tower mode** 并应用修改，效果相同。若只想在当前进程中启用，可在启动前设置环境变量：
 
 ```sh
-KIMI_CODE_EXPERIMENTAL_TOWER=1 kimi
+KIMI_CODE_EXPERIMENTAL_TOWER=1 tea-code
 ```
 
 环境变量必须在启动前设置。运行过程中修改 `/experiments` 或 `config.toml` 后，需要重启 Kimi Code，因为 Tower 的工具和 worker profile 只在进程启动时加载。启用实验功能后，`/tower` 才会出现在命令列表中。

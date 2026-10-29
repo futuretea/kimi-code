@@ -3,12 +3,6 @@ import { spawn } from 'node:child_process';
 import { log, type Logger } from '@moonshot-ai/kimi-code-sdk';
 import type { TelemetryProperties } from '@moonshot-ai/kimi-telemetry';
 
-import {
-  CLI_COMMAND_NAME,
-  kimiCodeOfficialInstallUrl,
-  nativeInstallCommandUnix,
-  nativeInstallCommandWin,
-} from '#/constant/app';
 import { loadTuiConfig } from '#/tui/config';
 import { resolveCommandPath } from '#/utils/process/resolve-command';
 
@@ -76,14 +70,9 @@ function bunCommand(platform: NodeJS.Platform): string {
 export function installCommandFor(
   source: InstallSource,
   version: string,
-  platform: NodeJS.Platform,
-  channel: UpdateChannel = 'stable',
+  _platform: NodeJS.Platform,
+  _channel: UpdateChannel = 'stable',
 ): string {
-  if (source === 'native' && channel === 'canary') {
-    return platform === 'win32'
-      ? `$env:KIMI_CODE_UPDATE_CHANNEL='canary'; ${CLI_COMMAND_NAME} update --yes`
-      : `KIMI_CODE_UPDATE_CHANNEL=canary ${CLI_COMMAND_NAME} update --yes`;
-  }
   switch (source) {
     case 'npm-global':
       return `npm install -g ${NPM_PACKAGE_NAME}@${version}`;
@@ -94,9 +83,7 @@ export function installCommandFor(
     case 'bun-global':
       return `bun add -g ${NPM_PACKAGE_NAME}@${version}`;
     case 'homebrew':
-      return 'brew upgrade kimi-code';
     case 'native':
-      return platform === 'win32' ? nativeInstallCommandWin() : nativeInstallCommandUnix();
     case 'unsupported':
       return `npm install -g ${NPM_PACKAGE_NAME}@${version}`;
   }
@@ -114,8 +101,7 @@ export function canAutoInstall(source: InstallSource, _platform: NodeJS.Platform
       // behind the CDN release — prompt the user to run `brew upgrade` manually.
       return false;
     case 'native':
-      // Staged-swap self update works on every platform (win32 included).
-      return true;
+      return false;
     case 'unsupported':
       return false;
   }
@@ -200,14 +186,6 @@ function resolveInstallSpawn(
   return { resolvedCmd, args, shell: platform === 'win32' };
 }
 
-// Built per call: the official-installer URL follows the current region.
-function thirdPartySourceNote(): string {
-  return (
-    '\nNote: Third-party sources may lag behind the official release.\n' +
-    `For the latest updates, use the official installer: ${kimiCodeOfficialInstallUrl()}\n`
-  );
-}
-
 export function renderManualUpdateMessage(
   currentVersion: string,
   plan: ActionableUpdatePlan,
@@ -235,19 +213,17 @@ export function renderManualUpdateMessage(
   const target = plan.target;
   if (plan.kind === 'switch-channel') {
     return (
-      `Kimi Code release channel switch requested (${currentVersion} -> ${target.version}).\n` +
+      `Tea Code release channel switch requested (${currentVersion} -> ${target.version}).\n` +
       `Release channel: ${plan.sourceChannel} -> ${target.channel}\n` +
       `Detected install source: ${sourceDesc}\n` +
-      `To switch manually, run: ${installCommand}\n` +
-      (source === 'homebrew' ? thirdPartySourceNote() : '')
+      `To switch manually, run: ${installCommand}\n`
     );
   }
   return (
     `A newer version of ${NPM_PACKAGE_NAME} is available ` +
     `(${currentVersion} -> ${target.version}).\n` +
     `Detected install source: ${sourceDesc}\n` +
-    `To update manually, run: ${installCommand}\n` +
-    (source === 'homebrew' ? thirdPartySourceNote() : '')
+    `To update manually, run: ${installCommand}\n`
   );
 }
 

@@ -5,6 +5,7 @@ import {
   kimiCodeCdnCanaryChannelUrl,
   kimiCodeCdnLatestJsonUrl,
   kimiCodeCdnLatestUrl,
+  NPM_PACKAGE_NAME,
 } from '#/constant/app';
 
 import type { UpdateChannel, UpdateManifest } from './types';
@@ -125,6 +126,22 @@ export async function fetchLatestFromCdn(
 
 export interface ChannelFeed extends FetchLatestResult {
   readonly channel: UpdateChannel;
+}
+
+export async function fetchNpmChannelFeed(
+  channel: UpdateChannel,
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs: number = CDN_FETCH_TIMEOUT_MS,
+): Promise<ChannelFeed> {
+  const tag = channel === 'stable' ? 'latest' : 'canary';
+  const url = `https://registry.npmjs.org/${encodeURIComponent(NPM_PACKAGE_NAME)}/${tag}`;
+  return fetchWithTimeout(fetchImpl, url, timeoutMs, async (response) => {
+    if (!response.ok) throw new Error(`npm registry returned HTTP ${response.status}`);
+    const { version } = z.object({
+      version: z.string().refine((value) => valid(value) !== null, { error: 'invalid semver' }),
+    }).parse(await response.json());
+    return { channel, latest: version, manifest: null };
+  });
 }
 
 /** Canary failures stay failures because stable is a different release line. */

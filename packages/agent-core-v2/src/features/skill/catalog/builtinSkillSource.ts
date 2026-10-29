@@ -5,6 +5,7 @@ import { LifecycleScope } from '#/app/scopes';
 import { ScopeActivation, registerScopedService } from '#/_base/di/scope';
 import { IConfigService } from '#/app/config/config';
 import { IFlagService } from '#/app/flag/flag';
+import { IBootstrapService } from '#/app/bootstrap/bootstrap';
 
 import { visibleBuiltinSkills } from './builtin/builtin';
 import {
@@ -36,6 +37,7 @@ export class BuiltinSkillSource extends Disposable implements IBuiltinSkillSourc
   constructor(
     @IConfigService private readonly config: IConfigService,
     @IFlagService private readonly flags: IFlagService,
+    @IBootstrapService private readonly bootstrap: IBootstrapService,
   ) {
     super();
     this._register(
@@ -47,8 +49,18 @@ export class BuiltinSkillSource extends Disposable implements IBuiltinSkillSourc
 
   async load(): Promise<SkillContribution> {
     await this.config.ready;
+    const skills = visibleBuiltinSkills(builtinProductSkillsEnabled(this.config), this.flags);
+    if (!this.bootstrap.args.forwardTeaCodeHome) return { skills };
+    const useTeaHome = (text: string): string => text
+      .replaceAll('KIMI_CODE_HOME', 'TEA_CODE_HOME')
+      .replaceAll('~/.kimi-code', '~/.tea-code')
+      .replaceAll('$HOME/.kimi-code', '$HOME/.tea-code');
     return {
-      skills: visibleBuiltinSkills(builtinProductSkillsEnabled(this.config), this.flags),
+      skills: skills.map((skill) => ({
+        ...skill,
+        content: useTeaHome(skill.content),
+        description: useTeaHome(skill.description),
+      })),
     };
   }
 }

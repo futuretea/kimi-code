@@ -26,7 +26,7 @@ Good candidates include:
 
 Tower is off by default. Enable the experiment in one of the following ways.
 
-For a persistent setting, add this to `config.toml` (by default, `~/.kimi-code/config.toml`; see [Config files](../configuration/config-files.md)):
+For a persistent setting, add this to `config.toml` (by default, `~/.tea-code/config.toml`; see [Config files](../configuration/config-files.md)):
 
 ```toml
 [experimental]
@@ -36,7 +36,7 @@ tower = true
 You can also enable **Tower mode** in `/experiments` and apply the change for the same effect. To enable it only for the current process, set this environment variable before launch:
 
 ```sh
-KIMI_CODE_EXPERIMENTAL_TOWER=1 kimi
+KIMI_CODE_EXPERIMENTAL_TOWER=1 tea-code
 ```
 
 Set the environment variable before launch. If you modify `/experiments` or `config.toml` while Kimi Code is running, restart Kimi Code: Tower tools and the worker profile load only at process startup. `/tower` appears in the command list only after the experiment is enabled.

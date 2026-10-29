@@ -10,7 +10,7 @@ import { emptyUpdateCache, UPDATE_CHANNELS, type UpdateCache } from './types';
 // as no manifest so one bad optional field does not discard the whole cache.
 const UpdateCacheSchema = z
   .object({
-    source: z.literal('cdn'),
+    source: z.literal('npm-registry'),
     channel: z.enum(UPDATE_CHANNELS).default('stable'),
     checkedAt: z.string().min(1).nullable(),
     latest: z.string().min(1).nullable(),

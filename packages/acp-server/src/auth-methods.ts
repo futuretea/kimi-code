@@ -29,6 +29,7 @@ export function buildTerminalAuthMethod(
   opts: {
     env?: Readonly<Record<string, string>>;
     legacyCommand?: string;
+    legacyArgs?: string[];
   } = {},
 ): AuthMethod {
   const env = opts.env ?? {};
@@ -46,7 +47,7 @@ export function buildTerminalAuthMethod(
         type: 'terminal',
         label: 'Login with Kimi account',
         command: opts.legacyCommand,
-        args: ['login'],
+        args: opts.legacyArgs ?? ['login'],
         env: { ...env },
       },
     };

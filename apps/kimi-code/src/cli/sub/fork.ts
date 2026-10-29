@@ -121,6 +121,7 @@ function createDefaultForkDeps(overrides: Partial<ForkDeps> = {}): ForkDeps & {
     const currentTelemetryBootstrap = getTelemetryBootstrap();
     harness ??= createKimiHarness({
       homeDir: currentTelemetryBootstrap.homeDir,
+      forwardTeaCodeHome: true,
       identity,
       telemetry: telemetryClient,
     });

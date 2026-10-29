@@ -76,6 +76,27 @@ describe('PluginManager', () => {
     ]);
   });
 
+  it('forwards the resolved Tea home to hooks and plugin MCP servers when enabled', async () => {
+    await writeFile(join(root, 'kimi.plugin.json'), JSON.stringify({
+      name: 'demo',
+      hooks: [{ event: 'Stop', command: 'echo stop' }],
+      mcpServers: {
+        tool: { command: 'node', env: { TEA_CODE_HOME: '/other', KIMI_CODE_HOME: '/upstream' } },
+      },
+    }));
+    const manager = new PluginManager({ kimiHomeDir: home, forwardTeaCodeHome: true });
+    await manager.load();
+
+    expect(manager.enabledHooks()[0]?.env).toEqual({
+      TEA_CODE_HOME: home,
+      KIMI_CODE_HOME: home,
+      KIMI_PLUGIN_ROOT: root,
+    });
+    expect(manager.enabledMcpServers()['plugin-demo:tool']).toEqual(expect.objectContaining({
+      env: expect.objectContaining({ TEA_CODE_HOME: home, KIMI_CODE_HOME: home }),
+    }));
+  });
+
   it('installs a local-path plugin into the managed root', async () => {
     const sourceRoot = await mkdtemp(join(tmpdir(), 'plugin-install-source-'));
     try {

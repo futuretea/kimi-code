@@ -112,7 +112,7 @@ export function registerExportCommand(parent: Command, deps?: Partial<ExportDeps
     .option('-y, --yes', 'Skip previous-session confirmation.')
     .option(
       '--no-include-global-log',
-      'Skip bundling the active global diagnostic log (~/.kimi-code/logs/kimi-code.log, not rotated .1 files). By default the global log is included.',
+      'Skip bundling the active global diagnostic log (~/.tea-code/logs/kimi-code.log, not rotated .1 files). By default the global log is included.',
     )
     .argument('[sessionId]', 'Session id to export. Defaults to the most recent session.')
     .action(
@@ -154,6 +154,7 @@ function createDefaultExportDeps(overrides: Partial<ExportDeps> = {}): ExportDep
     const currentTelemetryBootstrap = getTelemetryBootstrap();
     harness ??= createKimiHarness({
       homeDir: currentTelemetryBootstrap.homeDir,
+      forwardTeaCodeHome: true,
       identity,
       telemetry: telemetryClient,
     });

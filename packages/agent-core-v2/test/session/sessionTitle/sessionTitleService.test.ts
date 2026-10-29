@@ -265,6 +265,18 @@ describe('SessionTitleService', () => {
     expect(rebroadcast).toBeDefined();
   });
 
+  it.each([
+    ['https://api.kimi.com/coding/v1', true],
+    ['https://proxy.example.test/v1', false],
+  ])('restricts ACP session title headers by base URL: %s', async (baseUrl, allowed) => {
+    providers['managed:kimi-code'] = { ...MANAGED_PROVIDER, baseUrl };
+    Object.assign(ix.get(IHostRequestHeaders), { restrictToManagedBaseUrl: true });
+    titlePrompts = ['example'];
+    await ix.get(ISessionTitleService).generateTitle();
+    const headers = new Headers(fetchMock.mock.calls[0]![1]?.headers);
+    expect(headers.get('user-agent')).toBe(allowed ? 'test' : null);
+  });
+
   it('composes the title input from the recorded prompts in order', async () => {
     titlePrompts = ['先帮我搭一个 Vite 项目', '加上路由', '现在配一下 ESLint'];
 

@@ -34,7 +34,7 @@ describe('kimi app', () => {
       const program = new Command('kimi');
       registerAppCommand(program);
       await program.parseAsync(['node', 'kimi', 'app']);
-      expect(write).toHaveBeenCalledWith(expect.stringContaining('kimi install-desktop'));
+      expect(write).toHaveBeenCalledWith(expect.stringContaining('tea-code install-desktop'));
       expect(process.exitCode).toBe(1);
     } finally {
       process.exitCode = exitCode;

@@ -3,9 +3,7 @@ import { appendFile, mkdir, stat, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import { readKimiDeviceId } from '@moonshot-ai/kimi-code-oauth';
-import { resolveKimiHome } from '@moonshot-ai/kimi-code-sdk';
-
-import { getUpdateRolloutLogFile } from '#/utils/paths';
+import { getDataDir, getUpdateRolloutLogFile } from '#/utils/paths';
 
 import { decideUpdate } from './select';
 import type { RolloutBatch, UpdateFeed, UpdateManifest, UpdatePlan } from './types';
@@ -151,7 +149,7 @@ export async function appendRolloutDecisionLog(
  * creates the telemetry device_id before telemetry can emit first_launch.
  */
 export function resolveUpdateDeviceId(): string {
-  return readKimiDeviceId(resolveKimiHome()) ?? randomUUID();
+  return readKimiDeviceId(getDataDir()) ?? randomUUID();
 }
 
 /**

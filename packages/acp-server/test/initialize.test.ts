@@ -4,7 +4,13 @@ import { join } from 'node:path';
 import { PassThrough, Readable, Writable } from 'node:stream';
 
 import { ndJsonStream } from '@agentclientprotocol/sdk';
-import { describe, expect, it } from 'vitest';
+import { IBootstrapService, IConfigService } from '@moonshot-ai/agent-core-v2';
+import { IAgentIdentity } from '@moonshot-ai/agent-core-v2/app/agentIdentity/agentIdentity';
+import { IHostRequestHeaders } from '@moonshot-ai/agent-core-v2/llm-adapter/model/host-request-headers';
+import { resolveOutboundHeaders } from '@moonshot-ai/agent-core-v2/llm-adapter/model/catalog-service';
+import { IWebFetchService } from '@moonshot-ai/agent-core-v2/app/web/web';
+import { IWebSearchProviderService } from '@moonshot-ai/agent-core-v2/app/auth/webSearch/webSearch';
+import { describe, expect, it, vi } from 'vitest';
 
 import { runAcpServerWithStream } from '../src/start';
 import { CURRENT_VERSION, MIN_PROTOCOL_VERSION, negotiateVersion } from '../src/version';
@@ -67,6 +73,13 @@ describe('acp-server initialize handshake', () => {
       try {
         const stream = ndJsonStream(Writable.toWeb(toClient), Readable.toWeb(toAgent));
         const server = await runAcpServerWithStream(stream, { homeDir });
+        const bootstrap = server.core.accessor.get(IBootstrapService);
+        expect(bootstrap.clientIdentity).toEqual({
+          productName: 'kimi-code-acp',
+          version: '0.0.0',
+          platform: 'kimi_code_cli',
+        });
+        expect(bootstrap.args.requestHeaders).toEqual({});
 
         const request = {
           jsonrpc: '2.0',
@@ -97,6 +110,93 @@ describe('acp-server initialize handshake', () => {
     },
     30_000,
   );
+
+  it.each([
+    {
+      scenario: 'derives the network identity from custom agent metadata when no identity is supplied',
+      agentInfo: { name: 'Custom ACP Client', version: '1.2.3' },
+      clientIdentity: undefined,
+      expectedIdentity: { productName: 'Custom ACP Client', version: '1.2.3', platform: 'kimi_code_cli' },
+    },
+    {
+      scenario: 'keeps the Tea display name separate from the Kimi network identity',
+      agentInfo: { name: 'Tea Code CLI', version: '2.4.0' },
+      clientIdentity: { productName: 'Kimi Code CLI', version: '2.4.0', platform: 'kimi_code_cli' },
+      expectedIdentity: { productName: 'Kimi Code CLI', version: '2.4.0', platform: 'kimi_code_cli' },
+    },
+  ])('$scenario', async ({ agentInfo, clientIdentity, expectedIdentity }) => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'acp-server-identity-'));
+    const toAgent = new PassThrough();
+    const toClient = new PassThrough();
+    try {
+      const stream = ndJsonStream(Writable.toWeb(toClient), Readable.toWeb(toAgent));
+      const server = await runAcpServerWithStream(stream, { homeDir, agentInfo, clientIdentity });
+      try {
+        toAgent.write(`${JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: { protocolVersion: 1, clientCapabilities: {} },
+        })}\n`);
+
+        const response = await readOneMessage(toClient);
+        expect(response.error).toBeUndefined();
+        expect(response.result).toMatchObject({ agentInfo });
+        const bootstrap = server.core.accessor.get(IBootstrapService);
+        expect(bootstrap.clientIdentity).toEqual(expectedIdentity);
+        expect(bootstrap.args.requestHeaders).toEqual({});
+        const headers = server.core.accessor.get(IHostRequestHeaders);
+        expect((await server.core.accessor.get(IAgentIdentity).resolved()).requestHeaders).toEqual({});
+        if (clientIdentity === undefined) {
+          expect(headers.headers).toEqual({});
+        } else {
+          expect(resolveOutboundHeaders('kimi', undefined, headers)).toMatchObject({
+            'User-Agent': 'Kimi Code CLI/2.4.0',
+            'X-Msh-Version': '2.4.0',
+            'X-Msh-Platform': 'kimi_code_cli',
+          });
+          expect(resolveOutboundHeaders('anthropic', undefined, headers)).toEqual({});
+          expect(resolveOutboundHeaders('kimi', undefined, headers, 'https://proxy.example.test/v1')).toEqual({});
+          expect(resolveOutboundHeaders('kimi', undefined, headers, 'https://api.kimi.com/coding/v1')).toMatchObject({
+            'User-Agent': 'Kimi Code CLI/2.4.0',
+            'X-Msh-Version': '2.4.0',
+          });
+          const config = server.core.accessor.get(IConfigService);
+          await config.set('services', {
+            moonshotFetch: { baseUrl: 'https://fetch.example.test/fetch', apiKey: 'YOUR_API_KEY' },
+            moonshotSearch: { baseUrl: 'https://search.example.test/search', apiKey: 'YOUR_API_KEY' },
+          });
+          const fetchMock = vi.fn(async (_input: string | URL, _init?: RequestInit) => ({
+            status: 200,
+            text: async () => 'page',
+            json: async () => ({ search_results: [] }),
+          }));
+          vi.stubGlobal('fetch', fetchMock);
+          try {
+            const fetcher = server.core.accessor.get(IWebFetchService).getUrlFetcher();
+            await fetcher.fetch('https://example.test/page');
+            const requestHeaders = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
+            expect(requestHeaders['User-Agent']).toBeUndefined();
+            expect(requestHeaders['X-Msh-Device-Id']).toBeUndefined();
+            const search = server.core.accessor.get(IWebSearchProviderService).getWebSearchProvider();
+            expect(search).toBeDefined();
+            await search!.search('example');
+            const searchHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>;
+            expect(searchHeaders['User-Agent']).toBeUndefined();
+            expect(searchHeaders['X-Msh-Device-Id']).toBeUndefined();
+          } finally {
+            vi.unstubAllGlobals();
+          }
+        }
+      } finally {
+        await server.close();
+        toAgent.end();
+        toClient.end();
+      }
+    } finally {
+      await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  }, 30_000);
 
   it(
     'negotiates down to the highest supported version when the client advertises a newer one',
@@ -131,9 +231,12 @@ describe('acp-server initialize handshake', () => {
     30_000,
   );
 
-  it(
-    'advertises terminal-auth with forwarded env and the legacy _meta fallback',
-    async () => {
+  it.each([
+    { legacyArgs: undefined, expected: ['login'] },
+    { legacyArgs: ['acp', '--login'], expected: ['acp', '--login'] },
+  ])(
+    'advertises terminal-auth with forwarded env and legacy args $expected',
+    async ({ legacyArgs, expected }) => {
       const homeDir = await mkdtemp(join(tmpdir(), 'acp-server-auth-'));
       const toAgent = new PassThrough();
       const toClient = new PassThrough();
@@ -143,6 +246,7 @@ describe('acp-server initialize handshake', () => {
           homeDir,
           terminalAuthEnv: { KIMI_CODE_HOME: '/tmp/sandbox' },
           terminalAuthLegacyCommand: '/opt/kimi/bin/kimi',
+          terminalAuthLegacyArgs: legacyArgs,
         });
 
         toAgent.write(
@@ -168,7 +272,7 @@ describe('acp-server initialize handshake', () => {
         expect(method.env).toEqual({ KIMI_CODE_HOME: '/tmp/sandbox' });
         expect(method._meta?.['terminal-auth']).toMatchObject({
           command: '/opt/kimi/bin/kimi',
-          args: ['login'],
+          args: expected,
           env: { KIMI_CODE_HOME: '/tmp/sandbox' },
         });
 

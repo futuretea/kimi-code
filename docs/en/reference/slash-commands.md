@@ -39,12 +39,12 @@ Some commands are only available in the idle state. Executing these commands whi
 | `/reload-tui` | — | Reload only the `tui.toml` UI preferences (theme, editor, notifications, etc.) without rebuilding the session | Yes |
 | `/init` | — | Analyze the current codebase and generate `AGENTS.md` | No |
 | `/export-md [<path>]` | `/export` | Export the current session as a Markdown file | No |
-| `/export-debug-zip` | — | Export the current session as a debug ZIP archive (same behavior as [`kimi export`](./kimi-command.md#kimi-export)) | No |
-| `/import-sessions` | — | Import Claude Code and Codex sessions from the last 15 or 30 days as regular sessions (same behavior as [`kimi import-sessions`](./kimi-command.md#kimi-import-sessions)) | No |
+| `/export-debug-zip` | — | Export the current session as a debug ZIP archive (same behavior as [`tea-code export`](./kimi-command.md#tea-code-export)) | No |
+| `/import-sessions` | — | Import Claude Code and Codex sessions from the last 15 or 30 days as regular sessions (same behavior as [`tea-code import-sessions`](./kimi-command.md#tea-code-import-sessions)) | No |
 | `/copy` | — | Copy the last assistant message to the clipboard | No |
 | `/add-dir [<path>]` | — | Add an extra workspace directory to the current session. Run without a path (or with `list`) to list configured directories. When adding, choose whether to remember the directory for the project in `.kimi-code/local.toml` | No |
-| `/web` | — | Open the current session in the web UI: pick a running server to connect to, or start a new foreground server after the TUI exits. See [`kimi web`](./kimi-command.md#kimi-web) | Yes |
-| `/desktop` | `/install-desktop` | Open the Kimi Code desktop app page in your browser (URL follows the active region: `https://www.kimi.com/code` or `https://www.kimi.ai/code`). See [`kimi install-desktop`](./kimi-command.md#kimi-install-desktop) | Yes |
+| `/web` | — | Open the current session in the web UI: pick a running server to connect to, or start a new foreground server after the TUI exits. See [`tea-code web`](./kimi-command.md#tea-code-web) | Yes |
+| `/desktop` | `/install-desktop` | Open the Kimi Code desktop app page in your browser (URL follows the active region: `https://www.kimi.com/code` or `https://www.kimi.ai/code`). See [`tea-code install-desktop`](./kimi-command.md#tea-code-install-desktop) | Yes |
 
 ## Modes & Run Control
 
@@ -102,10 +102,10 @@ If an upcoming goal needs to start with `manage`, put `--` after `next`:
 In non-interactive prompt mode, only the create forms start goal mode:
 
 ```sh
-kimi -p "/goal Fix the failing checkout test"
+tea-code -p "/goal Fix the failing checkout test"
 ```
 
-Prompt mode exits with code `0` when the goal completes, `3` when it blocks, and `6` when it pauses. Other `/goal` subcommands, including `next`, are TUI controls and are not handled by `kimi -p`.
+Prompt mode exits with code `0` when the goal completes, `3` when it blocks, and `6` when it pauses. Other `/goal` subcommands, including `next`, are TUI controls and are not handled by `tea-code -p`.
 
 ## Information & Status
 

@@ -378,6 +378,8 @@ async function runServerInProcess(
   const v2 = await startServer({
     host: options.host,
     port: options.port,
+    homeDir: getDataDir(),
+    forwardTeaCodeHome: true,
     // Report the CLI's product version as `server_version` (/meta, web UI)
     // rather than kap-server's private package version.
     serverVersion: version,

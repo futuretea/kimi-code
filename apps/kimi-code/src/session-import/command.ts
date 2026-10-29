@@ -15,7 +15,7 @@ export function registerImportSessionsCommand(
 ): void {
   parent
     .command('import-sessions')
-    .description('Import recent Claude Code and Codex sessions into Kimi Code.')
+    .description('Import recent Claude Code and Codex sessions into Tea Code.')
     .action(async () => {
       process.exitCode = await run();
     });
@@ -24,12 +24,13 @@ export function registerImportSessionsCommand(
 /** `kimi import-sessions`: show only the import page in a bare terminal UI, then exit. */
 export async function runImportSessionsCommand(): Promise<number> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    process.stderr.write('kimi import-sessions needs an interactive terminal.\n');
+    process.stderr.write('tea-code import-sessions needs an interactive terminal.\n');
     return 1;
   }
   const telemetry: TelemetryClient = { track, withContext: withTelemetryContext, setContext: setTelemetryContext };
   const harness = createKimiHarness({
     homeDir: createCliTelemetryBootstrap().homeDir,
+    forwardTeaCodeHome: true,
     identity: createKimiCodeHostIdentity(),
     telemetry,
   });
