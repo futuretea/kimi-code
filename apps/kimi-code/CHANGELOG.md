@@ -1,5 +1,11 @@
 # @futuretea/tea-code
 
+## 2.4.0
+
+### Minor Changes
+
+- [#3](https://github.com/futuretea/kimi-code/pull/3) [`c2df07c`](https://github.com/futuretea/kimi-code/commit/c2df07c61357a1975c07b3934be5c954096a7298) Thanks [@futuretea](https://github.com/futuretea)! - Sync Tea Code with Kimi Code 2.4.0.
+
 ## 2.4.0 (upstream)
 
 ### Minor Changes
