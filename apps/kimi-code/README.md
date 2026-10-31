@@ -2,7 +2,7 @@
 
 > The Starting Point for Next-Gen Agents
 
-[![npm](https://img.shields.io/npm/v/@futuretea/tea-code)](https://www.npmjs.com/package/@futuretea/tea-code) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)  [![Docs](https://img.shields.io/badge/docs-online-blue)](https://github.com/futuretea/kimi-code/blob/tea/moonshot-240/docs/en/guides/getting-started.md)
+[![npm](https://img.shields.io/npm/v/@futuretea/tea-code)](https://www.npmjs.com/package/@futuretea/tea-code) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)  [![Docs](https://img.shields.io/badge/docs-online-blue)](https://github.com/futuretea/kimi-code/blob/tea/moonshot-241/docs/en/guides/getting-started.md)
 
 ## What is Tea Code CLI
 
@@ -30,7 +30,7 @@ Then, run it with a new shell session:
 tea-code --version
 ```
 
-For upgrade and uninstall instructions, see [Getting started](https://github.com/futuretea/kimi-code/blob/tea/moonshot-240/docs/en/guides/getting-started.md).
+For upgrade and uninstall instructions, see [Getting started](https://github.com/futuretea/kimi-code/blob/tea/moonshot-241/docs/en/guides/getting-started.md).
 
 ## Quick Start
 
@@ -59,9 +59,9 @@ Take a look at this project and explain the main directories.
 
 ## Documentation
 
-- Full docs: https://github.com/futuretea/kimi-code/blob/tea/moonshot-240/docs/en/guides/getting-started.md
-- 中文文档: https://github.com/futuretea/kimi-code/blob/tea/moonshot-240/docs/zh/guides/getting-started.md
-- Getting Started: https://github.com/futuretea/kimi-code/blob/tea/moonshot-240/docs/en/guides/getting-started.md
+- Full docs: https://github.com/futuretea/kimi-code/blob/tea/moonshot-241/docs/en/guides/getting-started.md
+- 中文文档: https://github.com/futuretea/kimi-code/blob/tea/moonshot-241/docs/zh/guides/getting-started.md
+- Getting Started: https://github.com/futuretea/kimi-code/blob/tea/moonshot-241/docs/en/guides/getting-started.md
 
 ## Repository & Issues
 

@@ -95,7 +95,7 @@ Then open a new conversation in Zed's Agent panel. See [Using in IDEs](docs/en/g
 Requirements: Node.js ≥ 24.15.0, pnpm 10.33.0.
 
 ```sh
-git clone --branch tea/moonshot-240 https://github.com/futuretea/kimi-code.git
+git clone --branch tea/moonshot-241 https://github.com/futuretea/kimi-code.git
 cd kimi-code
 pnpm install
 ```

@@ -99,7 +99,7 @@ Tea Code CLI 支持 [Agent Client Protocol](https://agentclientprotocol.com/)，
 环境要求：Node.js ≥ 24.15.0，pnpm 10.33.0。
 
 ```sh
-git clone --branch tea/moonshot-240 https://github.com/futuretea/kimi-code.git
+git clone --branch tea/moonshot-241 https://github.com/futuretea/kimi-code.git
 cd kimi-code
 pnpm install
 ```

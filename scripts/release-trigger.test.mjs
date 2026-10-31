@@ -82,7 +82,8 @@ await test('manual runs, main and invalid SHA cannot authorize publishing', () =
   for (const env of [{ GITHUB_EVENT_NAME: 'workflow_dispatch' },
     { GITHUB_REF_NAME: 'main', GITHUB_REF: 'refs/heads/main' },
     { GITHUB_REF_NAME: 'release/test', GITHUB_REF: 'refs/heads/release/test' },
-    { GITHUB_REF_NAME: 'tea/moonshot-231', GITHUB_REF: 'refs/heads/tea/moonshot-231' }, { GITHUB_SHA: 'abc' }]) {
+    { GITHUB_REF_NAME: 'tea/moonshot-231', GITHUB_REF: 'refs/heads/tea/moonshot-231' },
+    { GITHUB_REF_NAME: 'tea/moonshot-240', GITHUB_REF: 'refs/heads/tea/moonshot-240' }, { GITHUB_SHA: 'abc' }]) {
     const result = run({}, env);
     assert.notEqual(result.status, 0);
     assert.equal(result.calls.length, 0);
