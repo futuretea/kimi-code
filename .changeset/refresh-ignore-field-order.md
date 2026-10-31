@@ -1,5 +1,5 @@
 ---
-"@moonshot-ai/kimi-code": patch
+"@futuretea/tea-code": patch
 ---
 
 Fix model refresh reporting custom registry providers as updated when nothing changed.

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(new URL('./release-trigger.mjs', import.meta.url));
 const sha = 'a'.repeat(40);
-const branch = 'tea/moonshot-240';
+const branch = 'tea/moonshot-241';
 const repo = 'example/project';
 const dirs = [];
 const pr = {

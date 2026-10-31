@@ -5,7 +5,7 @@ import { setTimeout } from 'node:timers/promises';
 const repo = process.env.GITHUB_REPOSITORY;
 const branch = process.env.GITHUB_REF_NAME;
 const sha = process.env.GITHUB_SHA;
-if (process.env.GITHUB_EVENT_NAME !== 'push' || branch !== 'tea/moonshot-240' || process.env.GITHUB_REF !== `refs/heads/${branch}`) {
+if (process.env.GITHUB_EVENT_NAME !== 'push' || branch !== 'tea/moonshot-241' || process.env.GITHUB_REF !== `refs/heads/${branch}`) {
   throw new Error('Automatic publication requires the Tea Code release branch push');
 }
 if (!/^[a-f0-9]{40}$/.test(sha ?? '')) throw new Error('GITHUB_SHA must be a full commit SHA');

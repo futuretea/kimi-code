@@ -1,5 +1,5 @@
 ---
-"@moonshot-ai/kimi-code": patch
+"@futuretea/tea-code": patch
 ---
 
 Set [workspace] require_trust = false to skip workspace trust prompts.
