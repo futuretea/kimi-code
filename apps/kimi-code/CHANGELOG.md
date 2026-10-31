@@ -1,5 +1,43 @@
 # @futuretea/tea-code
 
+## 2.4.1
+
+### Patch Changes
+
+- [#4540](https://github.com/MoonshotAI/kimi-code/pull/4540) [`4b58a0c`](https://github.com/futuretea/kimi-code/commit/4b58a0cda232a638a2ae9290990511ae7a95b2fe) Thanks [@RealKai42](https://github.com/RealKai42)! - Fix sessions sometimes still appearing in session lists right after being archived.
+
+- [#3733](https://github.com/MoonshotAI/kimi-code/pull/3733) [`990580d`](https://github.com/futuretea/kimi-code/commit/990580dfe828e49f820e5d78e10fbdec4038c372) Thanks [@gfunc](https://github.com/gfunc)! - Fix 400 "Invalid max_tokens" errors for models imported from a custom registry (api.json) by recording each model's advertised output token limit.
+
+- [#4541](https://github.com/MoonshotAI/kimi-code/pull/4541) [`3a0b86e`](https://github.com/futuretea/kimi-code/commit/3a0b86ea06e7983d0c6313b969be7e5c91a5288e) Thanks [@7Sageer](https://github.com/7Sageer)! - Fix ACP initialization failing when clients send the first request during startup.
+
+- [#4516](https://github.com/MoonshotAI/kimi-code/pull/4516) [`be89803`](https://github.com/futuretea/kimi-code/commit/be89803bc6db08ff8335c1dc12ade79e3bbed56e) Thanks [@RealKai42](https://github.com/RealKai42)! - Stop building the global full-text search index by default, so `POST /api/v1/search` reports the index as unavailable and past sessions are no longer scanned in the background; set `[database] global_search = true` or `KIMI_CODE_GLOBAL_SEARCH=1` to turn it back on.
+
+- [#4470](https://github.com/MoonshotAI/kimi-code/pull/4470) [`8535bd7`](https://github.com/futuretea/kimi-code/commit/8535bd79b8d7a42f1c30221a4dc0fa1933e2e340) Thanks [@wbxl2000](https://github.com/wbxl2000)! - Remove the server's WebSocket `subscribe` / `unsubscribe` frames with their cursor replay and `resync_required`, `GET /sessions/{id}/snapshot`, and the session `last_seq` field; subscribe to sessions with `subscribe_v2` and send it again after reconnecting. `event.session.work_changed` now reaches every connection for every live session.
+
+- [#4520](https://github.com/MoonshotAI/kimi-code/pull/4520) [`3ed0e68`](https://github.com/futuretea/kimi-code/commit/3ed0e68f3bbfb3d9ef5bfad0e7b0de2c497e3d00) Thanks [@liruifengv](https://github.com/liruifengv)! - Merge skills from every configured directory in multi-directory projects, with the primary directory taking precedence on name conflicts.
+
+- [#4532](https://github.com/MoonshotAI/kimi-code/pull/4532) [`7cd571a`](https://github.com/futuretea/kimi-code/commit/7cd571afbe39e641ffc11565918d55d8d69e76f4) Thanks [@RealKai42](https://github.com/RealKai42)! - Fix model refresh reporting custom registry providers as updated when nothing changed.
+
+- [#4062](https://github.com/MoonshotAI/kimi-code/pull/4062) [`5f3ab5f`](https://github.com/futuretea/kimi-code/commit/5f3ab5fac81e050fc2fa10787dd560655f377d16) Thanks [@7Sageer](https://github.com/7Sageer)! - Add creation-time SSH, Docker, and custom-command environments; use `--environment <id>` and optionally `--environment-cwd <path>` when creating a session.
+
+- [#4418](https://github.com/MoonshotAI/kimi-code/pull/4418) [`e3efbb9`](https://github.com/futuretea/kimi-code/commit/e3efbb9d3b2241412edfe9b704fc33b09a4c2054) Thanks [@7Sageer](https://github.com/7Sageer)! - Remove `[secondary_model] force`, which is now ignored with a warning: a lone `default_model` still pins every subagent to that model.
+
+- [#4418](https://github.com/MoonshotAI/kimi-code/pull/4418) [`e3efbb9`](https://github.com/futuretea/kimi-code/commit/e3efbb9d3b2241412edfe9b704fc33b09a4c2054) Thanks [@7Sageer](https://github.com/7Sageer)! - Stop offering Agent and AgentSwarm subagents an implicit `primary` choice that ran them on your current model and thinking level, and hide the model choice entirely when `[secondary_model]` names only one model; list two or more aliases in `[secondary_model.models]` to choose again, noting a listed main model uses `default_effort` and does not follow `/model` switches.
+
+- [#4526](https://github.com/MoonshotAI/kimi-code/pull/4526) [`8a5a430`](https://github.com/futuretea/kimi-code/commit/8a5a4307cbc49da3355ed54240ae4dd6982481c3) Thanks [@pvzheroes125](https://github.com/pvzheroes125)! - Refresh available tools during the current turn after MCP authentication or other tool changes.
+
+- [#4465](https://github.com/MoonshotAI/kimi-code/pull/4465) [`89e07b8`](https://github.com/futuretea/kimi-code/commit/89e07b81df8500b135e40b74b4f5a59748448e33) Thanks [@kimi-agent-bot](https://github.com/kimi-agent-bot)! - Show background task notifications while their resulting turn is running.
+
+- [#4507](https://github.com/MoonshotAI/kimi-code/pull/4507) [`5fc3de8`](https://github.com/futuretea/kimi-code/commit/5fc3de897e20828e15c75defd3cb92a6c2ff8c18) Thanks [@JochenYang](https://github.com/JochenYang)! - Keep long-running subagent cards responsive as the streamed output grows.
+
+- Sync Tea Code with Kimi Code 2.4.1.
+
+- [#4524](https://github.com/MoonshotAI/kimi-code/pull/4524) [`47a518e`](https://github.com/futuretea/kimi-code/commit/47a518ed4e1912c0682596f882b1b6c5431b7ccb) Thanks [@RealKai42](https://github.com/RealKai42)! - Remind the agent to update its todo list after 10 steps without an update instead of 5, and tell it that no update is needed while the list still matches its progress.
+
+- [#4515](https://github.com/MoonshotAI/kimi-code/pull/4515) [`df7efe9`](https://github.com/futuretea/kimi-code/commit/df7efe99a351eb211a334e0fb4f51519c498a2b9) Thanks [@liruifengv](https://github.com/liruifengv)! - Fix @ file mentions to include files from additional workspace directories.
+
+- [#4517](https://github.com/MoonshotAI/kimi-code/pull/4517) [`7d72ae3`](https://github.com/futuretea/kimi-code/commit/7d72ae396586ad82f48ca4335956235d3c38f0d8) Thanks [@sailist](https://github.com/sailist)! - Set [workspace] require_trust = false to skip workspace trust prompts.
+
 ## 2.4.0
 
 ### Minor Changes
