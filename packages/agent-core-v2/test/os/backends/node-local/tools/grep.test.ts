@@ -414,7 +414,7 @@ describe('GrepTool', () => {
   });
 
   it('uses the Tea home for the ripgrep cache when isolation is enabled', async () => {
-    const tool = new GrepTool(createFakeKaos(), workspace, noopTelemetryService, undefined, undefined, {
+    const tool = new GrepTool(createFakeKaos(), workspace, noopTelemetryService, {
       homeDir: '/tea-home', args: { forwardTeaCodeHome: true },
     } as IBootstrapService);
     await executeTool(tool, context({ pattern: 'example' }));
