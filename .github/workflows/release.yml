@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: ['tea/moonshot-240']
+    branches: ['tea/moonshot-241']
   workflow_dispatch:
 
 concurrency:
@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   version:
-    if: github.repository == 'futuretea/kimi-code' && github.ref == 'refs/heads/tea/moonshot-240'
+    if: github.repository == 'futuretea/kimi-code' && github.ref == 'refs/heads/tea/moonshot-241'
     concurrency:
       group: release-version-${{ github.ref }}
       cancel-in-progress: false
@@ -46,7 +46,7 @@ jobs:
         run: gh workflow run ci.yml --ref "$VERSION_BRANCH"
 
   candidate:
-    if: github.repository == 'futuretea/kimi-code' && github.event_name == 'push' && github.ref == 'refs/heads/tea/moonshot-240'
+    if: github.repository == 'futuretea/kimi-code' && github.event_name == 'push' && github.ref == 'refs/heads/tea/moonshot-241'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
