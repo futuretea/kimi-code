@@ -90,7 +90,7 @@ describe('findExistingRg', () => {
       const result = await ensureRgPath(noRgProbe(), { shareDir: fakeShare, allowCachedFallback: true });
       expect(result).toEqual({ path: join(fakeShare, 'bin', binary), source: 'share-bin-cached' });
       expect(readFileSync(join(upstream, 'bin', binary), 'utf8')).toBe('upstream');
-      expect(rgUnavailableMessage('missing', fakeShare)).toContain(join(fakeShare, 'bin', binary));
+      expect(rgUnavailableMessage('missing', undefined, fakeShare)).toContain(join(fakeShare, 'bin', binary));
     } finally {
       vi.unstubAllEnvs();
     }
