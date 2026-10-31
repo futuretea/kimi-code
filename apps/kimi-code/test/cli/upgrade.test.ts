@@ -34,7 +34,7 @@ function cacheWith(
   manifest: UpdateCache['manifest'] = null,
 ): UpdateCache {
   return {
-    source: 'npm-registry',
+    source: 'cdn',
     channel,
     checkedAt: '2026-04-23T08:00:00.000Z',
     latest: version,
@@ -174,7 +174,7 @@ describe('handleUpgrade', () => {
     expect(deps.track).toHaveBeenCalledWith('upgrade_command_no_update', expect.objectContaining({
       current_version: '0.4.0',
     }));
-    expect(stdout.join('')).toContain('Tea Code is already up to date (v0.4.0).');
+    expect(stdout.join('')).toContain('Kimi Code is already up to date (v0.4.0).');
   });
 
   it('defers the full source probe through the default dependency assembly', async () => {

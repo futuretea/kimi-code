@@ -44,11 +44,12 @@ import {
   IGrepTool,
 } from '#/agent/tools/os/grep/grep';
 import { GrepTool as ProductionGrepTool } from '#/agent/tools/os/grep/grepTool';
-import { IAgentRuntimeService } from '#/agent/runtimeBinding/agentRuntime';
-import { FakeRuntime } from '#/runtime/fakeRuntime';
+import { IAgentEnvironmentService } from '#/agent/environmentBinding/agentEnvironment';
+import { FakeEnvironment } from '#/environment/fakeEnvironment';
 import { ensureRgPath } from '#/os/backends/node-local/tools/rgLocator';
 import { IBootstrapService } from '#/app/bootstrap/bootstrap';
 import { stubWorkspaceContext } from '../../../../session/workspaceContext/stub-workspace-context';
+import { stubAgentEnvironment } from '../../../../environment/stubs';
 import { recordingTelemetry, type TelemetryRecord } from '../../../../app/telemetry/stubs';
 import { registerStateServices } from '../../../../state/stubs';
 
@@ -182,25 +183,22 @@ class GrepTool extends ProductionGrepTool {
   ) {
     const environment = createTestEnv(kaos);
     const backend = Object.assign(
-      new FakeRuntime(
-        { workspaceId: 'workspace', runtimeId: 'local', generation: 'test' },
+      new FakeEnvironment(
+        { environmentId: 'local', generation: 'test' },
         { capabilities: ['fs', 'process'], pathClass: environment.pathClass },
       ),
       {
         process: createTestProcessService(kaos),
         fs: createTestFs(kaos),
-        environment,
+        host: environment,
       },
     );
-    const runtime: IAgentRuntimeService = {
-      _serviceBrand: undefined,
-      onDidChange: () => ({ dispose: () => {} }),
-      isAvailable: () => true,
-      inspect: () => backend,
-      acquire: () => ({ runtime: backend, track: (resource) => resource, dispose: () => {} }),
-    };
+    const environmentService = stubAgentEnvironment(backend, {
+      workDir: workspaceConfig.workspaceDir,
+      additionalDirs: workspaceConfig.additionalDirs,
+    });
     super(
-      runtime,
+      environmentService,
       stubWorkspaceContext(workspaceConfig.workspaceDir, workspaceConfig.additionalDirs),
       telemetry,
       undefined,
@@ -343,20 +341,14 @@ describe('GrepTool', () => {
           const processService = createTestProcessService(kaos);
           const fs = createTestFs(kaos);
           reg.defineInstance(IHostEnvironment, environment);
-          const runtime = Object.assign(
-            new FakeRuntime(
-              { workspaceId: 'workspace', runtimeId: 'local', generation: 'test' },
+          const backend = Object.assign(
+            new FakeEnvironment(
+              { environmentId: 'local', generation: 'test' },
               { capabilities: ['fs', 'process'], pathClass: environment.pathClass },
             ),
-            { process: processService, fs, environment },
+            { process: processService, fs, host: environment },
           );
-          reg.defineInstance(IAgentRuntimeService, {
-            _serviceBrand: undefined,
-            onDidChange: () => ({ dispose: () => {} }),
-            isAvailable: () => true,
-            inspect: () => runtime,
-            acquire: () => ({ runtime, track: (resource) => resource, dispose: () => {} }),
-          });
+          reg.defineInstance(IAgentEnvironmentService, stubAgentEnvironment(backend));
           reg.defineInstance(ISessionWorkspaceContext, stubWorkspaceContext('/workspace'));
           reg.defineInstance(ITelemetryService, noopTelemetryService);
           reg.definePartialInstance(IBootstrapService, { args: { requestHeaders: {}, forwardTeaCodeHome: false } });
@@ -422,7 +414,7 @@ describe('GrepTool', () => {
   });
 
   it('uses the Tea home for the ripgrep cache when isolation is enabled', async () => {
-    const tool = new GrepTool(createFakeKaos(), workspace, noopTelemetryService, {
+    const tool = new GrepTool(createFakeKaos(), workspace, noopTelemetryService, undefined, undefined, {
       homeDir: '/tea-home', args: { forwardTeaCodeHome: true },
     } as IBootstrapService);
     await executeTool(tool, context({ pattern: 'example' }));
@@ -1663,22 +1655,17 @@ describe('GrepTool', () => {
     vi.mocked(ensureRgPath).mockImplementationOnce((_probe, { signal: locatorSignal } = {}) => {
       expect(locatorSignal).toBe(controller.signal);
       return new Promise((_resolve, reject) => {
-        const rejectAbort = (): void => {
+        queueMicrotask(() => {
           const error = new Error('Aborted');
           error.name = 'AbortError';
+          controller.abort();
           reject(error);
-        };
-        if (locatorSignal?.aborted === true) {
-          rejectAbort();
-          return;
-        }
-        locatorSignal?.addEventListener('abort', rejectAbort, { once: true });
+        });
       });
     });
     const tool = new GrepTool(createFakeKaos({ exec }), workspace);
 
     const resultPromise = executeTool(tool, context({ pattern: 'hit' }, controller.signal));
-    controller.abort();
     const result = await Promise.race([
       resultPromise,
       new Promise<'timed out'>((resolve) => {

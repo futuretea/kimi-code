@@ -1,6 +1,6 @@
 # Slash Commands
 
-Slash commands are built-in control commands provided by Kimi Code CLI in the interactive TUI, covering account configuration, session management, mode switching, information queries, and more. Type `/` in the input box to trigger command completion — the candidate list filters in real time as you continue typing; command aliases are also matched.
+Slash commands are built-in control commands provided by Tea Code CLI in the interactive TUI, covering account configuration, session management, mode switching, information queries, and more. Type `/` in the input box to trigger command completion — the candidate list filters in real time as you continue typing; command aliases are also matched.
 
 After typing the full command name, press `Enter` to execute. If the `/`-prefixed input does not match any built-in or Skill command, it is sent to the Agent as a regular message.
 
@@ -28,7 +28,7 @@ Some commands are only available in the idle state. Executing these commands whi
 
 | Command | Alias | Description | Always available |
 | --- | --- | --- | --- |
-| `/new` | `/clear` | Start a fresh session, discarding the current context | No |
+| `/new` | `/clear` | Start a fresh session in the current environment, discarding the conversation | No |
 | `/sessions` | `/resume` | Browse historical sessions and switch to / restore one | No |
 | `/tasks` | `/task` | Browse the background task list | Yes |
 | `/fork` | — | Fork a new session from the current one, preserving the full conversation history; you stay in the current session | No |
@@ -42,7 +42,7 @@ Some commands are only available in the idle state. Executing these commands whi
 | `/export-debug-zip` | — | Export the current session as a debug ZIP archive (same behavior as [`tea-code export`](./kimi-command.md#tea-code-export)) | No |
 | `/import-sessions` | — | Import Claude Code and Codex sessions from the last 15 or 30 days as regular sessions (same behavior as [`tea-code import-sessions`](./kimi-command.md#tea-code-import-sessions)) | No |
 | `/copy` | — | Copy the last assistant message to the clipboard | No |
-| `/add-dir [<path>]` | — | Add an extra workspace directory to the current session. Run without a path (or with `list`) to list configured directories. When adding, choose whether to remember the directory for the project in `.kimi-code/local.toml` | No |
+| `/add-dir [<path>]` | — | Add an extra workspace directory to the current session. Run without a path (or with `list`) to list configured directories. When adding, choose whether to remember the directory in the workspace registry | No |
 | `/web` | — | Open the current session in the web UI: pick a running server to connect to, or start a new foreground server after the TUI exits. See [`tea-code web`](./kimi-command.md#tea-code-web) | Yes |
 | `/desktop` | `/install-desktop` | Open the Kimi Code desktop app page in your browser (URL follows the active region: `https://www.kimi.com/code` or `https://www.kimi.ai/code`). See [`tea-code install-desktop`](./kimi-command.md#tea-code-install-desktop) | Yes |
 
@@ -117,18 +117,18 @@ Prompt mode exits with code `0` when the goal completes, `3` when it blocks, and
 | `/status` | — | Show the current session runtime state: version, model, working directory, permission mode, etc. | Yes |
 | `/mcp` | — | List MCP servers and their connection status in the current session | Yes |
 | `/plugins` | — | Open the interactive plugin manager | Yes |
-| `/version` | — | Display the Kimi Code CLI version number | Yes |
+| `/version` | — | Display the Tea Code CLI version number | Yes |
 | `/feedback` | `/bug` | Submit feedback with optional diagnostic logs and codebase context | Yes |
 
 ## Exit
 
 | Command | Alias | Description | Always available |
 | --- | --- | --- | --- |
-| `/exit` | `/quit`, `/q` | Exit Kimi Code CLI | No |
+| `/exit` | `/quit`, `/q` | Exit Tea Code CLI | No |
 
 ## Built-in skill commands
 
-Kimi Code CLI ships with a set of built-in Skills that appear directly as `/<name>` slash commands. Unlike external Skills, they do not require the `skill:` prefix and are available out of the box.
+Tea Code CLI ships with a set of built-in Skills that appear directly as `/<name>` slash commands. Unlike external Skills, they do not require the `skill:` prefix and are available out of the box.
 
 | Command | Description |
 | --- | --- |
@@ -161,7 +161,7 @@ For example, a child Skill named `review` inside a parent Skill named `code-styl
 
 For convenience, external Skill commands also support a shorthand form that omits the `skill:` prefix — `/<name>` — as long as the name is not taken by a system slash command or a plugin command. That is, `/code-style` falls back to matching `/skill:code-style`.
 
-Built-in Skills shipped with Kimi Code CLI appear directly as `/<name>` in the slash command panel. For example, `/mcp-config` helps configure MCP servers and handle MCP OAuth login, and `/custom-theme [extra text]` invokes the custom-theme workflow to create or edit a TUI theme.
+Built-in Skills shipped with Tea Code CLI appear directly as `/<name>` in the slash command panel. For example, `/mcp-config` helps configure MCP servers and handle MCP OAuth login, and `/custom-theme [extra text]` invokes the custom-theme workflow to create or edit a TUI theme.
 
 ::: info
 External Skill commands entered while the agent is busy are queued behind the running turn instead of being rejected — press `Ctrl-S` to steer a queued command into the running turn immediately. `flow`-type Skills are also exposed via `/skill:<name>` — there is no separate `/flow:` namespace.

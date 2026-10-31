@@ -15,7 +15,7 @@ const MANIFEST: UpdateManifest = {
 
 describe('refreshUpdateCache', () => {
   it.each([
-    ['stable', 'latest', '2.4.0'],
+    ['stable', 'latest', '2.4.1'],
     ['canary', 'canary', '2.4.1-canary.1'],
   ] as const)('fetches the Tea npm %s channel', async (channel, tag, version) => {
     const fetchImpl = vi.fn(async () => ({

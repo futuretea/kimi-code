@@ -11,7 +11,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getVersion } from '#/cli/version';
@@ -173,6 +173,22 @@ describe('kimi acp', () => {
       });
     },
   );
+
+  it('rejects a root-level --environment instead of silently ignoring it', async () => {
+    const program = new Command('kimi').exitOverride().enablePositionalOptions();
+    program.addOption(new Option('--environment <id>').hideHelp());
+    registerAcpCommand(program);
+
+    await expect(
+      program.parseAsync(['node', 'kimi', '--environment', 'dev-box', 'acp']),
+    ).rejects.toThrow(ExitCalled);
+
+    expect(runAcpServer).not.toHaveBeenCalled();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    const stderr = stderrSpy.mock.calls.map((call: unknown[]) => String(call[0])).join('');
+    expect(stderr).toContain("--environment");
+    expect(stderr).toContain('acp');
+  });
 
   it('exits without starting the ACP server when --login is passed', async () => {
     // Stub the SDK harness so runLoginFlow doesn't hit a real OAuth endpoint:

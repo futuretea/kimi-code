@@ -4,12 +4,12 @@ import { join } from 'node:path';
 import { PassThrough, Readable, Writable } from 'node:stream';
 
 import { ndJsonStream } from '@agentclientprotocol/sdk';
-import { IBootstrapService, IConfigService } from '@moonshot-ai/agent-core-v2';
+import { IBootstrapService, IConfigService, IEnvironmentService } from '@moonshot-ai/agent-core-v2';
 import { IAgentIdentity } from '@moonshot-ai/agent-core-v2/app/agentIdentity/agentIdentity';
-import { IHostRequestHeaders } from '@moonshot-ai/agent-core-v2/llm-adapter/model/host-request-headers';
-import { resolveOutboundHeaders } from '@moonshot-ai/agent-core-v2/llm-adapter/model/catalog-service';
-import { IWebFetchService } from '@moonshot-ai/agent-core-v2/app/web/web';
 import { IWebSearchProviderService } from '@moonshot-ai/agent-core-v2/app/auth/webSearch/webSearch';
+import { IWebFetchService } from '@moonshot-ai/agent-core-v2/app/web/web';
+import { resolveOutboundHeaders } from '@moonshot-ai/agent-core-v2/llm-adapter/model/catalog-service';
+import { IHostRequestHeaders } from '@moonshot-ai/agent-core-v2/llm-adapter/model/host-request-headers';
 import { describe, expect, it, vi } from 'vitest';
 
 import { runAcpServerWithStream } from '../src/start';
@@ -111,6 +111,114 @@ describe('acp-server initialize handshake', () => {
     30_000,
   );
 
+  it(
+    'answers an initialize request sent before startup completes',
+    async () => {
+      const homeDir = await mkdtemp(join(tmpdir(), 'acp-server-early-init-'));
+      const toAgent = new PassThrough();
+      const toClient = new PassThrough();
+      try {
+        const stream = ndJsonStream(Writable.toWeb(toClient), Readable.toWeb(toAgent));
+        const serverPromise = runAcpServerWithStream(stream, { homeDir });
+        toAgent.write(
+          `${JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'initialize',
+            params: { protocolVersion: 1, clientCapabilities: {} },
+          })}\n`,
+        );
+
+        const response = await readOneMessage(toClient);
+        const server = await serverPromise;
+        await server.close();
+        toAgent.end();
+        toClient.end();
+
+        expect(response.id).toBe(1);
+        expect(response.error).toBeUndefined();
+        expect(response.result).toMatchObject({ protocolVersion: 1 });
+      } finally {
+        await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+    30_000,
+  );
+
+  it(
+    'rejects an early initialize request when startup fails',
+    async () => {
+      const homeDir = await mkdtemp(join(tmpdir(), 'acp-server-failed-init-'));
+      const toAgent = new PassThrough();
+      const toClient = new PassThrough();
+      const startupError = new Error('environment attach failed');
+      try {
+        const stream = ndJsonStream(Writable.toWeb(toClient), Readable.toWeb(toAgent));
+        const environmentService = {
+          addProvider: () => Promise.reject(startupError),
+        } as unknown as IEnvironmentService;
+        const serverPromise = runAcpServerWithStream(stream, {
+          homeDir,
+          extraSeeds: [[IEnvironmentService, environmentService]],
+        });
+        toAgent.write(
+          `${JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'initialize',
+            params: { protocolVersion: 1, clientCapabilities: {} },
+          })}\n`,
+        );
+
+        const responsePromise = readOneMessage(toClient);
+        await expect(serverPromise).rejects.toBe(startupError);
+        const response = await responsePromise;
+        expect(response.error).toMatchObject({
+          code: -32603,
+          data: { details: startupError.message },
+        });
+      } finally {
+        toAgent.end();
+        toClient.end();
+        await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+    5_000,
+  );
+
+  it(
+    'negotiates down to the highest supported version when the client advertises a newer one',
+    async () => {
+      const homeDir = await mkdtemp(join(tmpdir(), 'acp-server-neg-'));
+      const toAgent = new PassThrough();
+      const toClient = new PassThrough();
+      try {
+        const stream = ndJsonStream(Writable.toWeb(toClient), Readable.toWeb(toAgent));
+        const server = await runAcpServerWithStream(stream, { homeDir });
+
+        toAgent.write(
+          `${JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'initialize',
+            params: { protocolVersion: 99, clientCapabilities: {} },
+          })}\n`,
+        );
+
+        const response = await readOneMessage(toClient);
+        expect(response.error).toBeUndefined();
+        expect((response.result as { protocolVersion?: number })?.protocolVersion).toBe(1);
+
+        await server.close();
+        toAgent.end();
+        toClient.end();
+      } finally {
+        await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+    30_000,
+  );
+
   it.each([
     {
       scenario: 'derives the network identity from custom agent metadata when no identity is supplied',
@@ -120,9 +228,9 @@ describe('acp-server initialize handshake', () => {
     },
     {
       scenario: 'keeps the Tea display name separate from the Kimi network identity',
-      agentInfo: { name: 'Tea Code CLI', version: '2.4.0' },
-      clientIdentity: { productName: 'Kimi Code CLI', version: '2.4.0', platform: 'kimi_code_cli' },
-      expectedIdentity: { productName: 'Kimi Code CLI', version: '2.4.0', platform: 'kimi_code_cli' },
+      agentInfo: { name: 'Tea Code CLI', version: '2.4.1' },
+      clientIdentity: { productName: 'Kimi Code CLI', version: '2.4.1', platform: 'kimi_code_cli' as const },
+      expectedIdentity: { productName: 'Kimi Code CLI', version: '2.4.1', platform: 'kimi_code_cli' as const },
     },
   ])('$scenario', async ({ agentInfo, clientIdentity, expectedIdentity }) => {
     const homeDir = await mkdtemp(join(tmpdir(), 'acp-server-identity-'));
@@ -151,15 +259,15 @@ describe('acp-server initialize handshake', () => {
           expect(headers.headers).toEqual({});
         } else {
           expect(resolveOutboundHeaders('kimi', undefined, headers)).toMatchObject({
-            'User-Agent': 'Kimi Code CLI/2.4.0',
-            'X-Msh-Version': '2.4.0',
+            'User-Agent': 'Kimi Code CLI/2.4.1',
+            'X-Msh-Version': '2.4.1',
             'X-Msh-Platform': 'kimi_code_cli',
           });
           expect(resolveOutboundHeaders('anthropic', undefined, headers)).toEqual({});
           expect(resolveOutboundHeaders('kimi', undefined, headers, 'https://proxy.example.test/v1')).toEqual({});
           expect(resolveOutboundHeaders('kimi', undefined, headers, 'https://api.kimi.com/coding/v1')).toMatchObject({
-            'User-Agent': 'Kimi Code CLI/2.4.0',
-            'X-Msh-Version': '2.4.0',
+            'User-Agent': 'Kimi Code CLI/2.4.1',
+            'X-Msh-Version': '2.4.1',
           });
           const config = server.core.accessor.get(IConfigService);
           await config.set('services', {
@@ -197,39 +305,6 @@ describe('acp-server initialize handshake', () => {
       await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   }, 30_000);
-
-  it(
-    'negotiates down to the highest supported version when the client advertises a newer one',
-    async () => {
-      const homeDir = await mkdtemp(join(tmpdir(), 'acp-server-neg-'));
-      const toAgent = new PassThrough();
-      const toClient = new PassThrough();
-      try {
-        const stream = ndJsonStream(Writable.toWeb(toClient), Readable.toWeb(toAgent));
-        const server = await runAcpServerWithStream(stream, { homeDir });
-
-        toAgent.write(
-          `${JSON.stringify({
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'initialize',
-            params: { protocolVersion: 99, clientCapabilities: {} },
-          })}\n`,
-        );
-
-        const response = await readOneMessage(toClient);
-        expect(response.error).toBeUndefined();
-        expect((response.result as { protocolVersion?: number })?.protocolVersion).toBe(1);
-
-        await server.close();
-        toAgent.end();
-        toClient.end();
-      } finally {
-        await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-      }
-    },
-    30_000,
-  );
 
   it.each([
     { legacyArgs: undefined, expected: ['login'] },
