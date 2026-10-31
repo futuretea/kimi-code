@@ -1,5 +1,20 @@
 # @moonshot-ai/kap-server
 
+## 0.3.0
+
+### Minor Changes
+
+- [#4457](https://github.com/MoonshotAI/kimi-code/pull/4457) [`e2ad1dc`](https://github.com/futuretea/kimi-code/commit/e2ad1dcf214337ecfb5ca160fa36d5ef73560ab6) Thanks [@liruifengv](https://github.com/liruifengv)! - Allow file listings to expose symlinked directories and optionally follow symlinks outside the workspace.
+
+### Patch Changes
+
+- [#4527](https://github.com/MoonshotAI/kimi-code/pull/4527) [`1853dae`](https://github.com/futuretea/kimi-code/commit/1853dae4ff54b36da878a08c86a7088bde0114a8) Thanks [@liruifengv](https://github.com/liruifengv)! - Add batched, folder-scoped Git and pull request queries for multi-root workspace panels.
+
+- Updated dependencies [[`e2ad1dc`](https://github.com/futuretea/kimi-code/commit/e2ad1dcf214337ecfb5ca160fa36d5ef73560ab6), [`1853dae`](https://github.com/futuretea/kimi-code/commit/1853dae4ff54b36da878a08c86a7088bde0114a8)]:
+  - @moonshot-ai/agent-core-v2@0.6.0
+  - @moonshot-ai/kimi-code-product@0.0.3
+  - @moonshot-ai/remote-control@0.0.3
+
 ## 0.2.5
 
 ### Patch Changes

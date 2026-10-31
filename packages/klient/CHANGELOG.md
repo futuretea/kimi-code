@@ -1,5 +1,12 @@
 # @moonshot-ai/klient
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies [[`e2ad1dc`](https://github.com/futuretea/kimi-code/commit/e2ad1dcf214337ecfb5ca160fa36d5ef73560ab6), [`1853dae`](https://github.com/futuretea/kimi-code/commit/1853dae4ff54b36da878a08c86a7088bde0114a8)]:
+  - @moonshot-ai/agent-core-v2@0.6.0
+
 ## 0.1.3
 
 ### Patch Changes
