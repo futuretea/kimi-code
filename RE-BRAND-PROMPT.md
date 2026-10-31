@@ -2,31 +2,32 @@
 
 请基于下面的上下文，生成一个可以在单次执行中完成的 re-brand goal。目标不是重新设计 Kimi Code，也不是维护一个长期分叉；目标是把 fork 收敛成一个上游无需感知的发行版。
 
-## 当前发行与后续基线
+## 本轮填空
 
-- 当前已发布 `@futuretea/tea-code@2.3.2`，功能基线为官方 `@moonshot-ai/kimi-code@2.3.2` tag，解引用后的 commit 为 `b8dd3a134060c6e80ba4a1659335cd63b68483f2`。
-- 当前实现与正式 npm 发布分支为 `tea/moonshot-232`，发布源码 commit 为 `3e6146be925ffebdf8fc95b40d7c7bdc2bcbf74c`。`futuretea` 是目标提示词所在分支，不能把其中 tag 之后的上游提交当作已发布 Tea Code 的功能基线。
-- 生成新的 goal 时，先锁定目标提出者指定的上游 tag、commit、同版本号的 Tea Code 发行版本和实现/发布分支，再重新计算相对该 tag 的差异。已发布的 `2.3.2` 只作为对照，不重复发布；不得复用历史差异统计，也不得把现有 fork 差异全部视为应保留的设计。
-- 现有发行身份是 npm 包 `@futuretea/tea-code`、可执行命令 `tea-code`，运行目录是 `TEA_CODE_HOME` 或默认的 `~/.tea-code`。
-- Tea Code 自 `2.1.1` 起与对应 Kimi Code 使用相同版本号，以减少变基时的发行元数据差异。当前沿用上游 `getVersion()` 和身份传递，不维护 `UPSTREAM_VERSION`、`getUpstreamVersion()` 或独立版本映射机制。
+填入：上游 tag `<TAG>`（解引用 commit `<SHA>`）、Tea 版本 `<VER>`（必须等于该 tag）、新线 `tea/moonshot-<N>`。
+功能基线只使用这个 tag。`futuretea` 只放提示词；fork `main` 和上游 `main` 都不是基线。不得把 `futuretea` 上该 tag 之后的提交当作功能基线，也不得复用历史差异统计，或把现有 fork 差异全部视为应保留的设计。上一轮发行线只作对照，禁止把新线合并进旧线。
 
-## 本轮新增发行：Tea Code 2.4.0
+已发布对照：`2.4.0` / `tea/moonshot-240`、`2.3.2` / `tea/moonshot-232`、`2.3.1` / `tea/moonshot-231`。
 
-- 本轮目标为新增 `@futuretea/tea-code@2.4.0`，同步官方 `@moonshot-ai/kimi-code@2.4.0` tag；该 tag 解引用后的 commit 为 `f26e4d91ef8d5d233f6c20b42a150f96924d4f5e`。以此为功能基线重新计算最小 re-brand 差异，保留本文既有范围与边界。
-- 计划实现与正式 npm 发布分支为 `tea/moonshot-240`，执行时创建或确认该分支，并将 `.github/workflows/release.yml` 的 push 分支与 `.changeset/config.json` 的 `baseBranch` 同步指向它。本轮沿用上游 `2.4.0` 的发布授权流程：合并对应版本更新 PR，且该合并提交的 CI 通过后才允许 npm 发布；普通推送不发布。`2.3.2` 及此前的发行和对应分支只作为历史对照。
-- 本轮 Tea Code 发行版本、`tea-code --version`、npm 更新目标和默认 Kimi 网络身份版本均为 `2.4.0`；ACP 编辑器显示名称为 `Tea Code CLI/2.4.0`，Kimi OAuth 身份为 `Kimi Code CLI/2.4.0`。沿用后文的产品 token、协议前缀、Web 后缀和 SDK 自定义身份保留规则。
+现有发行身份是 npm 包 `@futuretea/tea-code`、可执行命令 `tea-code`，运行目录是 `TEA_CODE_HOME` 或默认的 `~/.tea-code`。Tea Code 自 `2.1.1` 起与对应 Kimi Code 使用相同版本号，以减少变基时的发行元数据差异。沿用上游 `getVersion()` 和身份传递，不维护 `UPSTREAM_VERSION`、`getUpstreamVersion()` 或独立版本映射机制。
 
-## 上一轮发行：Tea Code 2.3.2（仅供对照）
+本轮 Tea Code 发行版本、`tea-code --version`、npm 更新目标和默认 Kimi 网络身份版本均为 `<VER>`；ACP 编辑器显示名称为 `Tea Code CLI/<VER>`，Kimi OAuth 身份为 `Kimi Code CLI/<VER>`。沿用后文的产品 token、协议前缀、Web 后缀和 SDK 自定义身份保留规则。
 
-- 该轮发行 `@futuretea/tea-code@2.3.2`，同步官方 `@moonshot-ai/kimi-code@2.3.2` tag；该 tag 解引用后的 commit 为 `b8dd3a134060c6e80ba4a1659335cd63b68483f2`。
-- 该轮实现与正式 npm 发布分支为 `tea/moonshot-232`，`.github/workflows/release.yml` 的 push 分支与 `.changeset/config.json` 的 `baseBranch` 均指向它。该轮沿用上游 `2.3.2` 的发布授权流程：合并对应版本更新 PR，且该合并提交的 CI 通过后才允许 npm 发布；普通推送不发布。
-- 该轮 Tea Code 发行版本、`tea-code --version`、npm 更新目标和默认 Kimi 网络身份版本均为 `2.3.2`；ACP 编辑器显示名称为 `Tea Code CLI/2.3.2`，Kimi OAuth 身份为 `Kimi Code CLI/2.3.2`。
+## 切线
 
-## 历史发行目标：Tea Code 2.3.1（仅供对照）
+每轮填空，不沿用上一轮分支名。下列字面量来自已成功同步 `c2df07c613` 实际改过、旧提示词没有写全的项。
 
-- 该轮目标为新增 `@futuretea/tea-code@2.3.1`，同步官方 `@moonshot-ai/kimi-code@2.3.1` tag；该 tag 解引用后的 commit 为 `684bae9ea6a437f3bae98bba1dcb797a917d500b`。以此为功能基线重新计算最小 re-brand 差异，保留本文既有范围与边界。
-- 计划实现与正式 npm 发布分支为 `tea/moonshot-231`，执行时创建或确认该分支，并将 `.github/workflows/release.yml` 的 push 分支与 `.changeset/config.json` 的 `baseBranch` 同步指向它。该轮沿用上游 `2.3.1` 的发布授权流程：合并对应版本更新 PR，且该合并提交的 CI 通过后才允许 npm 发布；普通推送不发布。上述 `2.1.1` 发行和 `tea/moonshot-211` 分支及其推送发布流程只作为历史对照。
-- 该轮 Tea Code 发行版本、`tea-code --version`、npm 更新目标和默认 Kimi 网络身份版本均为 `2.3.1`；ACP 编辑器显示名称为 `Tea Code CLI/2.3.1`，Kimi OAuth 身份为 `Kimi Code CLI/2.3.1`。沿用后文的产品 token、协议前缀、Web 后缀和 SDK 自定义身份保留规则。
+从上一轮 `tea/moonshot-*` 拉出新线后，把下列字面量全部换成新线 `tea/moonshot-<N>`，并在该发行线工作树上用 `git grep tea/moonshot-` 确认没有旧线残留。旧线名字只允许留在明确标成历史对照的文档里（包括上文「已发布对照」这一行）。
+
+- `.github/workflows/ci.yml`：`on.push.branches`、`concurrency.group`、`cancel-in-progress`（三处一起改；漏掉 push 分支则合并后没有 push CI，npm 发不出）
+- `.github/workflows/release.yml`：`on.push.branches`、`version` job 的 `if`、`candidate` job 的 `if`（不能只改 push）
+- `.changeset/config.json` 的 `baseBranch`
+- `scripts/release-trigger.mjs` 的分支判断，以及 `scripts/release-trigger.test.mjs` 的 `const branch`；把上一轮分支放进拒绝用例
+- `README.md`、`README.zh-CN.md` 的 `git clone --branch`；`apps/kimi-code/README.md` 的 blob 链接；`apps/kimi-code/package.json` 的 `homepage`
+
+版本：`apps/kimi-code/package.json` 保持上一已发布 Tea 版本。把仍指向 `@moonshot-ai/kimi-code` 的 changeset 改挂 `@futuretea/tea-code`。改挂后的最高 bump 只能等于「已发布版本 → `<VER>`」的距离；该距离是 patch 时，minor 和 major 都降为 patch。禁止为了凑 bump 改共享包的发布方式。Tea 版本必须等于上游 tag。
+
+发版：只等待或手工打开 `changeset-release/tea/moonshot-<N>` → `tea/moonshot-<N>`（形态同 #1、#2、#3）。不要开同步 PR 把新线合进旧线（#4 那种）。若 Actions 未开「Allow GitHub Actions to create and approve pull requests」、因而不能创建 PR，按同一头尾手工开。合并后，`release-trigger.mjs` 只认该合并提交上 `ci.yml` 的 **push** run；PR CI 通过不等于可以发布。普通推送不发布。
 
 ## 产品意图
 
@@ -47,14 +48,14 @@ Tea Code 发行版本用于 `tea-code --version`、npm 更新和本地发行管�
 - 仅因产品名而改动日志名、导出 archive 名、临时目录、缓存 basename、内部变量/函数名或测试 fixture 名，不能提高隔离或网络身份正确性，必须保持上游名称。
 - 运行目录已经隔离时，不再通过改日志或导出文件 basename 做第二层隔离；例如 Tea Code home 内的 `kimi-code.log` 与 `kimi-debug-*.zip` 仍是允许且预期的上游兼容文件名。
 - GitHub Actions 正式 release 与 Changesets 配置仅可作最小适配，使 `futuretea/kimi-code` 能以 npm-only 方式发布 `@futuretea/tea-code`；不得新增发布机制或改变非 release 路径。正式 release 不联动部署文档，不恢复自动原生构建、Apple 签名/公证或 GitHub Release 原生资产上传；保留手动和本地原生构建能力及其上游名称。Nix packaging、PR 预览发布和其他发布自动化不属于本 goal，除非目标提出者另行明确要求。
-- 正式发布沿用 `.github/workflows/release.yml` 的 Changesets 流程：由 `pnpm changeset version` 生成目标版本，取得明确发布授权后推送到目标发行分支触发 npm 发布。已发布的 `2.3.2` 使用 `tea/moonshot-232`，workflow 的 push 分支与 `.changeset/config.json` 的 `baseBranch` 均指向它；后续 goal 必须明确对应分支并保持两处一致。npm trusted publisher 使用仓库 `futuretea/kimi-code`、文件 `release.yml`；本 goal 不默认创建或修改该外部配置，也不默认执行提交、推送、打 tag、发布或部署。
-- Tea Code 版本必须与选定上游 tag 相同，发布前确认该 Tea Code 版本尚未发布。沿用既有 Changesets 生成目标版本，不得因版本化再次递增而交付不同版本，不改变共享包版本，也不新增长期版本校正机制、直接发布或一次性旁路。若目标版本已发布，不擅自加补丁号或改回独立映射，交由目标提出者决定下一版本。
+- 正式发布只沿用 `.github/workflows/release.yml` 的 Changesets 流程，按「切线」一节替换分支字面量，并由 `pnpm changeset version` 生成目标版本 `<VER>`。发布授权是把 `changeset-release/tea/moonshot-<N>` 合并进 `tea/moonshot-<N>`；`release-trigger.mjs` 只认该合并提交上 `ci.yml` 的 push run。PR CI 通过不等于可以发布，普通推送不发布，也不得把新线合进旧线。npm trusted publisher 使用仓库 `futuretea/kimi-code`、文件 `release.yml`；本 goal 不默认创建或修改该外部配置，也不默认执行提交、推送、打 tag、发布或部署。
+- Tea Code 版本必须等于选定上游 tag，即 `<VER>`。切线时 `apps/kimi-code/package.json` 保持上一已发布 Tea 版本。把仍指向 `@moonshot-ai/kimi-code` 的 changeset 改挂 `@futuretea/tea-code`；改挂后的最高 bump 只能等于「已发布 Tea 版本 → `<VER>`」的距离，该距离是 patch 时 minor 和 major 都降为 patch。禁止为了凑 bump 改共享包的发布方式，不改变共享包版本，也不新增长期版本校正机制、直接发布或一次性旁路。不得因版本化再次递增而交付不同于 `<VER>` 的版本。发布前确认该 Tea Code 版本尚未发布。若目标版本已发布，不擅自加补丁号或改回独立映射，交由目标提出者决定下一版本。
 - Tea Code 安装和更新使用 `@futuretea/tea-code` 的 npm 发行来源，不自动下载上游 Kimi 原生发行物。普通启动不探测旧 Python `~/.kimi`；只在用户主动执行 `tea-code migrate` 时使用既有迁移能力，保留该显式命令的上游源标记语义。
-- ACP 的编辑器显示名称与 Kimi 网络身份分开：本轮目标显示 `Tea Code CLI/2.4.0`，Kimi OAuth 使用 `Kimi Code CLI/2.4.0`。沿用已支持的可选网络身份参数；未传该参数的调用方维持上游行为，不为品牌增加 ACP 模型请求字段，也不强制覆盖 SDK 调用方的自定义身份。
+- ACP 的编辑器显示名称与 Kimi 网络身份分开：显示 `Tea Code CLI/<VER>`，Kimi OAuth 使用 `Kimi Code CLI/<VER>`。沿用已支持的可选网络身份参数；未传该参数的调用方维持上游行为，不为品牌增加 ACP 模型请求字段，也不强制覆盖 SDK 调用方的自定义身份。
 
 ## Goal 必须包含的范围与边界
 
-- 以指定上游 tag 为功能基线。先用 Git 和源码确认每个保留差异的必要性；不要以旧 proposal、README 或现有 fork 文档代替代码事实。
+- 以指定上游 tag `<TAG>`（解引用 commit `<SHA>`）为功能基线。`futuretea` 只放提示词；fork `main` 与上游 `main` 都不是功能基线。先用 Git 和源码确认每个保留差异的必要性；不要以旧 proposal、README 或现有 fork 文档代替代码事实。
 - 覆盖所有实际运行入口，而不局限于主 CLI：CLI/TUI、ACP、Web/kap-server、v2、OAuth/core、插件/工具启动器，以及 inspect/vis 等会解析同一运行目录的本仓库工具。浏览器 Web UI 的品牌和静态资源除外；仍须覆盖其实际 Kimi 出站身份路径。
 - 保留用户在 CLI、TUI、文档和发行流程中复制得到的 Tea Code 名称和路径；测试这些文案、恢复命令、环境变量传递、默认路径与隔离行为。不要改动浏览器 Web UI 中保留的 Kimi Code 文案。
 - 保留独立发行需要的包名、bin、更新来源和发布配置，但不引入与发行无关的 release 机制、功能分叉、协议变化或上游功能改写。
