@@ -34,7 +34,7 @@ function cacheWith(
   manifest: UpdateCache['manifest'] = null,
 ): UpdateCache {
   return {
-    source: 'cdn',
+    source: 'npm-registry',
     channel,
     checkedAt: '2026-04-23T08:00:00.000Z',
     latest: version,
