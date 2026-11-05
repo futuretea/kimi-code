@@ -26,7 +26,7 @@
 
 - [#4643](https://github.com/MoonshotAI/kimi-code/pull/4643) [`42cb675`](https://github.com/futuretea/kimi-code/commit/42cb675304e7c08f14acae59efef90e960f5cc73) Thanks [@pvzheroes125](https://github.com/pvzheroes125)! - Fix cancelling one MCP sign-in attempt interrupting another.
 
-- [`d56e541`](https://github.com/futuretea/kimi-code/commit/d56e54164a8e60b77e683c600bc0a1cee6b9092d) Thanks [@cursoragent](https://github.com/cursoragent)! - Use ~/.tea-code/bin/kimi (Windows: ~/.tea-code/bin/kimi.exe) as the remote executor when remoteBin is unset; set remoteBin to keep an executor installed at ~/.kimi-code/bin/kimi or ~/.kimi-code/bin/kimi.exe.
+- [`d56e541`](https://github.com/futuretea/kimi-code/commit/d56e54164a8e60b77e683c600bc0a1cee6b9092d) - Use ~/.tea-code/bin/kimi (Windows: ~/.tea-code/bin/kimi.exe) as the remote executor when remoteBin is unset; set remoteBin to keep an executor installed at ~/.kimi-code/bin/kimi or ~/.kimi-code/bin/kimi.exe.
 
 - [#4609](https://github.com/MoonshotAI/kimi-code/pull/4609) [`fc3b521`](https://github.com/futuretea/kimi-code/commit/fc3b521b8b68468268bb4cfe7f45008ce08b2b99) Thanks [@7Sageer](https://github.com/7Sageer)! - Stop requiring Edit and prohibiting Bash `sed` for incremental file edits.
 
