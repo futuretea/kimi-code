@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(new URL('./release-trigger.mjs', import.meta.url));
 const sha = 'a'.repeat(40);
-const branch = 'tea/moonshot-241';
+const branch = 'tea/moonshot-250';
 const repo = 'example/project';
 const dirs = [];
 const pr = {
@@ -83,7 +83,8 @@ await test('manual runs, main and invalid SHA cannot authorize publishing', () =
     { GITHUB_REF_NAME: 'main', GITHUB_REF: 'refs/heads/main' },
     { GITHUB_REF_NAME: 'release/test', GITHUB_REF: 'refs/heads/release/test' },
     { GITHUB_REF_NAME: 'tea/moonshot-231', GITHUB_REF: 'refs/heads/tea/moonshot-231' },
-    { GITHUB_REF_NAME: 'tea/moonshot-240', GITHUB_REF: 'refs/heads/tea/moonshot-240' }, { GITHUB_SHA: 'abc' }]) {
+    { GITHUB_REF_NAME: 'tea/moonshot-240', GITHUB_REF: 'refs/heads/tea/moonshot-240' },
+    { GITHUB_REF_NAME: 'tea/moonshot-241', GITHUB_REF: 'refs/heads/tea/moonshot-241' }, { GITHUB_SHA: 'abc' }]) {
     const result = run({}, env);
     assert.notEqual(result.status, 0);
     assert.equal(result.calls.length, 0);
