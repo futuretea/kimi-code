@@ -1,5 +1,55 @@
 # @futuretea/tea-code
 
+## 2.5.0
+
+### Minor Changes
+
+- [#4621](https://github.com/MoonshotAI/kimi-code/pull/4621) [`1b13934`](https://github.com/futuretea/kimi-code/commit/1b13934ff83112ff7bb85f9afcfd1ab90fb0464a) Thanks [@Grapedge](https://github.com/Grapedge)! - Allow /model and /effort while the agent is working; a turn that has already started calling the model keeps its settings, the switch applies from the next turn, and choosing Compact and continue runs after the current turn ends.
+
+- [#4544](https://github.com/MoonshotAI/kimi-code/pull/4544) [`e24e1e1`](https://github.com/futuretea/kimi-code/commit/e24e1e1919d729edaa8fe0d60b820cd8f4fdd2b5) Thanks [@sailist](https://github.com/sailist)! - Add support for forking running sessions and forking from a selected historical turn.
+
+### Patch Changes
+
+- [#4606](https://github.com/MoonshotAI/kimi-code/pull/4606) [`011b1d4`](https://github.com/futuretea/kimi-code/commit/011b1d4163e2846e66bc2d88868a66ae9aab39ee) Thanks [@wbxl2000](https://github.com/wbxl2000)! - Send each agent's run status, settings, context usage, goal and todo list over the server WebSocket as `agent`, `usage`, `goal` and `todo` frames; transcripts and the REST transcript endpoints no longer include `meta` or `todos`.
+
+- [#4543](https://github.com/MoonshotAI/kimi-code/pull/4543) [`2d674cf`](https://github.com/futuretea/kimi-code/commit/2d674cfa38d047e57a396124533ef0567c1ad434) Thanks [@7Sageer](https://github.com/7Sageer)! - Speed up remote file reads, edits, writes, search, and completion.
+
+- [#4525](https://github.com/MoonshotAI/kimi-code/pull/4525) [`8019337`](https://github.com/futuretea/kimi-code/commit/80193374ebb47973a97d21d0b4ce4c27128eee82) Thanks [@liruifengv](https://github.com/liruifengv)! - Improve plugin marketplace interactions.
+
+- [#4627](https://github.com/MoonshotAI/kimi-code/pull/4627) [`a5724dd`](https://github.com/futuretea/kimi-code/commit/a5724dd32ec5d5f228f21c66597d55fb02c81fa7) Thanks [@Grapedge](https://github.com/Grapedge)! - Show steered messages faded until the agent reads them, including across turns, instead of at full intensity immediately.
+
+- [#4543](https://github.com/MoonshotAI/kimi-code/pull/4543) [`2d674cf`](https://github.com/futuretea/kimi-code/commit/2d674cfa38d047e57a396124533ef0567c1ad434) Thanks [@7Sageer](https://github.com/7Sageer)! - Fix searches failing on dot-only filenames, completion exceeding its timeout, and false directory warnings.
+
+- [#4600](https://github.com/MoonshotAI/kimi-code/pull/4600) [`1401bdd`](https://github.com/futuretea/kimi-code/commit/1401bddd05f6e8f09e1748d973891a3fcec31465) Thanks [@7Sageer](https://github.com/7Sageer)! - Fix local file tools in existing desktop sessions after upgrading.
+
+- [#4477](https://github.com/MoonshotAI/kimi-code/pull/4477) [`02d2e8f`](https://github.com/futuretea/kimi-code/commit/02d2e8f3fc79b2ebf160d5aa132dac304608d34a) Thanks [@kimi-agent-bot](https://github.com/kimi-agent-bot)! - Show backend model error messages verbatim, stop inferring quota from message wording, and require decoded model errors to carry explicit retryability for retry policies.
+
+- [#4643](https://github.com/MoonshotAI/kimi-code/pull/4643) [`42cb675`](https://github.com/futuretea/kimi-code/commit/42cb675304e7c08f14acae59efef90e960f5cc73) Thanks [@pvzheroes125](https://github.com/pvzheroes125)! - Fix cancelling one MCP sign-in attempt interrupting another.
+
+- [`d56e541`](https://github.com/futuretea/kimi-code/commit/d56e54164a8e60b77e683c600bc0a1cee6b9092d) Thanks [@cursoragent](https://github.com/cursoragent)! - Use ~/.tea-code/bin/kimi (Windows: ~/.tea-code/bin/kimi.exe) as the remote executor when remoteBin is unset; set remoteBin to keep an executor installed at ~/.kimi-code/bin/kimi or ~/.kimi-code/bin/kimi.exe.
+
+- [#4609](https://github.com/MoonshotAI/kimi-code/pull/4609) [`fc3b521`](https://github.com/futuretea/kimi-code/commit/fc3b521b8b68468268bb4cfe7f45008ce08b2b99) Thanks [@7Sageer](https://github.com/7Sageer)! - Stop requiring Edit and prohibiting Bash `sed` for incremental file edits.
+
+- [#4535](https://github.com/MoonshotAI/kimi-code/pull/4535) [`ebc2a9f`](https://github.com/futuretea/kimi-code/commit/ebc2a9f9607414b1ddfc66a75d8725ea5fe47049) Thanks [@wbxl2000](https://github.com/wbxl2000)! - Remove the REST task endpoints (`GET /sessions/{id}/tasks`, `GET /sessions/{id}/tasks/{task_id}`, and the `:cancel` / `:detach` actions); use the WebSocket task frames and the `task.stop` / `task.background` requests instead.
+
+- [#4606](https://github.com/MoonshotAI/kimi-code/pull/4606) [`011b1d4`](https://github.com/futuretea/kimi-code/commit/011b1d4163e2846e66bc2d88868a66ae9aab39ee) Thanks [@wbxl2000](https://github.com/wbxl2000)! - Remove `GET /sessions/{id}/status` and the `status` field of the `:undo` response; read the main agent's state from the WebSocket `agent` and `usage` frames instead.
+
+- [#4659](https://github.com/MoonshotAI/kimi-code/pull/4659) [`b5f14f7`](https://github.com/futuretea/kimi-code/commit/b5f14f7e3faeb5db5dd03624a0d4af5659185def) Thanks [@wbxl2000](https://github.com/wbxl2000)! - Fix the first side chat answer sometimes showing the main conversation's answer or disappearing.
+
+- [#4658](https://github.com/MoonshotAI/kimi-code/pull/4658) [`e9de788`](https://github.com/futuretea/kimi-code/commit/e9de788a174939e3e9eb55aa9504bfafbb7ca39b) Thanks [@wbxl2000](https://github.com/wbxl2000)! - Fix side chat history dropping or reordering earlier turns after the server reloads a session from disk.
+
+- [#4554](https://github.com/MoonshotAI/kimi-code/pull/4554) [`aeeaba8`](https://github.com/futuretea/kimi-code/commit/aeeaba847f086959384af7e9dc9334b04cd307eb) Thanks [@YD-233](https://github.com/YD-233)! - Show the invalid workspace directory path instead of silently exiting during TUI startup.
+
+- [#4535](https://github.com/MoonshotAI/kimi-code/pull/4535) [`ebc2a9f`](https://github.com/futuretea/kimi-code/commit/ebc2a9f9607414b1ddfc66a75d8725ea5fe47049) Thanks [@wbxl2000](https://github.com/wbxl2000)! - Stream a task's output over the server's WebSocket with `task.watch` / `task.unwatch`, and stop a task or move it to the background with `task.stop` / `task.background`.
+
+- [#4535](https://github.com/MoonshotAI/kimi-code/pull/4535) [`ebc2a9f`](https://github.com/futuretea/kimi-code/commit/ebc2a9f9607414b1ddfc66a75d8725ea5fe47049) Thanks [@wbxl2000](https://github.com/wbxl2000)! - Send each agent's running tasks over the server WebSocket as a `task.list` frame followed by a `task` frame on every change; transcripts and the REST transcript endpoints no longer include tasks.
+
+- [#4606](https://github.com/MoonshotAI/kimi-code/pull/4606) [`011b1d4`](https://github.com/futuretea/kimi-code/commit/011b1d4163e2846e66bc2d88868a66ae9aab39ee) Thanks [@wbxl2000](https://github.com/wbxl2000)! - Fix the todo list not reverting after undo.
+
+- [#4535](https://github.com/MoonshotAI/kimi-code/pull/4535) [`ebc2a9f`](https://github.com/futuretea/kimi-code/commit/ebc2a9f9607414b1ddfc66a75d8725ea5fe47049) Thanks [@wbxl2000](https://github.com/wbxl2000)! - web: Improved interactions and fixed known bugs.
+
+- [#4649](https://github.com/MoonshotAI/kimi-code/pull/4649) [`75f35b0`](https://github.com/futuretea/kimi-code/commit/75f35b02532a2331e5e6734b50f3285a162f122e) Thanks [@7Sageer](https://github.com/7Sageer)! - Show the remote working directory in the welcome panel and the remote repository's git status in the footer when using a remote environment, update the web and desktop pull request badge right after switching branches, never run a git or gh executable located inside the opened folder when reading git status, and stop leaving a "Ready." line in the transcript after startup.
+
 ## 2.4.1
 
 ### Patch Changes
