@@ -589,7 +589,7 @@ MCP server 的声明配置写在 `~/.tea-code/mcp.json` 或项目内 `.kimi-code
 | --- | --- | --- | --- |
 | `type` | `string` | 是 | `"ssh"` |
 | `host` | `string` | 是 | SSH 主机；经系统 `ssh` 启动，`~/.ssh/config`（用户、端口、密钥、`ProxyJump`、`ControlMaster`）照常生效 |
-| `remoteBin` | `string` | 否 | 目标上的执行器路径，POSIX 默认 `~/.kimi-code/bin/kimi`，Windows 默认 `~/.kimi-code/bin/kimi.exe`。支持含空格的绝对路径、目标账户主目录下的 `~/` 路径或目标 `PATH` 中的裸名称（如 `kimi`） |
+| `remoteBin` | `string` | 否 | 目标上的执行器路径，POSIX 默认 `~/.tea-code/bin/kimi`，Windows 默认 `~/.tea-code/bin/kimi.exe`。支持含空格的绝对路径、目标账户主目录下的 `~/` 路径或目标 `PATH` 中的裸名称（如 `kimi`） |
 | `defaultCwd` | `string` | 否 | 绑定会话时工作目录的预填值，不在本机校验 |
 
 ### Docker 条目
@@ -599,7 +599,7 @@ MCP server 的声明配置写在 `~/.tea-code/mcp.json` 或项目内 `.kimi-code
 | `type` | `string` | 是 | `"docker"` |
 | `container` | `string` | 是 | 运行中的容器名或 id，经 `docker exec` 接入 |
 | `context` | `string` | 否 | Docker context（例如 `orbstack`） |
-| `remoteBin` | `string` | 否 | 容器内的执行器路径，默认为容器用户 home 下的 `~/.kimi-code/bin/kimi`；启动命令经 `docker exec … sh -c` 执行，`~` 前缀由容器内的 shell 展开 |
+| `remoteBin` | `string` | 否 | 容器内的执行器路径，默认为容器用户 home 下的 `~/.tea-code/bin/kimi`；启动命令经 `docker exec … sh -c` 执行，`~` 前缀由容器内的 shell 展开 |
 | `defaultCwd` | `string` | 否 | 绑定会话时工作目录的预填值 |
 
 ### command 条目
@@ -611,7 +611,7 @@ MCP server 的声明配置写在 `~/.tea-code/mcp.json` 或项目内 `.kimi-code
 | `command` | `string` | 是 | 启动器可执行文件：按 `PATH` 解析的名称，或绝对路径。解析结果落在工作目录内会被拒绝，项目无法用同名二进制冒名顶替启动器 |
 | `args` | `array<string>` | 否 | 进入目标的启动器参数。某个参数已经调用 `exec-server` 时（例如 `--command "~/.tea-code/bin/tea-code exec-server"`），不再追加，按原样执行 |
 | `env` | `table<string, string>` | 否 | 本机启动器进程的环境变量，不会传播到目标环境执行的命令中 |
-| `remoteBin` | `string` | 否 | 目标上的执行器路径，追加在 `args` 之后，默认 `~/.kimi-code/bin/kimi`。应为不含空格和 shell 特殊字符的路径。只有经目标上的 shell 执行参数的启动器（如 ssh）会展开 `~`；`kubectl exec`、`docker exec` 这类原样传递参数的启动器需要绝对路径 |
+| `remoteBin` | `string` | 否 | 目标上的执行器路径，追加在 `args` 之后，默认 `~/.tea-code/bin/kimi`。应为不含空格和 shell 特殊字符的路径。只有经目标上的 shell 执行参数的启动器（如 ssh）会展开 `~`；`kubectl exec`、`docker exec` 这类原样传递参数的启动器需要绝对路径 |
 | `defaultCwd` | `string` | 否 | 绑定会话时工作目录的预填值 |
 
 ```toml
@@ -636,7 +636,7 @@ defaultCwd = "/home/me/kimi-code"
 [environments.k8s]
 command = "kubectl"
 args = ["exec", "-i", "dev-pod", "--"]
-remoteBin = "/root/.kimi-code/bin/kimi"
+remoteBin = "/root/.tea-code/bin/kimi"
 defaultCwd = "/workspace"
 ```
 

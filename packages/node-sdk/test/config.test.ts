@@ -104,7 +104,7 @@ default = "dev_box"
 type = "ssh"
 host = "dev-box"
 default_cwd = "/remote/dev"
-remote_bin = "~/.kimi-code/bin/kimi"
+remote_bin = "~/.tea-code/bin/kimi"
 `;
     const config = parseConfigString(text);
     expect(config.environments?.default).toBe('dev_box');
@@ -112,7 +112,7 @@ remote_bin = "~/.kimi-code/bin/kimi"
       type: 'ssh',
       host: 'dev-box',
       defaultCwd: '/remote/dev',
-      remoteBin: '~/.kimi-code/bin/kimi',
+      remoteBin: '~/.tea-code/bin/kimi',
     });
   });
 

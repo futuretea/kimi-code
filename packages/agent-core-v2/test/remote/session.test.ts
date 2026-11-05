@@ -230,10 +230,10 @@ if (mode === 'timeout') {
     expect(commands).toHaveLength(mode === 'windows' ? 3 : 2);
     expect(commands[0]).toBe('uname -s');
     if (mode === 'posix') {
-      expect(commands[1]).toBe(`"$HOME"'/.kimi-code/bin/kimi' 'exec-server' '--listen' 'stdio'`);
+      expect(commands[1]).toBe(`"$HOME"'/.tea-code/bin/kimi' 'exec-server' '--listen' 'stdio'`);
     } else {
       expect(commands.at(-1)).toMatch(/^powershell .* -EncodedCommand [A-Za-z0-9+/=]+$/);
-      expect(Buffer.from(commands.at(-1)!.split(' ').at(-1)!, 'base64').toString('utf16le')).toContain('/.kimi-code/bin/kimi.exe');
+      expect(Buffer.from(commands.at(-1)!.split(' ').at(-1)!, 'base64').toString('utf16le')).toContain('/.tea-code/bin/kimi.exe');
     }
   });
 

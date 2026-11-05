@@ -157,7 +157,7 @@ PowerShell probe when needed, before launching the executor exactly once.
 Authentication failures and probe timeouts stop detection. POSIX paths retain
 shell quoting and tilde expansion. Windows paths use an encoded PowerShell
 script with a literal executable path, target-side `~` expansion, and the
-executor's exit status; the default becomes `~/.kimi-code/bin/kimi.exe`.
+executor's exit status; the default becomes `~/.tea-code/bin/kimi.exe`.
 The outer command contains no shell conditionals, so Windows PowerShell 5.1
 can serve as the SSH default shell. Docker retains
 `docker exec -i <container> sh -c 'exec <remoteBin> exec-server --listen stdio'`.

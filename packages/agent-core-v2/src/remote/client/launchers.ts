@@ -1,7 +1,7 @@
 import { resolveProgramPath } from '#/environment/programPath';
 import type { RemoteEnvironmentEntry } from '#/remote/declaration/remoteEnvironmentDeclaration';
 
-export const DEFAULT_REMOTE_BIN = '~/.kimi-code/bin/kimi';
+export const DEFAULT_REMOTE_BIN = '~/.tea-code/bin/kimi';
 export const EXEC_SERVER_SUBCOMMAND = 'exec-server';
 export const EXEC_SERVER_ARGV: readonly string[] = [EXEC_SERVER_SUBCOMMAND, '--listen', 'stdio'];
 
@@ -119,7 +119,7 @@ export function powerShellCommand(script: string): string {
 }
 
 function execServerPowerShellCommand(remoteBin: string): string {
-  const path = remoteBin === DEFAULT_REMOTE_BIN ? '~/.kimi-code/bin/kimi.exe' : remoteBin;
+  const path = remoteBin === DEFAULT_REMOTE_BIN ? '~/.tea-code/bin/kimi.exe' : remoteBin;
   const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
   const executable = /^~[\\/]/.test(path)
     ? `($env:USERPROFILE + ${literal(path.slice(1))})`
